@@ -1,13 +1,17 @@
 """
-docx_generator.py — Generación de certificados .docx usando la plantilla Word.
+docx_generator.py — Generación de certificados PDF usando la plantilla Word.
 
-Reemplaza los placeholders del archivo Word directamente en el XML interno,
-preservando el formato visual exacto de la plantilla.
+Flujo:
+1. Rellena los placeholders del .docx en el XML interno.
+2. Convierte el .docx a PDF usando LibreOffice (disponible en Streamlit Cloud).
 """
 
 from __future__ import annotations
 
 import io
+import os
+import subprocess
+import tempfile
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -86,3 +90,46 @@ def generar_certificado_docx(
                 zout.writestr(item, data)
 
     return output_buffer.getvalue()
+
+
+def generar_certificado_pdf(
+    nombre: str,
+    cedula: str,
+    nombre_curso: str,
+    fecha_capacitacion: str,
+    codigo_certificado: str,
+) -> bytes:
+    """
+    Genera un certificado PDF convirtiendo la plantilla Word rellenada.
+
+    Usa LibreOffice headless para la conversión .docx → PDF.
+
+    Returns:
+        Bytes del archivo PDF generado.
+    """
+    docx_bytes = generar_certificado_docx(
+        nombre=nombre,
+        cedula=cedula,
+        nombre_curso=nombre_curso,
+        fecha_capacitacion=fecha_capacitacion,
+        codigo_certificado=codigo_certificado,
+    )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        docx_path = os.path.join(tmpdir, "certificado.docx")
+        pdf_path  = os.path.join(tmpdir, "certificado.pdf")
+
+        with open(docx_path, "wb") as f:
+            f.write(docx_bytes)
+
+        subprocess.run(
+            [
+                "libreoffice", "--headless", "--convert-to", "pdf",
+                "--outdir", tmpdir, docx_path,
+            ],
+            check=True,
+            capture_output=True,
+        )
+
+        with open(pdf_path, "rb") as f:
+            return f.read()

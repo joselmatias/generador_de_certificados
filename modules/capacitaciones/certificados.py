@@ -19,7 +19,7 @@ import pandas as pd
 import streamlit as st
 
 from database.db import get_connection, consultar_capacitaciones, listar_cursos
-from utils.docx_generator import generar_certificado_docx
+from utils.docx_generator import generar_certificado_pdf
 
 
 def mostrar_certificados() -> None:
@@ -98,7 +98,7 @@ def mostrar_certificados() -> None:
     col_pdf, col_excel = st.columns(2)
 
     with col_pdf:
-        if st.button(f"📄 Generar {len(df)} certificados Word", type="primary", use_container_width=True):
+        if st.button(f"📄 Generar {len(df)} certificados PDF", type="primary", use_container_width=True):
             zip_bytes, errores = _generar_zip_certificados(df)
 
             if errores:
@@ -139,18 +139,18 @@ def _generar_zip_certificados(df: pd.DataFrame) -> tuple[bytes | None, list[str]
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         for i, (_, fila) in enumerate(df.iterrows()):
             try:
-                docx_bytes = generar_certificado_docx(
+                pdf_bytes = generar_certificado_pdf(
                     nombre=str(fila.get("nombre", "")),
                     cedula=str(fila.get("cedula", "")),
                     nombre_curso=str(fila.get("nombre_curso", "")),
                     fecha_capacitacion=str(fila.get("fecha_capacitacion", "")),
                     codigo_certificado=str(fila.get("codigo_certificado", "")),
                 )
-                nombre_archivo = _nombre_archivo_docx(
+                nombre_archivo = _nombre_archivo_pdf(
                     str(fila.get("nombre", "participante")),
                     str(fila.get("cedula", str(i))),
                 )
-                zf.writestr(nombre_archivo, docx_bytes)
+                zf.writestr(nombre_archivo, pdf_bytes)
                 generados += 1
             except Exception as e:
                 errores.append(f"{fila.get('nombre', '?')} ({fila.get('cedula', '?')}): {e}")
@@ -161,10 +161,10 @@ def _generar_zip_certificados(df: pd.DataFrame) -> tuple[bytes | None, list[str]
     return (zip_buffer.getvalue() if generados > 0 else None), errores
 
 
-def _nombre_archivo_docx(nombre: str, cedula: str) -> str:
-    """Construye nombre de archivo .docx seguro para el ZIP."""
+def _nombre_archivo_pdf(nombre: str, cedula: str) -> str:
+    """Construye nombre de archivo PDF seguro para el ZIP."""
     nombre_limpio = re.sub(r"[^\w\s]", "", nombre).replace(" ", "_")[:50]
-    return f"{cedula}_{nombre_limpio}.docx"
+    return f"{cedula}_{nombre_limpio}.pdf"
 
 
 def _dataframe_a_excel(df: pd.DataFrame) -> bytes:
