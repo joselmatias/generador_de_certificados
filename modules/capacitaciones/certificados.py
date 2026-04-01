@@ -1,11 +1,11 @@
 """
-certificados.py — Generación y descarga de certificados PDF.
+certificados.py — Generación y descarga de certificados .docx usando plantilla Word.
 
 Flujo:
 1. Filtros por rango de fechas, curso y oficina (master ve todas).
 2. Vista previa de registros a certificar.
-3. Generación de PDF por participante con ReportLab.
-4. Descarga de ZIP con todos los PDFs.
+3. Generación de .docx por participante usando la plantilla Word.
+4. Descarga de ZIP con todos los .docx.
 5. Descarga de resumen Excel con los mismos registros.
 """
 
@@ -18,18 +18,14 @@ import zipfile
 import pandas as pd
 import streamlit as st
 
-from auth.login import obtener_sesion
 from database.db import get_connection, consultar_capacitaciones, listar_cursos
-from utils.pdf_generator import generar_certificado
-
-NOMBRE_INSTITUCION = "Institución Pública del Ecuador"
+from utils.docx_generator import generar_certificado_docx
 
 
 def mostrar_certificados() -> None:
     """Renderiza el módulo completo de generación de certificados."""
-    sesion    = obtener_sesion()
-    oficina   = sesion["oficina"]
-    es_master = sesion["rol"] == "master"
+    oficina   = st.session_state.get("oficina_nombre", "")
+    es_master = st.session_state.get("oficina_rol", "") == "master"
 
     st.title("🎓 Generación de Certificados")
     st.markdown(f"**Oficina:** {oficina}")
@@ -102,7 +98,7 @@ def mostrar_certificados() -> None:
     col_pdf, col_excel = st.columns(2)
 
     with col_pdf:
-        if st.button(f"📄 Generar {len(df)} certificados PDF", type="primary", use_container_width=True):
+        if st.button(f"📄 Generar {len(df)} certificados Word", type="primary", use_container_width=True):
             zip_bytes, errores = _generar_zip_certificados(df)
 
             if errores:
@@ -132,7 +128,7 @@ def mostrar_certificados() -> None:
 
 
 def _generar_zip_certificados(df: pd.DataFrame) -> tuple[bytes | None, list[str]]:
-    """Genera un ZIP en memoria con un PDF por participante."""
+    """Genera un ZIP en memoria con un .docx por participante."""
     zip_buffer = io.BytesIO()
     errores: list[str] = []
     generados = 0
@@ -143,19 +139,18 @@ def _generar_zip_certificados(df: pd.DataFrame) -> tuple[bytes | None, list[str]
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         for i, (_, fila) in enumerate(df.iterrows()):
             try:
-                pdf_bytes = generar_certificado(
+                docx_bytes = generar_certificado_docx(
                     nombre=str(fila.get("nombre", "")),
                     cedula=str(fila.get("cedula", "")),
                     nombre_curso=str(fila.get("nombre_curso", "")),
                     fecha_capacitacion=str(fila.get("fecha_capacitacion", "")),
                     codigo_certificado=str(fila.get("codigo_certificado", "")),
-                    nombre_institucion=NOMBRE_INSTITUCION,
                 )
-                nombre_archivo = _nombre_archivo_pdf(
+                nombre_archivo = _nombre_archivo_docx(
                     str(fila.get("nombre", "participante")),
                     str(fila.get("cedula", str(i))),
                 )
-                zf.writestr(nombre_archivo, pdf_bytes)
+                zf.writestr(nombre_archivo, docx_bytes)
                 generados += 1
             except Exception as e:
                 errores.append(f"{fila.get('nombre', '?')} ({fila.get('cedula', '?')}): {e}")
@@ -166,10 +161,10 @@ def _generar_zip_certificados(df: pd.DataFrame) -> tuple[bytes | None, list[str]
     return (zip_buffer.getvalue() if generados > 0 else None), errores
 
 
-def _nombre_archivo_pdf(nombre: str, cedula: str) -> str:
-    """Construye nombre de archivo PDF seguro para el ZIP."""
+def _nombre_archivo_docx(nombre: str, cedula: str) -> str:
+    """Construye nombre de archivo .docx seguro para el ZIP."""
     nombre_limpio = re.sub(r"[^\w\s]", "", nombre).replace(" ", "_")[:50]
-    return f"{cedula}_{nombre_limpio}.pdf"
+    return f"{cedula}_{nombre_limpio}.docx"
 
 
 def _dataframe_a_excel(df: pd.DataFrame) -> bytes:
