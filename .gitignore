@@ -1,0 +1,20 @@
+# Datos sensibles y locales
+.streamlit/secrets.toml
+data/
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# IDEs
+.vscode/
+.idea/
+
+# Exports temporales
+exports/
+*.zip
