@@ -1130,14 +1130,23 @@ def _mapa_calor_capacitaciones(df: pd.DataFrame) -> go.Figure:
                 )
 
         if s_lats:
+            # Escalar tamaño proporcional al conteo: rango 22–70 px
+            valores = [int(t) for t in s_text]
+            v_min, v_max = min(valores), max(valores)
+            rango = max(v_max - v_min, 1)
+            tamanios = [
+                int(22 + (v - v_min) / rango * 48)
+                for v in valores
+            ]
             fig.add_trace(go.Scattermapbox(
                 lat=s_lats,
                 lon=s_lons,
                 mode="markers+text",
                 marker=go.scattermapbox.Marker(
-                    size=28,
+                    size=tamanios,
                     color=COLOR_SECUNDARIO,
                     opacity=0.85,
+                    sizemode="diameter",
                 ),
                 text=s_text,
                 textfont=dict(size=11, color="white"),
