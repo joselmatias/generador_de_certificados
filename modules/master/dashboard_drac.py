@@ -286,6 +286,176 @@ CONGRESOS_2025 = [
     },
 ]
 
+CAPACITACIONES_EXPOSITORES_RAW = [
+    # ENERO
+    {"mes": "Enero",      "fecha": "14/01/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO", "XAVIER GALARZA"]},
+    {"mes": "Enero",      "fecha": "20/01/2025", "oficina": "Cuenca",     "expositores": ["MARIA MOROCHO", "ANGEL PEREZ"]},
+    {"mes": "Enero",      "fecha": "21/01/2025", "oficina": "Guayaquil",  "expositores": ["ALEXANDRA SILVA"]},
+    {"mes": "Enero",      "fecha": "21/01/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO"]},
+    {"mes": "Enero",      "fecha": "27/01/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO"]},
+    {"mes": "Enero",      "fecha": "30/01/2025", "oficina": "Cuenca",     "expositores": ["MARIA MOROCHO", "ANGEL PEREZ"]},
+    {"mes": "Enero",      "fecha": "30/01/2025", "oficina": "Portoviejo", "expositores": ["GEOCONDA VERA", "CRISTIAN ROMERO"]},
+    # FEBRERO
+    {"mes": "Febrero",    "fecha": "01/02/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO"]},
+    {"mes": "Febrero",    "fecha": "18/02/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO"]},
+    {"mes": "Febrero",    "fecha": "19/02/2025", "oficina": "Portoviejo", "expositores": ["XAVIER GALARZA"]},
+    {"mes": "Febrero",    "fecha": "21/02/2025", "oficina": "Guayaquil",  "expositores": ["ALEJANDRA MURILLO", "CARLOS GARCIA"]},
+    {"mes": "Febrero",    "fecha": "24/02/2025", "oficina": "Loja",       "expositores": ["KARLA MONCADA"]},
+    {"mes": "Febrero",    "fecha": "27/02/2025", "oficina": "Loja",       "expositores": ["KARLA MONCADA"]},
+    # MARZO
+    {"mes": "Marzo",      "fecha": "01/03/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO", "XAVIER GALARZA"]},
+    {"mes": "Marzo",      "fecha": "11/03/2025", "oficina": "Cuenca",     "expositores": ["MARIA MOROCHO", "ANGEL PEREZ"]},
+    {"mes": "Marzo",      "fecha": "17/03/2025", "oficina": "Portoviejo", "expositores": ["XAVIER GALARZA"]},
+    {"mes": "Marzo",      "fecha": "24/03/2025", "oficina": "Portoviejo", "expositores": ["XAVIER GALARZA"]},
+    {"mes": "Marzo",      "fecha": "26/03/2025", "oficina": "Cuenca",     "expositores": ["VARIOS PONENTES"]},
+    {"mes": "Marzo",      "fecha": "27/03/2025", "oficina": "Loja",       "expositores": ["ANAHI LOPEZ", "KARLA MONCADA"]},
+    {"mes": "Marzo",      "fecha": "28/03/2025", "oficina": "Guayaquil",  "expositores": ["ALEJANDRA MURILLO", "CARLOS GARCIA"]},
+    {"mes": "Marzo",      "fecha": "31/03/2025", "oficina": "Guayaquil",  "expositores": ["ALEJANDRA MURILLO", "CARLOS GARCIA"]},
+    # ABRIL
+    {"mes": "Abril",      "fecha": "02/04/2025", "oficina": "Guayaquil",  "expositores": ["ALEJANDRA MURILLO", "CARLOS GARCIA"]},
+    {"mes": "Abril",      "fecha": "11/04/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO"]},
+    {"mes": "Abril",      "fecha": "22/04/2025", "oficina": "Loja",       "expositores": ["ANAHI LOPEZ", "KARLA MONCADA"]},
+    {"mes": "Abril",      "fecha": "23/04/2025", "oficina": "Loja",       "expositores": ["ANAHI LOPEZ", "KARLA MONCADA"]},
+    {"mes": "Abril",      "fecha": "23/04/2025", "oficina": "Cuenca",     "expositores": ["ANGEL PEREZ", "MARIA MOROCHO"]},
+    {"mes": "Abril",      "fecha": "23/04/2025", "oficina": "Cuenca",     "expositores": ["ANGEL PEREZ", "MARIA MOROCHO"]},
+    {"mes": "Abril",      "fecha": "25/04/2025", "oficina": "Cuenca",     "expositores": ["ANGEL PEREZ", "MARIA MOROCHO"]},
+    {"mes": "Abril",      "fecha": "30/04/2025", "oficina": "Guayaquil",  "expositores": ["ALEJANDRA MURILLO", "CARLOS GARCIA"]},
+    {"mes": "Abril",      "fecha": "30/04/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO"]},
+    # MAYO
+    {"mes": "Mayo",       "fecha": "15/05/2025", "oficina": "Guayaquil",  "expositores": ["ALEXANDRA SILVA", "CARLOS GARCIA"]},
+    {"mes": "Mayo",       "fecha": "19/05/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO", "XAVIER GALARZA"]},
+    {"mes": "Mayo",       "fecha": "21/05/2025", "oficina": "Cuenca",     "expositores": ["ANGEL PEREZ", "MARIA MOROCHO"]},
+    {"mes": "Mayo",       "fecha": "21/05/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO", "ALEJANDRA MURILLO", "XAVIER GALARZA"]},
+    {"mes": "Mayo",       "fecha": "22/05/2025", "oficina": "Cuenca",     "expositores": ["ANGEL PEREZ", "MARIA MOROCHO"]},
+    {"mes": "Mayo",       "fecha": "22/05/2025", "oficina": "Portoviejo", "expositores": ["ALEJANDRA MURILLO", "RICHARD ALVARADO", "XAVIER GALARZA"]},
+    {"mes": "Mayo",       "fecha": "22/05/2025", "oficina": "Portoviejo", "expositores": ["ALEJANDRA MURILLO", "RICHARD ALVARADO", "XAVIER GALARZA"]},
+    {"mes": "Mayo",       "fecha": "28/05/2025", "oficina": "Loja",       "expositores": ["SALOME ROSALES"]},
+    # JUNIO
+    {"mes": "Junio",      "fecha": "03/06/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO", "ALEJANDRA MURILLO"]},
+    {"mes": "Junio",      "fecha": "10/06/2025", "oficina": "Portoviejo", "expositores": ["RICHARD ALVARADO", "ALEJANDRA MURILLO", "XAVIER GALARZA"]},
+    {"mes": "Junio",      "fecha": "18/06/2025", "oficina": "Portoviejo", "expositores": ["RICHARD ALVARADO", "ALEJANDRA MURILLO"]},
+    {"mes": "Junio",      "fecha": "25/06/2025", "oficina": "Guayaquil",  "expositores": ["ALEXANDRA SILVA", "CARLOS GARCIA"]},
+    {"mes": "Junio",      "fecha": "25/06/2025", "oficina": "Guayaquil",  "expositores": ["ALEXANDRA SILVA", "CARLOS GARCIA"]},
+    {"mes": "Junio",      "fecha": "26/06/2025", "oficina": "Cuenca",     "expositores": ["ROSA MORALES"]},
+    {"mes": "Junio",      "fecha": "27/06/2025", "oficina": "Loja",       "expositores": ["SALOME ROSALES"]},
+    {"mes": "Junio",      "fecha": "30/06/2025", "oficina": "Cuenca",     "expositores": ["ROSA MORALES"]},
+    # JULIO
+    {"mes": "Julio",      "fecha": "01/07/2025", "oficina": "Guayaquil",  "expositores": ["CARLOS GARCIA"]},
+    {"mes": "Julio",      "fecha": "04/07/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO", "ALEJANDRA MURILLO"]},
+    {"mes": "Julio",      "fecha": "10/07/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO", "ALEJANDRA MURILLO"]},
+    {"mes": "Julio",      "fecha": "11/07/2025", "oficina": "Cuenca",     "expositores": ["ROSA MORALES", "ANGEL PEREZ"]},
+    {"mes": "Julio",      "fecha": "14/07/2025", "oficina": "Loja",       "expositores": ["ANAHI LOPEZ", "KARLA MONCADA"]},
+    {"mes": "Julio",      "fecha": "14/07/2025", "oficina": "Portoviejo", "expositores": ["DAVID SEGOVIA", "MARICELA LOAYZA", "ROBERTO SANTOS"]},
+    {"mes": "Julio",      "fecha": "14/07/2025", "oficina": "Portoviejo", "expositores": ["DAVID SEGOVIA"]},
+    {"mes": "Julio",      "fecha": "15/07/2025", "oficina": "Portoviejo", "expositores": ["DAVID SEGOVIA", "CRISTIAN ROMERO"]},
+    {"mes": "Julio",      "fecha": "16/07/2025", "oficina": "Portoviejo", "expositores": ["DAVID SEGOVIA", "CRISTIAN ROMERO"]},
+    {"mes": "Julio",      "fecha": "16/07/2025", "oficina": "Cuenca",     "expositores": ["ROSA MORALES", "ANGEL PEREZ"]},
+    {"mes": "Julio",      "fecha": "18/07/2025", "oficina": "Guayaquil",  "expositores": ["CARLOS GARCIA", "ALEXANDRA SILVA"]},
+    {"mes": "Julio",      "fecha": "22/07/2025", "oficina": "Loja",       "expositores": ["ANAHI LOPEZ"]},
+    {"mes": "Julio",      "fecha": "30/07/2025", "oficina": "Loja",       "expositores": ["SALOME ROSALES"]},
+    # AGOSTO
+    {"mes": "Agosto",     "fecha": "01/08/2025", "oficina": "Guayaquil",  "expositores": ["ROBERTO SANTOS", "CARLOS GARCIA", "ALEXANDRA SILVA"]},
+    {"mes": "Agosto",     "fecha": "02/08/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO", "ALEJANDRA MURILLO"]},
+    {"mes": "Agosto",     "fecha": "05/08/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO", "ALEJANDRA MURILLO"]},
+    {"mes": "Agosto",     "fecha": "05/08/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO", "ALEJANDRA MURILLO", "XAVIER GALARZA"]},
+    {"mes": "Agosto",     "fecha": "06/08/2025", "oficina": "Loja",       "expositores": ["CARLOS GARCIA"]},
+    {"mes": "Agosto",     "fecha": "12/08/2025", "oficina": "Guayaquil",  "expositores": ["CARLOS GARCIA", "ALEXANDRA SILVA"]},
+    {"mes": "Agosto",     "fecha": "14/08/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO"]},
+    {"mes": "Agosto",     "fecha": "15/08/2025", "oficina": "Cuenca",     "expositores": ["MARIA MOROCHO", "ANGEL PEREZ"]},
+    {"mes": "Agosto",     "fecha": "16/08/2025", "oficina": "Portoviejo", "expositores": ["DAVID SEGOVIA", "CRISTIAN ROMERO"]},
+    {"mes": "Agosto",     "fecha": "16/08/2025", "oficina": "Portoviejo", "expositores": ["DAVID SEGOVIA", "CRISTIAN ROMERO"]},
+    {"mes": "Agosto",     "fecha": "17/08/2025", "oficina": "Portoviejo", "expositores": ["MARIO NARANJO", "ALEJANDRA MURILLO"]},
+    {"mes": "Agosto",     "fecha": "18/08/2025", "oficina": "Portoviejo", "expositores": ["DAVID SEGOVIA", "CRISTIAN ROMERO"]},
+    {"mes": "Agosto",     "fecha": "18/08/2025", "oficina": "Portoviejo", "expositores": ["DAVID SEGOVIA"]},
+    {"mes": "Agosto",     "fecha": "19/08/2025", "oficina": "Guayaquil",  "expositores": ["CARLOS GARCIA", "MILKA NAZARENO"]},
+    {"mes": "Agosto",     "fecha": "19/08/2025", "oficina": "Loja",       "expositores": ["SALOME ROSALES", "KARLA MONCADA"]},
+    {"mes": "Agosto",     "fecha": "20/08/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO", "ALEXANDRA SILVA"]},
+    {"mes": "Agosto",     "fecha": "21/08/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO"]},
+    {"mes": "Agosto",     "fecha": "22/08/2025", "oficina": "Guayaquil",  "expositores": ["CARLOS GARCIA", "ALEXANDRA SILVA"]},
+    {"mes": "Agosto",     "fecha": "25/08/2025", "oficina": "Cuenca",     "expositores": ["MARIA MOROCHO"]},
+    {"mes": "Agosto",     "fecha": "25/08/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO"]},
+    {"mes": "Agosto",     "fecha": "26/08/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO"]},
+    {"mes": "Agosto",     "fecha": "26/08/2025", "oficina": "Portoviejo", "expositores": ["ALEJANDRA MURILLO", "CRISTIAN ROMERO"]},
+    {"mes": "Agosto",     "fecha": "26/08/2025", "oficina": "Portoviejo", "expositores": ["ALEJANDRA MURILLO", "CRISTIAN ROMERO"]},
+    {"mes": "Agosto",     "fecha": "27/08/2025", "oficina": "Guayaquil",  "expositores": ["CARLOS GARCIA", "ALEXANDRA SILVA"]},
+    # SEPTIEMBRE
+    {"mes": "Septiembre", "fecha": "10/09/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO", "ALEXANDRA SILVA"]},
+    {"mes": "Septiembre", "fecha": "10/09/2025", "oficina": "Guayaquil",  "expositores": ["CARLOS GARCIA"]},
+    {"mes": "Septiembre", "fecha": "11/09/2025", "oficina": "Portoviejo", "expositores": ["ALEJANDRA MURILLO", "CRISTIAN ROMERO"]},
+    {"mes": "Septiembre", "fecha": "12/09/2025", "oficina": "Portoviejo", "expositores": ["ALEJANDRA MURILLO", "CRISTIAN ROMERO"]},
+    {"mes": "Septiembre", "fecha": "12/09/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO", "ALEXANDRA SILVA"]},
+    {"mes": "Septiembre", "fecha": "13/09/2025", "oficina": "Portoviejo", "expositores": ["ALEJANDRA MURILLO", "CRISTIAN ROMERO"]},
+    {"mes": "Septiembre", "fecha": "15/09/2025", "oficina": "Guayaquil",  "expositores": ["CARLOS GARCIA", "ALEXANDRA SILVA"]},
+    {"mes": "Septiembre", "fecha": "16/09/2025", "oficina": "Guayaquil",  "expositores": ["ALEXANDRA SILVA"]},
+    {"mes": "Septiembre", "fecha": "17/09/2025", "oficina": "Guayaquil",  "expositores": ["ROBERTO SANTOS", "DAVID SEGOVIA"]},
+    {"mes": "Septiembre", "fecha": "18/09/2025", "oficina": "Guayaquil",  "expositores": ["CARLOS GARCIA", "MILKA NAZARENO"]},
+    {"mes": "Septiembre", "fecha": "18/09/2025", "oficina": "Guayaquil",  "expositores": ["CARLOS GARCIA", "MILKA NAZARENO"]},
+    {"mes": "Septiembre", "fecha": "19/09/2025", "oficina": "Portoviejo", "expositores": ["ALEJANDRA MURILLO", "XAVIER GALARZA"]},
+    {"mes": "Septiembre", "fecha": "22/09/2025", "oficina": "Loja",       "expositores": ["ANAHI LOPEZ", "KARLA MONCADA"]},
+    {"mes": "Septiembre", "fecha": "26/09/2025", "oficina": "Cuenca",     "expositores": ["ROSA MORALES", "MARIA MOROCHO"]},
+    {"mes": "Septiembre", "fecha": "26/09/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO", "ALEXANDRA SILVA"]},
+    {"mes": "Septiembre", "fecha": "29/09/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO", "ALEXANDRA SILVA"]},
+    {"mes": "Septiembre", "fecha": "30/09/2025", "oficina": "Loja",       "expositores": ["ANAHI LOPEZ", "KARLA MONCADA"]},
+    # OCTUBRE
+    {"mes": "Octubre",    "fecha": "02/10/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO", "ALEXANDRA SILVA"]},
+    {"mes": "Octubre",    "fecha": "03/10/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO", "ALEXANDRA SILVA"]},
+    {"mes": "Octubre",    "fecha": "06/10/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO", "ALEXANDRA SILVA"]},
+    {"mes": "Octubre",    "fecha": "07/10/2025", "oficina": "Cuenca",     "expositores": ["ROSA MORALES", "MARIA MOROCHO"]},
+    {"mes": "Octubre",    "fecha": "07/10/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO", "ALEXANDRA SILVA"]},
+    {"mes": "Octubre",    "fecha": "08/10/2025", "oficina": "Portoviejo", "expositores": ["ALEJANDRA MURILLO", "CRISTIAN ROMERO"]},
+    {"mes": "Octubre",    "fecha": "13/10/2025", "oficina": "Portoviejo", "expositores": ["ALEJANDRA MURILLO", "CRISTIAN ROMERO"]},
+    {"mes": "Octubre",    "fecha": "13/10/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO"]},
+    {"mes": "Octubre",    "fecha": "14/10/2025", "oficina": "Guayaquil",  "expositores": ["ALEXANDRA SILVA"]},
+    {"mes": "Octubre",    "fecha": "15/10/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO", "ALEXANDRA SILVA"]},
+    {"mes": "Octubre",    "fecha": "16/10/2025", "oficina": "Loja",       "expositores": ["DAVID SEGOVIA", "ROBERTO SANTOS", "MARICELA LOAYZA"]},
+    {"mes": "Octubre",    "fecha": "20/10/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO", "ALEJANDRA MURILLO"]},
+    {"mes": "Octubre",    "fecha": "20/10/2025", "oficina": "Guayaquil",  "expositores": ["ALEXANDRA SILVA"]},
+    {"mes": "Octubre",    "fecha": "21/10/2025", "oficina": "Guayaquil",  "expositores": ["CARLOS GARCIA", "MILKA NAZARENO"]},
+    {"mes": "Octubre",    "fecha": "21/10/2025", "oficina": "Cuenca",     "expositores": ["ROBERTO SANTOS", "ALEXANDRA SILVA"]},
+    {"mes": "Octubre",    "fecha": "23/10/2025", "oficina": "Cuenca",     "expositores": ["MARIA MOROCHO", "ANGEL PEREZ"]},
+    {"mes": "Octubre",    "fecha": "23/10/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO"]},
+    {"mes": "Octubre",    "fecha": "24/10/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO"]},
+    {"mes": "Octubre",    "fecha": "24/10/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO"]},
+    {"mes": "Octubre",    "fecha": "27/10/2025", "oficina": "Guayaquil",  "expositores": ["ALEXANDRA SILVA"]},
+    {"mes": "Octubre",    "fecha": "28/10/2025", "oficina": "Guayaquil",  "expositores": ["ALEXANDRA SILVA"]},
+    {"mes": "Octubre",    "fecha": "29/10/2025", "oficina": "Cuenca",     "expositores": ["ROBERTO SANTOS", "CARLOS GARCIA"]},
+    {"mes": "Octubre",    "fecha": "30/10/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO", "ALEXANDRA SILVA"]},
+    # NOVIEMBRE
+    {"mes": "Noviembre",  "fecha": "05/11/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO"]},
+    {"mes": "Noviembre",  "fecha": "10/11/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO", "ALEXANDRA SILVA"]},
+    {"mes": "Noviembre",  "fecha": "10/11/2025", "oficina": "Portoviejo", "expositores": ["DAVID SEGOVIA", "ROBERTO SANTOS", "MARICELA LOAYZA"]},
+    {"mes": "Noviembre",  "fecha": "13/11/2025", "oficina": "Portoviejo", "expositores": ["DAVID SEGOVIA"]},
+    {"mes": "Noviembre",  "fecha": "14/11/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO", "ALEXANDRA SILVA"]},
+    {"mes": "Noviembre",  "fecha": "19/11/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO"]},
+    {"mes": "Noviembre",  "fecha": "20/11/2025", "oficina": "Loja",       "expositores": ["ANAHI LOPEZ", "KARLA MONCADA"]},
+    {"mes": "Noviembre",  "fecha": "20/11/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO"]},
+    {"mes": "Noviembre",  "fecha": "21/11/2025", "oficina": "Guayaquil",  "expositores": ["CARLOS GARCIA", "MILKA NAZARENO"]},
+    {"mes": "Noviembre",  "fecha": "21/11/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO"]},
+    {"mes": "Noviembre",  "fecha": "21/11/2025", "oficina": "Portoviejo", "expositores": ["NAZRE MURGUEITO"]},
+    {"mes": "Noviembre",  "fecha": "24/11/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO"]},
+    {"mes": "Noviembre",  "fecha": "26/11/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO", "ALEJANDRA MURILLO"]},
+    {"mes": "Noviembre",  "fecha": "27/11/2025", "oficina": "Cuenca",     "expositores": ["ROBERTO SANTOS", "MARIA SILVA"]},
+    {"mes": "Noviembre",  "fecha": "28/11/2025", "oficina": "Loja",       "expositores": ["KARLA MONCADA", "ANAHI LOPEZ"]},
+    {"mes": "Noviembre",  "fecha": "28/11/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO"]},
+    {"mes": "Noviembre",  "fecha": "28/11/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO"]},
+    {"mes": "Noviembre",  "fecha": "28/11/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO", "ALEJANDRA MURILLO"]},
+    # DICIEMBRE
+    {"mes": "Diciembre",  "fecha": "06/12/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO"]},
+    {"mes": "Diciembre",  "fecha": "08/12/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO"]},
+    {"mes": "Diciembre",  "fecha": "11/12/2025", "oficina": "Loja",       "expositores": ["ANAHI LOPEZ", "SALOME ROSALES"]},
+    {"mes": "Diciembre",  "fecha": "11/12/2025", "oficina": "Loja",       "expositores": ["ANAHI LOPEZ", "SALOME ROSALES"]},
+    {"mes": "Diciembre",  "fecha": "11/12/2025", "oficina": "Guayaquil",  "expositores": ["CARLOS GARCIA"]},
+    {"mes": "Diciembre",  "fecha": "12/12/2025", "oficina": "Guayaquil",  "expositores": ["CARLOS GARCIA"]},
+    {"mes": "Diciembre",  "fecha": "12/12/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO"]},
+    {"mes": "Diciembre",  "fecha": "15/12/2025", "oficina": "Guayaquil",  "expositores": ["CARLOS GARCIA"]},
+    {"mes": "Diciembre",  "fecha": "17/12/2025", "oficina": "Portoviejo", "expositores": ["ALEJANDRA MURILLO"]},
+    {"mes": "Diciembre",  "fecha": "18/12/2025", "oficina": "Portoviejo", "expositores": ["CRISTIAN ROMERO", "ALEJANDRA MURILLO"]},
+    {"mes": "Diciembre",  "fecha": "18/12/2025", "oficina": "Guayaquil",  "expositores": ["ALEXANDRA SILVA", "ROBERTO SANTOS", "MARICELA LOAYZA", "CARLOS VEINTEMILLA"]},
+    {"mes": "Diciembre",  "fecha": "18/12/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO"]},
+    {"mes": "Diciembre",  "fecha": "19/12/2025", "oficina": "Guayaquil",  "expositores": ["MILKA NAZARENO", "ALEXANDRA SILVA", "CARLOS GARCIA"]},
+    {"mes": "Diciembre",  "fecha": "20/12/2025", "oficina": "Cuenca",     "expositores": ["ROSA MORALES", "ANGEL PEREZ"]},
+]
+
 ASAMBLEAS_RESPONSABLES_RAW = [
     {"numero": "001", "oficina": "Portoviejo", "responsables": ["CRISTIAN ROMERO"]},
     {"numero": "002", "oficina": "Loja",       "responsables": ["KARLA MONCADA", "ANAHI LOPEZ"]},
@@ -564,6 +734,120 @@ def _grafico_asistentes_asambleas(df: pd.DataFrame) -> go.Figure:
 
 
 # ---------------------------------------------------------------------------
+# Helpers — expositores capacitaciones
+# ---------------------------------------------------------------------------
+
+_MESES_ORDEN = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+]
+
+
+def _df_expositores_detalle() -> pd.DataFrame:
+    """Una fila por (fecha, oficina, expositor)."""
+    filas = []
+    for r in CAPACITACIONES_EXPOSITORES_RAW:
+        for exp in r["expositores"]:
+            filas.append({
+                "mes":       r["mes"],
+                "fecha":     r["fecha"],
+                "oficina":   r["oficina"].strip().title(),
+                "expositor": exp.strip().upper(),
+            })
+    return pd.DataFrame(filas)
+
+
+def _grafico_expositores_total() -> go.Figure:
+    """Barras horizontales: participaciones totales por expositor."""
+    df = (
+        _df_expositores_detalle()
+        .groupby("expositor").size()
+        .reset_index(name="Capacitaciones")
+        .sort_values("Capacitaciones", ascending=True)
+    )
+    fig = go.Figure(go.Bar(
+        y=df["expositor"], x=df["Capacitaciones"],
+        orientation="h",
+        marker_color=COLOR_PRIMARIO,
+        text=df["Capacitaciones"], textposition="outside",
+    ))
+    fig.update_layout(
+        title="Participaciones por expositor (total nacional)",
+        xaxis_title="N° Capacitaciones", yaxis_title="",
+        margin=dict(l=10, r=40, t=50, b=10),
+        plot_bgcolor="white", showlegend=False, height=500,
+    )
+    return fig
+
+
+def _grafico_expositores_por_oficina() -> go.Figure:
+    """Barras agrupadas: expositores por oficina (top expositores internos)."""
+    df = _df_expositores_detalle()
+    # Solo expositores con > 1 participación para no saturar el gráfico
+    conteo_total = df.groupby("expositor").size()
+    top_exp = conteo_total[conteo_total > 1].index
+    df_top = df[df["expositor"].isin(top_exp)]
+
+    pivot = (
+        df_top.groupby(["oficina", "expositor"]).size()
+        .reset_index(name="Capacitaciones")
+    )
+    fig = px.bar(
+        pivot, x="expositor", y="Capacitaciones", color="oficina",
+        barmode="group", title="Expositores por oficina",
+        color_discrete_map={
+            "Portoviejo": COLORES_OFICINAS_DRAC["Portoviejo"],
+            "Loja":       COLORES_OFICINAS_DRAC["Loja"],
+            "Cuenca":     COLORES_OFICINAS_DRAC["Cuenca"],
+            "Guayaquil":  COLORES_OFICINAS_DRAC["Guayaquil"],
+        },
+        text="Capacitaciones",
+    )
+    fig.update_traces(textposition="outside")
+    fig.update_layout(
+        xaxis_title="Expositor", yaxis_title="N° Capacitaciones",
+        xaxis_tickangle=-40, legend_title="Oficina",
+        margin=dict(l=10, r=10, t=55, b=140),
+        plot_bgcolor="white", height=520,
+    )
+    return fig
+
+
+def _grafico_expositores_mensual() -> go.Figure:
+    """Barras apiladas: capacitaciones por mes y oficina."""
+    df = pd.DataFrame(CAPACITACIONES_EXPOSITORES_RAW)
+    df["oficina"] = df["oficina"].str.strip().str.title()
+    mensual = (
+        df.groupby(["mes", "oficina"]).size()
+        .reset_index(name="Capacitaciones")
+    )
+    # Ordenar meses cronológicamente
+    cat_mes = pd.CategoricalDtype(categories=_MESES_ORDEN, ordered=True)
+    mensual["mes"] = mensual["mes"].astype(cat_mes)
+    mensual = mensual.sort_values("mes")
+
+    fig = px.bar(
+        mensual, x="mes", y="Capacitaciones", color="oficina",
+        barmode="stack", title="Capacitaciones por mes y oficina",
+        color_discrete_map={
+            "Portoviejo": COLORES_OFICINAS_DRAC["Portoviejo"],
+            "Loja":       COLORES_OFICINAS_DRAC["Loja"],
+            "Cuenca":     COLORES_OFICINAS_DRAC["Cuenca"],
+            "Guayaquil":  COLORES_OFICINAS_DRAC["Guayaquil"],
+        },
+        text="Capacitaciones",
+    )
+    fig.update_traces(textposition="inside")
+    fig.update_layout(
+        xaxis_title="Mes", yaxis_title="N° Capacitaciones",
+        legend_title="Oficina",
+        margin=dict(l=10, r=10, t=55, b=10),
+        plot_bgcolor="white",
+    )
+    return fig
+
+
+# ---------------------------------------------------------------------------
 # Punto de entrada
 # ---------------------------------------------------------------------------
 
@@ -770,6 +1054,29 @@ def mostrar_dashboard_drac() -> None:
         }),
         use_container_width=True, hide_index=True,
     )
+
+    # --- Estadísticas por expositor
+    st.subheader("Estadísticas por Expositor — Capacitaciones 2025")
+
+    col_e1, col_e2 = st.columns(2)
+    with col_e1:
+        st.plotly_chart(_grafico_expositores_total(), use_container_width=True)
+    with col_e2:
+        st.plotly_chart(_grafico_expositores_por_oficina(), use_container_width=True)
+
+    st.plotly_chart(_grafico_expositores_mensual(), use_container_width=True)
+
+    st.markdown("**Detalle — expositor por capacitación:**")
+    df_exp_tabla = pd.DataFrame([
+        {
+            "Mes":        r["mes"],
+            "Fecha":      r["fecha"],
+            "Oficina":    r["oficina"].strip().title(),
+            "Expositor(es)": " / ".join(r["expositores"]),
+        }
+        for r in CAPACITACIONES_EXPOSITORES_RAW
+    ])
+    st.dataframe(df_exp_tabla, use_container_width=True, hide_index=True)
 
     # --- Asambleas Productivas
     st.subheader("Asambleas Productivas 2025")
