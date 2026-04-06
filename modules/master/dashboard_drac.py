@@ -8,6 +8,7 @@ Secciones:
 
 from __future__ import annotations
 
+import requests
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -57,6 +58,44 @@ COLORES_TIPO = {
 
 
 # ---------------------------------------------------------------------------
+# GeoJSON provincias Ecuador
+# ---------------------------------------------------------------------------
+
+@st.cache_data(show_spinner=False)
+def _cargar_geojson_provincias() -> dict | None:
+    """Descarga (con caché) el GeoJSON de provincias del Ecuador."""
+    url = (
+        "https://raw.githubusercontent.com/angelnmara/geojson/master/"
+        "EcuadorProvincias.geojson"
+    )
+    try:
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception:
+        return None
+
+
+def _trazas_provincias(geojson: dict) -> tuple[list, list]:
+    """Devuelve (lons, lats) con None como separador entre polígonos."""
+    all_lons: list = []
+    all_lats: list = []
+    for feature in geojson.get("features", []):
+        geom = feature.get("geometry", {})
+        gtype = geom.get("type", "")
+        if gtype == "Polygon":
+            anillos = [geom["coordinates"][0]]
+        elif gtype == "MultiPolygon":
+            anillos = [poly[0] for poly in geom["coordinates"]]
+        else:
+            continue
+        for anillo in anillos:
+            all_lons.extend([c[0] for c in anillo] + [None])
+            all_lats.extend([c[1] for c in anillo] + [None])
+    return all_lons, all_lats
+
+
+# ---------------------------------------------------------------------------
 # Helpers — convenios
 # ---------------------------------------------------------------------------
 
@@ -67,8 +106,12 @@ def _df_convenios() -> pd.DataFrame:
 
 
 def _mapa_convenios(df: pd.DataFrame) -> go.Figure:
-    """Scatter geo interactivo centrado en Ecuador con un punto por convenio."""
-    # Agregar jitter mínimo para que puntos solapados sean distinguibles
+    """Scatter geo con límites provinciales del Ecuador y puntos por convenio.
+
+    - Usa scope='world' con rangos explícitos para que Galápagos (~89°W) sea visible.
+    - Dibuja los polígonos de provincias descargados del GeoJSON antes de los puntos.
+    """
+    # ---- jitter para separar puntos en la misma ciudad --------------------
     df_map = df.copy()
     conteo_loc = df_map.groupby(["lat", "lon"]).cumcount()
     df_map["lat_j"] = df_map["lat"] + conteo_loc * 0.06
@@ -86,6 +129,21 @@ def _mapa_convenios(df: pd.DataFrame) -> go.Figure:
 
     fig = go.Figure()
 
+    # ---- límites de provincias --------------------------------------------
+    geojson = _cargar_geojson_provincias()
+    if geojson:
+        lons_prov, lats_prov = _trazas_provincias(geojson)
+        fig.add_trace(go.Scattergeo(
+            lon=lons_prov,
+            lat=lats_prov,
+            mode="lines",
+            line=dict(width=0.7, color="#555555"),
+            showlegend=False,
+            hoverinfo="skip",
+            name="",
+        ))
+
+    # ---- puntos por convenio (una traza por tipo) -------------------------
     for tipo, color in COLORES_TIPO.items():
         mask = df_map["tipo"] == tipo
         sub = df_map[mask]
@@ -96,8 +154,10 @@ def _mapa_convenios(df: pd.DataFrame) -> go.Figure:
             lon=sub["lon_j"],
             mode="markers+text",
             name=tipo,
-            marker=dict(size=14, color=color, opacity=0.85, symbol="circle",
-                        line=dict(width=1, color="white")),
+            marker=dict(
+                size=14, color=color, opacity=0.88, symbol="circle",
+                line=dict(width=1, color="white"),
+            ),
             text=sub["N"].astype(str),
             textposition="middle center",
             textfont=dict(size=8, color="white"),
@@ -108,13 +168,15 @@ def _mapa_convenios(df: pd.DataFrame) -> go.Figure:
     fig.update_layout(
         title=dict(text="Mapa de Convenios Institucionales — Ecuador", x=0.5),
         geo=dict(
-            scope="south america",
+            # 'world' + rangos explícitos → muestra tanto el continente
+            # como las Islas Galápagos (~89°W) sin recorte de scope regional.
+            scope="world",
             projection_type="mercator",
-            center=dict(lat=-1.8, lon=-78.5),
-            lataxis_range=[-5.5, 1.5],
-            lonaxis_range=[-92.0, -74.5],
+            center=dict(lat=-1.5, lon=-80.0),
+            lataxis_range=[-5.5, 2.0],
+            lonaxis_range=[-93.0, -74.0],
             showland=True,
-            landcolor="#F0F0F0",
+            landcolor="#EEF2F5",
             showocean=True,
             oceancolor="#D6EAF8",
             showlakes=True,
@@ -122,23 +184,21 @@ def _mapa_convenios(df: pd.DataFrame) -> go.Figure:
             showrivers=True,
             rivercolor="#AED6F1",
             showcountries=True,
-            countrycolor="#AAAAAA",
+            countrycolor="#888888",
             showcoastlines=True,
-            coastlinecolor="#888888",
-            subunitcolor="#CCCCCC",
-            showsubunits=True,
+            coastlinecolor="#666666",
             bgcolor="white",
         ),
         legend=dict(
             title="Tipo de convenio",
             orientation="v",
             x=0.01, y=0.99,
-            bgcolor="rgba(255,255,255,0.85)",
+            bgcolor="rgba(255,255,255,0.88)",
             bordercolor="#CCCCCC",
             borderwidth=1,
         ),
-        margin=dict(l=0, r=0, t=40, b=0),
-        height=520,
+        margin=dict(l=0, r=0, t=45, b=0),
+        height=580,
         paper_bgcolor="white",
     )
     return fig
@@ -298,7 +358,11 @@ def mostrar_dashboard_drac() -> None:
 
     # --- Mapa interactivo
     st.subheader("Mapa interactivo — Distribución geográfica de convenios")
-    st.caption("Cada punto representa un convenio. Pasa el cursor sobre el punto para ver el detalle.")
+    st.caption(
+        "Cada punto representa un convenio. Pasa el cursor sobre el punto para ver el detalle. "
+        "Los límites de provincias se cargan automáticamente desde el repositorio GeoJSON del Ecuador. "
+        "Las Islas Galápagos (~89°W) son visibles en el extremo izquierdo del mapa."
+    )
 
     # Filtros rápidos para el mapa
     fi1, fi2 = st.columns(2)
