@@ -257,6 +257,154 @@ def _grafico_convenios_evolucion(df: pd.DataFrame) -> go.Figure:
 
 
 # ---------------------------------------------------------------------------
+# Datos estáticos — Intendencia Regional Abogacía de la Competencia 2025
+# ---------------------------------------------------------------------------
+
+CAPACITACIONES_2025 = [
+    {"oficina": "Portoviejo", "numero": 51,  "asistentes": 2050, "encuestados": 1143},
+    {"oficina": "Loja",       "numero": 19,  "asistentes": 1005, "encuestados": 341},
+    {"oficina": "Cuenca",     "numero": 21,  "asistentes": 1024, "encuestados": 706},
+    {"oficina": "Guayaquil",  "numero": 63,  "asistentes": 3037, "encuestados": 513},
+]
+
+ASAMBLEAS_2025 = [
+    {"oficina": "Portoviejo", "numero": 9,  "asistentes": 287},
+    {"oficina": "Loja",       "numero": 9,  "asistentes": 165},
+    {"oficina": "Cuenca",     "numero": 11, "asistentes": 120},
+    {"oficina": "Guayaquil",  "numero": 9,  "asistentes": 564},
+]
+
+CONGRESOS_2025 = [
+    {
+        "oficina": "Cuenca",
+        "tema": "Mercados Justos: Tendencia y Desafíos de la Competencia Económica en la Región",
+        "asistentes": 400,
+        "fecha": "26 de marzo de 2025",
+    },
+]
+
+COLORES_OFICINAS_DRAC = {
+    "Portoviejo": "#2E86AB",
+    "Loja":       "#A23B72",
+    "Cuenca":     "#C8A951",
+    "Guayaquil":  "#1A3A5C",
+}
+
+
+def _grafico_capacitaciones_barras(df: pd.DataFrame) -> go.Figure:
+    """Barras agrupadas: número de capacitaciones y asistentes por oficina."""
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        name="Capacitaciones",
+        x=df["oficina"], y=df["numero"],
+        marker_color=[COLORES_OFICINAS_DRAC.get(o, COLOR_PRIMARIO) for o in df["oficina"]],
+        text=df["numero"], textposition="outside",
+        yaxis="y1",
+    ))
+    fig.add_trace(go.Scatter(
+        name="Asistentes",
+        x=df["oficina"], y=df["asistentes"],
+        mode="lines+markers+text",
+        text=df["asistentes"], textposition="top center",
+        line=dict(color=COLOR_SECUNDARIO, width=2),
+        marker=dict(size=8, color=COLOR_SECUNDARIO),
+        yaxis="y2",
+    ))
+    fig.update_layout(
+        title="Capacitaciones ejecutadas y asistentes por oficina",
+        xaxis_title="Oficina",
+        yaxis=dict(title="N° Capacitaciones", showgrid=False),
+        yaxis2=dict(title="Asistentes", overlaying="y", side="right"),
+        legend=dict(orientation="h", x=0, y=1.12),
+        margin=dict(l=10, r=10, t=60, b=10),
+        plot_bgcolor="white",
+        barmode="group",
+    )
+    return fig
+
+
+def _grafico_encuestados_pie(df: pd.DataFrame) -> go.Figure:
+    """Donut: distribución de encuestados por oficina."""
+    fig = px.pie(
+        df, names="oficina", values="encuestados",
+        title="Distribución de encuestados por oficina",
+        color="oficina",
+        color_discrete_map=COLORES_OFICINAS_DRAC,
+        hole=0.45,
+    )
+    fig.update_traces(textposition="inside", textinfo="percent+label")
+    fig.update_layout(margin=dict(l=10, r=10, t=50, b=10), showlegend=False)
+    return fig
+
+
+def _grafico_asambleas(df: pd.DataFrame) -> go.Figure:
+    """Barras agrupadas: número de asambleas y asistentes por oficina."""
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        name="Asambleas",
+        x=df["oficina"], y=df["numero"],
+        marker_color=[COLORES_OFICINAS_DRAC.get(o, COLOR_PRIMARIO) for o in df["oficina"]],
+        text=df["numero"], textposition="outside",
+        yaxis="y1",
+    ))
+    fig.add_trace(go.Scatter(
+        name="Asistentes",
+        x=df["oficina"], y=df["asistentes"],
+        mode="lines+markers+text",
+        text=df["asistentes"], textposition="top center",
+        line=dict(color=COLOR_SECUNDARIO, width=2),
+        marker=dict(size=8, color=COLOR_SECUNDARIO),
+        yaxis="y2",
+    ))
+    fig.update_layout(
+        title="Asambleas Productivas y asistentes por oficina",
+        xaxis_title="Oficina",
+        yaxis=dict(title="N° Asambleas", showgrid=False),
+        yaxis2=dict(title="Asistentes", overlaying="y", side="right"),
+        legend=dict(orientation="h", x=0, y=1.12),
+        margin=dict(l=10, r=10, t=60, b=10),
+        plot_bgcolor="white",
+    )
+    return fig
+
+
+def _grafico_asistentes_comparativo(
+    df_cap: pd.DataFrame, df_asm: pd.DataFrame
+) -> go.Figure:
+    """Barras apiladas horizontales: asistentes totales por oficina y actividad."""
+    oficinas = df_cap["oficina"].tolist()
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        name="Capacitaciones",
+        y=oficinas,
+        x=df_cap.set_index("oficina").loc[oficinas, "asistentes"].values,
+        orientation="h",
+        marker_color=COLOR_PRIMARIO,
+        text=df_cap.set_index("oficina").loc[oficinas, "asistentes"].values,
+        textposition="inside",
+    ))
+    asm_idx = df_asm.set_index("oficina")
+    fig.add_trace(go.Bar(
+        name="Asambleas",
+        y=oficinas,
+        x=[asm_idx.loc[o, "asistentes"] if o in asm_idx.index else 0 for o in oficinas],
+        orientation="h",
+        marker_color=COLOR_SECUNDARIO,
+        text=[asm_idx.loc[o, "asistentes"] if o in asm_idx.index else 0 for o in oficinas],
+        textposition="inside",
+    ))
+    fig.update_layout(
+        title="Asistentes totales por oficina y tipo de actividad",
+        xaxis_title="Asistentes", yaxis_title="",
+        barmode="stack",
+        legend=dict(orientation="h", x=0, y=1.1),
+        margin=dict(l=10, r=10, t=55, b=10),
+        plot_bgcolor="white",
+    )
+    return fig
+
+
+# ---------------------------------------------------------------------------
 # Punto de entrada
 # ---------------------------------------------------------------------------
 
@@ -381,4 +529,91 @@ def mostrar_dashboard_drac() -> None:
         }),
         use_container_width=True,
         hide_index=True,
+    )
+
+    # ======================================================================
+    # SECCIÓN 3 — Intendencia Regional Abogacía de la Competencia
+    # ======================================================================
+    st.divider()
+    st.header("3. Estadísticas Intendencia Regional — Abogacía de la Competencia")
+    st.caption("Datos consolidados 2025 de las cuatro oficinas regionales.")
+
+    df_cap25 = pd.DataFrame(CAPACITACIONES_2025)
+    df_asm25 = pd.DataFrame(ASAMBLEAS_2025)
+    df_cong25 = pd.DataFrame(CONGRESOS_2025)
+
+    # --- KPIs globales
+    total_cap  = df_cap25["numero"].sum()
+    total_asi  = df_cap25["asistentes"].sum()
+    total_enc  = df_cap25["encuestados"].sum()
+    total_asm  = df_asm25["numero"].sum()
+    total_asi_asm = df_asm25["asistentes"].sum()
+    total_cong = len(df_cong25)
+    total_asi_cong = df_cong25["asistentes"].sum()
+
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Capacitaciones ejecutadas", f"{total_cap:,}", help="Total nacional 2025")
+    k2.metric("Asistentes a capacitaciones", f"{total_asi:,}")
+    k3.metric("Encuestados", f"{total_enc:,}")
+    k4.metric("Tasa de encuestados", f"{total_enc/total_asi*100:.1f}%")
+
+    k5, k6, k7, k8 = st.columns(4)
+    k5.metric("Asambleas Productivas", f"{total_asm:,}")
+    k6.metric("Asistentes a asambleas", f"{total_asi_asm:,}")
+    k7.metric("Congresos Internacionales", f"{total_cong:,}")
+    k8.metric("Asistentes a congresos", f"{total_asi_cong:,}")
+
+    # --- Capacitaciones ejecutadas
+    st.subheader("Capacitaciones Ejecutadas 2025")
+    col_cap_bar, col_cap_pie = st.columns(2)
+    with col_cap_bar:
+        st.plotly_chart(_grafico_capacitaciones_barras(df_cap25), use_container_width=True)
+    with col_cap_pie:
+        st.plotly_chart(_grafico_encuestados_pie(df_cap25), use_container_width=True)
+
+    # Tabla capacitaciones
+    df_cap_tabla = df_cap25.copy()
+    df_cap_tabla.loc[len(df_cap_tabla)] = {
+        "oficina": "TOTAL", "numero": total_cap,
+        "asistentes": total_asi, "encuestados": total_enc,
+    }
+    st.dataframe(
+        df_cap_tabla.rename(columns={
+            "oficina": "Oficina", "numero": "N° Capacitaciones",
+            "asistentes": "Asistentes", "encuestados": "Encuestados",
+        }),
+        use_container_width=True, hide_index=True,
+    )
+
+    # --- Asambleas Productivas
+    st.subheader("Asambleas Productivas 2025")
+    col_asm, col_comp = st.columns(2)
+    with col_asm:
+        st.plotly_chart(_grafico_asambleas(df_asm25), use_container_width=True)
+    with col_comp:
+        st.plotly_chart(
+            _grafico_asistentes_comparativo(df_cap25, df_asm25),
+            use_container_width=True,
+        )
+
+    # Tabla asambleas
+    df_asm_tabla = df_asm25.copy()
+    df_asm_tabla.loc[len(df_asm_tabla)] = {
+        "oficina": "TOTAL", "numero": total_asm, "asistentes": total_asi_asm,
+    }
+    st.dataframe(
+        df_asm_tabla.rename(columns={
+            "oficina": "Oficina", "numero": "N° Asambleas", "asistentes": "Asistentes",
+        }),
+        use_container_width=True, hide_index=True,
+    )
+
+    # --- Congresos Internacionales
+    st.subheader("Congresos Internacionales 2025")
+    st.dataframe(
+        df_cong25.rename(columns={
+            "oficina": "Oficina", "tema": "Tema",
+            "asistentes": "Asistentes", "fecha": "Fecha",
+        }),
+        use_container_width=True, hide_index=True,
     )
