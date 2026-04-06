@@ -504,6 +504,214 @@ COLORES_OFICINAS_DRAC = {
     "Guayaquil":  "#1A3A5C",
 }
 
+# ---------------------------------------------------------------------------
+# Datos estáticos — Incidencia geográfica de capacitaciones 2025 (por provincia)
+# ---------------------------------------------------------------------------
+
+CAPACITACIONES_PROVINCIAS_RAW = [
+    # ENERO
+    {"mes": "Enero",      "fecha": "14/01/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Enero",      "fecha": "20/01/2025", "oficina": "Cuenca",     "provincia": "Azuay"},
+    {"mes": "Enero",      "fecha": "21/01/2025", "oficina": "Guayaquil",  "provincia": "Santa Elena"},
+    {"mes": "Enero",      "fecha": "21/01/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Enero",      "fecha": "27/01/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Enero",      "fecha": "30/01/2025", "oficina": "Cuenca",     "provincia": "Azuay"},
+    {"mes": "Enero",      "fecha": "30/01/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    # FEBRERO
+    {"mes": "Febrero",    "fecha": "01/02/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Febrero",    "fecha": "18/02/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Febrero",    "fecha": "19/02/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Febrero",    "fecha": "21/02/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Febrero",    "fecha": "24/02/2025", "oficina": "Loja",       "provincia": "Loja"},
+    {"mes": "Febrero",    "fecha": "27/02/2025", "oficina": "Loja",       "provincia": "Loja"},
+    # MARZO
+    {"mes": "Marzo",      "fecha": "01/03/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Marzo",      "fecha": "11/03/2025", "oficina": "Cuenca",     "provincia": "Azuay"},
+    {"mes": "Marzo",      "fecha": "17/03/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Marzo",      "fecha": "24/03/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Marzo",      "fecha": "26/03/2025", "oficina": "Cuenca",     "provincia": "Azuay"},
+    {"mes": "Marzo",      "fecha": "27/03/2025", "oficina": "Loja",       "provincia": "Loja"},
+    {"mes": "Marzo",      "fecha": "28/03/2025", "oficina": "Guayaquil",  "provincia": "Santa Elena"},
+    {"mes": "Marzo",      "fecha": "31/03/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    # ABRIL
+    {"mes": "Abril",      "fecha": "02/04/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Abril",      "fecha": "11/04/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Abril",      "fecha": "22/04/2025", "oficina": "Loja",       "provincia": "Zamora Chinchipe"},
+    {"mes": "Abril",      "fecha": "23/04/2025", "oficina": "Loja",       "provincia": "Loja"},
+    {"mes": "Abril",      "fecha": "23/04/2025", "oficina": "Cuenca",     "provincia": "Azuay"},
+    {"mes": "Abril",      "fecha": "23/04/2025", "oficina": "Cuenca",     "provincia": "Azuay"},
+    {"mes": "Abril",      "fecha": "25/04/2025", "oficina": "Cuenca",     "provincia": "Azuay"},
+    {"mes": "Abril",      "fecha": "30/04/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Abril",      "fecha": "30/04/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    # MAYO
+    {"mes": "Mayo",       "fecha": "15/05/2025", "oficina": "Guayaquil",  "provincia": "Santa Elena"},
+    {"mes": "Mayo",       "fecha": "19/05/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Mayo",       "fecha": "21/05/2025", "oficina": "Cuenca",     "provincia": "Azuay"},
+    {"mes": "Mayo",       "fecha": "21/05/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Mayo",       "fecha": "22/05/2025", "oficina": "Cuenca",     "provincia": "Azuay"},
+    {"mes": "Mayo",       "fecha": "22/05/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Mayo",       "fecha": "22/05/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Mayo",       "fecha": "28/05/2025", "oficina": "Loja",       "provincia": "Loja"},
+    # JUNIO
+    {"mes": "Junio",      "fecha": "03/06/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Junio",      "fecha": "10/06/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Junio",      "fecha": "18/06/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Junio",      "fecha": "25/06/2025", "oficina": "Guayaquil",  "provincia": "Santa Elena"},
+    {"mes": "Junio",      "fecha": "25/06/2025", "oficina": "Guayaquil",  "provincia": "Santa Elena"},
+    {"mes": "Junio",      "fecha": "26/06/2025", "oficina": "Cuenca",     "provincia": "Azuay"},
+    {"mes": "Junio",      "fecha": "27/06/2025", "oficina": "Loja",       "provincia": "Loja"},
+    {"mes": "Junio",      "fecha": "30/06/2025", "oficina": "Cuenca",     "provincia": "Azuay"},
+    # JULIO
+    {"mes": "Julio",      "fecha": "01/07/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Julio",      "fecha": "04/07/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Julio",      "fecha": "10/07/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Julio",      "fecha": "11/07/2025", "oficina": "Cuenca",     "provincia": "Azuay"},
+    {"mes": "Julio",      "fecha": "14/07/2025", "oficina": "Loja",       "provincia": "Loja"},
+    {"mes": "Julio",      "fecha": "14/07/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Julio",      "fecha": "14/07/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Julio",      "fecha": "15/07/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Julio",      "fecha": "16/07/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Julio",      "fecha": "16/07/2025", "oficina": "Cuenca",     "provincia": "Azuay"},
+    {"mes": "Julio",      "fecha": "18/07/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Julio",      "fecha": "22/07/2025", "oficina": "Loja",       "provincia": "Loja"},
+    {"mes": "Julio",      "fecha": "30/07/2025", "oficina": "Loja",       "provincia": "Loja"},
+    # AGOSTO
+    {"mes": "Agosto",     "fecha": "01/08/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Agosto",     "fecha": "02/08/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Agosto",     "fecha": "05/08/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Agosto",     "fecha": "05/08/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Agosto",     "fecha": "06/08/2025", "oficina": "Loja",       "provincia": "Loja"},
+    {"mes": "Agosto",     "fecha": "12/08/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Agosto",     "fecha": "14/08/2025", "oficina": "Guayaquil",  "provincia": "Los Ríos"},
+    {"mes": "Agosto",     "fecha": "15/08/2025", "oficina": "Cuenca",     "provincia": "Azuay"},
+    {"mes": "Agosto",     "fecha": "16/08/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Agosto",     "fecha": "16/08/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Agosto",     "fecha": "17/08/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Agosto",     "fecha": "18/08/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Agosto",     "fecha": "18/08/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Agosto",     "fecha": "19/08/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Agosto",     "fecha": "19/08/2025", "oficina": "Loja",       "provincia": "El Oro"},
+    {"mes": "Agosto",     "fecha": "20/08/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Agosto",     "fecha": "21/08/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Agosto",     "fecha": "22/08/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Agosto",     "fecha": "25/08/2025", "oficina": "Cuenca",     "provincia": "Azuay"},
+    {"mes": "Agosto",     "fecha": "25/08/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Agosto",     "fecha": "26/08/2025", "oficina": "Guayaquil",  "provincia": "Bolívar"},
+    {"mes": "Agosto",     "fecha": "26/08/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Agosto",     "fecha": "26/08/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Agosto",     "fecha": "27/08/2025", "oficina": "Guayaquil",  "provincia": "Santa Elena"},
+    # SEPTIEMBRE
+    {"mes": "Septiembre", "fecha": "10/09/2025", "oficina": "Guayaquil",  "provincia": "Santa Elena"},
+    {"mes": "Septiembre", "fecha": "10/09/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Septiembre", "fecha": "11/09/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Septiembre", "fecha": "12/09/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Septiembre", "fecha": "13/09/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Septiembre", "fecha": "12/09/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Septiembre", "fecha": "15/09/2025", "oficina": "Guayaquil",  "provincia": "Santa Elena"},
+    {"mes": "Septiembre", "fecha": "16/09/2025", "oficina": "Guayaquil",  "provincia": "Santa Elena"},
+    {"mes": "Septiembre", "fecha": "17/09/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Septiembre", "fecha": "18/09/2025", "oficina": "Guayaquil",  "provincia": "Santa Elena"},
+    {"mes": "Septiembre", "fecha": "18/09/2025", "oficina": "Guayaquil",  "provincia": "Santa Elena"},
+    {"mes": "Septiembre", "fecha": "19/09/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Septiembre", "fecha": "22/09/2025", "oficina": "Loja",       "provincia": "Loja"},
+    {"mes": "Septiembre", "fecha": "26/09/2025", "oficina": "Cuenca",     "provincia": "Azuay"},
+    {"mes": "Septiembre", "fecha": "26/09/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Septiembre", "fecha": "29/09/2025", "oficina": "Guayaquil",  "provincia": "Santa Elena"},
+    {"mes": "Septiembre", "fecha": "30/09/2025", "oficina": "Loja",       "provincia": "Loja"},
+    # OCTUBRE
+    {"mes": "Octubre",    "fecha": "02/10/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Octubre",    "fecha": "03/10/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Octubre",    "fecha": "06/10/2025", "oficina": "Guayaquil",  "provincia": "Santa Elena"},
+    {"mes": "Octubre",    "fecha": "07/10/2025", "oficina": "Cuenca",     "provincia": "Azuay"},
+    {"mes": "Octubre",    "fecha": "07/10/2025", "oficina": "Guayaquil",  "provincia": "Santa Elena"},
+    {"mes": "Octubre",    "fecha": "08/10/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Octubre",    "fecha": "13/10/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Octubre",    "fecha": "13/10/2025", "oficina": "Guayaquil",  "provincia": "Bolívar"},
+    {"mes": "Octubre",    "fecha": "14/10/2025", "oficina": "Guayaquil",  "provincia": "Santa Elena"},
+    {"mes": "Octubre",    "fecha": "15/10/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Octubre",    "fecha": "16/10/2025", "oficina": "Loja",       "provincia": "El Oro"},
+    {"mes": "Octubre",    "fecha": "20/10/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Octubre",    "fecha": "20/10/2025", "oficina": "Guayaquil",  "provincia": "Santa Elena"},
+    {"mes": "Octubre",    "fecha": "21/10/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Octubre",    "fecha": "21/10/2025", "oficina": "Cuenca",     "provincia": "Azuay"},
+    {"mes": "Octubre",    "fecha": "23/10/2025", "oficina": "Cuenca",     "provincia": "Cañar"},
+    {"mes": "Octubre",    "fecha": "23/10/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Octubre",    "fecha": "24/10/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Octubre",    "fecha": "24/10/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Octubre",    "fecha": "27/10/2025", "oficina": "Guayaquil",  "provincia": "Santa Elena"},
+    {"mes": "Octubre",    "fecha": "28/10/2025", "oficina": "Guayaquil",  "provincia": "Santa Elena"},
+    {"mes": "Octubre",    "fecha": "29/10/2025", "oficina": "Cuenca",     "provincia": "Azuay"},
+    {"mes": "Octubre",    "fecha": "30/10/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    # NOVIEMBRE
+    {"mes": "Noviembre",  "fecha": "05/11/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Noviembre",  "fecha": "10/11/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Noviembre",  "fecha": "10/11/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Noviembre",  "fecha": "13/11/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Noviembre",  "fecha": "14/11/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Noviembre",  "fecha": "19/11/2025", "oficina": "Guayaquil",  "provincia": "Bolívar"},
+    {"mes": "Noviembre",  "fecha": "20/11/2025", "oficina": "Loja",       "provincia": "Zamora Chinchipe"},
+    {"mes": "Noviembre",  "fecha": "20/11/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Noviembre",  "fecha": "21/11/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Noviembre",  "fecha": "21/11/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Noviembre",  "fecha": "21/11/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Noviembre",  "fecha": "24/11/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Noviembre",  "fecha": "26/11/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Noviembre",  "fecha": "27/11/2025", "oficina": "Cuenca",     "provincia": "Azuay"},
+    {"mes": "Noviembre",  "fecha": "28/11/2025", "oficina": "Loja",       "provincia": "Loja"},
+    {"mes": "Noviembre",  "fecha": "28/11/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Noviembre",  "fecha": "28/11/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Noviembre",  "fecha": "28/11/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    # DICIEMBRE
+    {"mes": "Diciembre",  "fecha": "06/12/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Diciembre",  "fecha": "08/12/2025", "oficina": "Guayaquil",  "provincia": "Los Ríos"},
+    {"mes": "Diciembre",  "fecha": "11/12/2025", "oficina": "Loja",       "provincia": "Loja"},
+    {"mes": "Diciembre",  "fecha": "11/12/2025", "oficina": "Loja",       "provincia": "Loja"},
+    {"mes": "Diciembre",  "fecha": "11/12/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Diciembre",  "fecha": "12/12/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Diciembre",  "fecha": "12/12/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Diciembre",  "fecha": "15/12/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Diciembre",  "fecha": "17/12/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Diciembre",  "fecha": "18/12/2025", "oficina": "Portoviejo", "provincia": "Manabí"},
+    {"mes": "Diciembre",  "fecha": "18/12/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Diciembre",  "fecha": "18/12/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Diciembre",  "fecha": "19/12/2025", "oficina": "Guayaquil",  "provincia": "Guayas"},
+    {"mes": "Diciembre",  "fecha": "20/12/2025", "oficina": "Cuenca",     "provincia": "Azuay"},
+]
+
+# Normalización de nombres de provincia (cubre variantes con/sin tilde y ciudad→provincia)
+_PROV_NORM: dict[str, str] = {
+    "manabi":             "Manabí",
+    "manabí":             "Manabí",
+    "azuay":              "Azuay",
+    "guayas":             "Guayas",
+    "santa elena":        "Santa Elena",
+    "loja":               "Loja",
+    "zamora":             "Zamora Chinchipe",
+    "zamora chinchipe":   "Zamora Chinchipe",
+    "los ríos":           "Los Ríos",
+    "los rios":           "Los Ríos",
+    "el oro":             "El Oro",
+    "bolívar":            "Bolívar",
+    "bolivar":            "Bolívar",
+    "cañar":              "Cañar",
+    "canar":              "Cañar",
+    "cuenca":             "Azuay",   # ciudad → provincia
+}
+
+# Coordenadas aproximadas del centroide de cada provincia (lat, lon)
+_COORDS_PROVINCIAS_CAP: dict[str, tuple[float, float]] = {
+    "Manabí":           (-1.05,  -80.45),
+    "Azuay":            (-2.90,  -79.00),
+    "Guayas":           (-2.19,  -79.89),
+    "Santa Elena":      (-2.23,  -80.92),
+    "Loja":             (-3.99,  -79.20),
+    "Zamora Chinchipe": (-4.07,  -78.95),
+    "Los Ríos":         (-1.80,  -79.50),
+    "El Oro":           (-3.26,  -79.96),
+    "Bolívar":          (-1.60,  -79.00),
+    "Cañar":            (-2.56,  -78.94),
+}
+
 
 def _grafico_num_capacitaciones(df: pd.DataFrame) -> go.Figure:
     """Barras simples: número de capacitaciones por oficina."""
@@ -813,6 +1021,149 @@ def _grafico_expositores_por_oficina() -> go.Figure:
     return fig
 
 
+def _df_cap_provincias(meses: list[str] | None = None) -> pd.DataFrame:
+    """Conteo de capacitaciones por provincia (con normalización de nombres).
+
+    Args:
+        meses: Lista de nombres de mes para filtrar. None = todos.
+
+    Returns:
+        DataFrame con columnas ['provincia', 'Capacitaciones'] ordenado descendente.
+    """
+    provincias = []
+    for r in CAPACITACIONES_PROVINCIAS_RAW:
+        if meses and r["mes"] not in meses:
+            continue
+        prov_key = r["provincia"].strip().lower()
+        prov = _PROV_NORM.get(prov_key, r["provincia"].strip().title())
+        provincias.append(prov)
+
+    if not provincias:
+        return pd.DataFrame(columns=["provincia", "Capacitaciones"])
+
+    return (
+        pd.Series(provincias, name="provincia")
+        .value_counts()
+        .reset_index()
+        .rename(columns={"count": "Capacitaciones"})
+        .sort_values("Capacitaciones", ascending=False)
+        .reset_index(drop=True)
+    )
+
+
+def _mapa_calor_capacitaciones(df: pd.DataFrame) -> go.Figure:
+    """Mapa de calor coroplético: incidencia de capacitaciones por provincia.
+
+    Usa Choroplethmapbox para colorear las provincias según el conteo,
+    con etiquetas numéricas sobre cada provincia.
+    Similar a _mapa_convenios pero con escala de color continua.
+    """
+    geojson = _cargar_geojson_provincias()
+    fig = go.Figure()
+
+    # ---- Capa coroplética -------------------------------------------------
+    if geojson and not df.empty:
+        # Detectar la clave de nombre de provincia en el GeoJSON
+        clave_geojson = None
+        for candidata in ["DPA_DESPRO", "NAME_1", "NOM_DEPAR", "NOMBRE_PRO", "name", "NAME"]:
+            if (geojson.get("features")
+                    and candidata in geojson["features"][0].get("properties", {})):
+                clave_geojson = candidata
+                break
+
+        if clave_geojson:
+            # DPA_DESPRO usa mayúsculas con tildes: "MANABÍ", "AZUAY", etc.
+            df_map = df.copy()
+            df_map["prov_key"] = df_map["provincia"].str.upper()
+
+            fig.add_trace(go.Choroplethmapbox(
+                geojson=geojson,
+                locations=df_map["prov_key"],
+                z=df_map["Capacitaciones"],
+                featureidkey=f"properties.{clave_geojson}",
+                colorscale=[
+                    [0.00, "#EBF5FB"],
+                    [0.15, "#AED6F1"],
+                    [0.35, "#5DADE2"],
+                    [0.60, "#2471A3"],
+                    [0.80, "#1A5276"],
+                    [1.00, "#0B1F3A"],
+                ],
+                colorbar=dict(
+                    title=dict(text="Capacitaciones", side="right"),
+                    thickness=14,
+                    len=0.55,
+                    x=1.0,
+                ),
+                marker_opacity=0.80,
+                marker_line_width=1.2,
+                marker_line_color="#333333",
+                hovertemplate=(
+                    "<b>%{location}</b><br>"
+                    "Capacitaciones: <b>%{z}</b><extra></extra>"
+                ),
+                name="Incidencia",
+                showscale=True,
+            ))
+        else:
+            # Sin clave coincidente: dibujar bordes provinciales manualmente
+            all_lons, all_lats = _trazas_provincias(geojson)
+            fig.add_trace(go.Scattermapbox(
+                lon=all_lons, lat=all_lats,
+                mode="lines",
+                line=dict(width=1.2, color="#555555"),
+                showlegend=False, hoverinfo="skip", name="",
+            ))
+
+    # ---- Etiquetas con el conteo sobre cada provincia ---------------------
+    if not df.empty:
+        s_lats, s_lons, s_text, s_hover = [], [], [], []
+        for _, row in df.iterrows():
+            coords = _COORDS_PROVINCIAS_CAP.get(row["provincia"])
+            if coords:
+                s_lats.append(coords[0])
+                s_lons.append(coords[1])
+                s_text.append(str(int(row["Capacitaciones"])))
+                s_hover.append(
+                    f"<b>{row['provincia']}</b><br>"
+                    f"Capacitaciones: {int(row['Capacitaciones'])}"
+                )
+
+        if s_lats:
+            fig.add_trace(go.Scattermapbox(
+                lat=s_lats,
+                lon=s_lons,
+                mode="markers+text",
+                marker=go.scattermapbox.Marker(
+                    size=28,
+                    color=COLOR_SECUNDARIO,
+                    opacity=0.85,
+                ),
+                text=s_text,
+                textfont=dict(size=11, color="white"),
+                hovertext=s_hover,
+                hoverinfo="text",
+                showlegend=False,
+                name="",
+            ))
+
+    fig.update_layout(
+        title=dict(
+            text="Mapa de Calor — Incidencia de Capacitaciones por Provincia (2025)",
+            x=0.5,
+        ),
+        mapbox=dict(
+            style="open-street-map",
+            zoom=4.8,
+            center={"lat": -2.0, "lon": -79.5},
+        ),
+        margin=dict(l=0, r=0, t=45, b=0),
+        height=600,
+        paper_bgcolor="white",
+    )
+    return fig
+
+
 def _grafico_expositores_mensual() -> go.Figure:
     """Barras apiladas: capacitaciones por mes y oficina."""
     df = pd.DataFrame(CAPACITACIONES_EXPOSITORES_RAW)
@@ -1077,6 +1428,72 @@ def mostrar_dashboard_drac() -> None:
         for r in CAPACITACIONES_EXPOSITORES_RAW
     ])
     st.dataframe(df_exp_tabla, use_container_width=True, hide_index=True)
+
+    # --- Mapa de calor — distribución geográfica
+    st.subheader("Mapa interactivo — Distribución geográfica de capacitaciones")
+    st.caption(
+        "El mapa muestra la incidencia de capacitaciones por provincia durante 2025. "
+        "Las provincias con mayor actividad aparecen en tonos más oscuros. "
+        "Los números sobre cada provincia indican el total de capacitaciones realizadas."
+    )
+
+    # Filtro por mes
+    fi_mes1, fi_mes2 = st.columns([2, 3])
+    with fi_mes1:
+        meses_filter = st.multiselect(
+            "Filtrar por mes",
+            options=_MESES_ORDEN,
+            default=[],
+            placeholder="Todos los meses",
+            key="drac_cap_meses",
+        )
+
+    meses_sel = meses_filter if meses_filter else None
+    df_prov = _df_cap_provincias(meses=meses_sel)
+
+    if not df_prov.empty:
+        # KPIs rápidos del mapa
+        prov_top = df_prov.iloc[0]
+        total_eventos = int(df_prov["Capacitaciones"].sum())
+        n_provincias_activas = len(df_prov)
+
+        km1, km2, km3 = st.columns(3)
+        km1.metric("Total capacitaciones (período)", total_eventos)
+        km2.metric("Provincias con actividad", n_provincias_activas)
+        km3.metric(
+            "Provincia con mayor incidencia",
+            prov_top["provincia"],
+            delta=f"{int(prov_top['Capacitaciones'])} capacitaciones",
+        )
+
+        st.plotly_chart(_mapa_calor_capacitaciones(df_prov), use_container_width=True)
+
+        # Ranking de provincias
+        col_rank, _ = st.columns([1, 1])
+        with col_rank:
+            fig_rank = go.Figure(go.Bar(
+                y=df_prov["provincia"][::-1],
+                x=df_prov["Capacitaciones"][::-1],
+                orientation="h",
+                marker_color=[
+                    COLOR_PRIMARIO if i > 0 else COLOR_SECUNDARIO
+                    for i in range(len(df_prov) - 1, -1, -1)
+                ],
+                text=df_prov["Capacitaciones"][::-1],
+                textposition="outside",
+            ))
+            fig_rank.update_layout(
+                title="Ranking por provincia",
+                xaxis_title="N° Capacitaciones",
+                yaxis_title="",
+                margin=dict(l=10, r=40, t=45, b=10),
+                plot_bgcolor="white",
+                showlegend=False,
+                height=max(280, len(df_prov) * 40),
+            )
+            st.plotly_chart(fig_rank, use_container_width=True)
+    else:
+        st.info("No hay datos para los meses seleccionados.")
 
     # --- Asambleas Productivas
     st.subheader("Asambleas Productivas 2025")
