@@ -18,6 +18,9 @@ from database.db import get_connection, consultar_capacitaciones
 from utils.charts import (
     grafico_radar_satisfaccion,
     grafico_histograma_satisfaccion,
+    grafico_participantes_provincia,
+    grafico_top_instituciones,
+    grafico_evolucion_mensual,
     ETIQUETAS_SATISFACCION,
 )
 
@@ -437,6 +440,18 @@ def mostrar_dashboard_drac() -> None:
             if col in df_cap.columns:
                 df_cap[col] = pd.to_numeric(df_cap[col], errors="coerce")
 
+        # --- Análisis por provincia e institución (al inicio)
+        st.subheader("Análisis por provincia e institución")
+        col_prov, col_inst = st.columns(2)
+        with col_prov:
+            st.plotly_chart(grafico_participantes_provincia(df_cap), use_container_width=True)
+        with col_inst:
+            st.plotly_chart(grafico_top_instituciones(df_cap), use_container_width=True)
+
+        st.plotly_chart(grafico_evolucion_mensual(df_cap), use_container_width=True)
+        st.divider()
+
+    if filas:
         # Métricas rápidas
         cols_sat = [c for c in ETIQUETAS_SATISFACCION.keys() if c in df_cap.columns]
         total_respuestas = df_cap[cols_sat].dropna(how="all").shape[0] if cols_sat else 0
