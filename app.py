@@ -125,6 +125,7 @@ with st.sidebar:
     MODULOS_MASTER = {
         **MODULOS_REGIONAL,
         "🌐 Dashboard Global": "dashboard_global",
+        "📊 Dashboard DRAC":   "dashboard_drac",
     }
 
     modulos_disponibles = MODULOS_MASTER if es_master else MODULOS_REGIONAL
@@ -164,6 +165,10 @@ elif modulo_id == "cap_dashboard":
 elif modulo_id == "dashboard_global" and es_master:
     from modules.master.dashboard_global import mostrar_dashboard_global
     mostrar_dashboard_global()
+
+elif modulo_id == "dashboard_drac" and es_master:
+    from modules.master.dashboard_drac import mostrar_dashboard_drac
+    mostrar_dashboard_drac()
 
 else:
     st.error("Módulo no disponible.")
