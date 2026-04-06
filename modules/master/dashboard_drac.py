@@ -106,16 +106,17 @@ def _df_convenios() -> pd.DataFrame:
 
 
 def _mapa_convenios(df: pd.DataFrame) -> go.Figure:
-    """Scatter geo con límites provinciales del Ecuador y puntos por convenio.
+    """Mapa interactivo con base OpenStreetMap, límites provinciales y puntos por convenio.
 
-    - Usa scope='world' con rangos explícitos para que Galápagos (~89°W) sea visible.
-    - Dibuja los polígonos de provincias descargados del GeoJSON antes de los puntos.
+    - Usa Scattermapbox (sin token) con estilo open-street-map.
+    - Dibuja los polígonos del GeoJSON de provincias como líneas sobre el mapa.
+    - Zoom inicial muestra tanto el Ecuador continental como las Galápagos.
     """
-    # ---- jitter para separar puntos en la misma ciudad --------------------
+    # ---- jitter para separar puntos solapados en la misma ciudad ----------
     df_map = df.copy()
     conteo_loc = df_map.groupby(["lat", "lon"]).cumcount()
-    df_map["lat_j"] = df_map["lat"] + conteo_loc * 0.06
-    df_map["lon_j"] = df_map["lon"] + conteo_loc * 0.06
+    df_map["lat_j"] = df_map["lat"] + conteo_loc * 0.04
+    df_map["lon_j"] = df_map["lon"] + conteo_loc * 0.04
 
     df_map["texto_hover"] = (
         "<b>" + df_map["contraparte"] + "</b><br>"
@@ -129,15 +130,15 @@ def _mapa_convenios(df: pd.DataFrame) -> go.Figure:
 
     fig = go.Figure()
 
-    # ---- límites de provincias --------------------------------------------
+    # ---- límites de provincias desde GeoJSON ------------------------------
     geojson = _cargar_geojson_provincias()
     if geojson:
-        lons_prov, lats_prov = _trazas_provincias(geojson)
-        fig.add_trace(go.Scattergeo(
-            lon=lons_prov,
-            lat=lats_prov,
+        all_lons, all_lats = _trazas_provincias(geojson)
+        fig.add_trace(go.Scattermapbox(
+            lon=all_lons,
+            lat=all_lats,
             mode="lines",
-            line=dict(width=0.7, color="#555555"),
+            line=dict(width=1.2, color="#333333"),
             showlegend=False,
             hoverinfo="skip",
             name="",
@@ -149,56 +150,40 @@ def _mapa_convenios(df: pd.DataFrame) -> go.Figure:
         sub = df_map[mask]
         if sub.empty:
             continue
-        fig.add_trace(go.Scattergeo(
-            lat=sub["lat_j"],
+        fig.add_trace(go.Scattermapbox(
             lon=sub["lon_j"],
+            lat=sub["lat_j"],
             mode="markers+text",
             name=tipo,
-            marker=dict(
-                size=14, color=color, opacity=0.88, symbol="circle",
-                line=dict(width=1, color="white"),
+            marker=go.scattermapbox.Marker(
+                size=20,
+                color=color,
+                opacity=0.90,
             ),
             text=sub["N"].astype(str),
-            textposition="middle center",
-            textfont=dict(size=8, color="white"),
+            textfont=dict(size=9, color="white"),
             hovertext=sub["texto_hover"],
             hoverinfo="text",
         ))
 
+    # zoom ~4.5 con centro entre continental y Galápagos para ver ambos
     fig.update_layout(
         title=dict(text="Mapa de Convenios Institucionales — Ecuador", x=0.5),
-        geo=dict(
-            # 'world' + rangos explícitos → muestra tanto el continente
-            # como las Islas Galápagos (~89°W) sin recorte de scope regional.
-            scope="world",
-            projection_type="mercator",
-            center=dict(lat=-1.5, lon=-80.0),
-            lataxis_range=[-5.5, 2.0],
-            lonaxis_range=[-93.0, -74.0],
-            showland=True,
-            landcolor="#EEF2F5",
-            showocean=True,
-            oceancolor="#D6EAF8",
-            showlakes=True,
-            lakecolor="#D6EAF8",
-            showrivers=True,
-            rivercolor="#AED6F1",
-            showcountries=True,
-            countrycolor="#888888",
-            showcoastlines=True,
-            coastlinecolor="#666666",
-            bgcolor="white",
+        mapbox=dict(
+            style="open-street-map",
+            zoom=4.6,
+            center={"lat": -1.8, "lon": -81.5},
         ),
         legend=dict(
             title="Tipo de convenio",
             orientation="v",
             x=0.01, y=0.99,
-            bgcolor="rgba(255,255,255,0.88)",
+            bgcolor="rgba(255,255,255,0.90)",
             bordercolor="#CCCCCC",
             borderwidth=1,
         ),
         margin=dict(l=0, r=0, t=45, b=0),
-        height=580,
+        height=600,
         paper_bgcolor="white",
     )
     return fig
