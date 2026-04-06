@@ -286,6 +286,47 @@ CONGRESOS_2025 = [
     },
 ]
 
+ASAMBLEAS_RESPONSABLES_RAW = [
+    {"numero": "001", "oficina": "Portoviejo", "responsables": ["CRISTIAN ROMERO"]},
+    {"numero": "002", "oficina": "Loja",       "responsables": ["KARLA MONCADA", "ANAHI LOPEZ"]},
+    {"numero": "003", "oficina": "Guayaquil",  "responsables": ["ALEJANDRA MURILLO", "CARLOS GARCÍA"]},
+    {"numero": "004", "oficina": "Cuenca",     "responsables": ["MARIA MOROCHO"]},
+    {"numero": "005", "oficina": "Cuenca",     "responsables": ["MARIA MOROCHO"]},
+    {"numero": "006", "oficina": "Loja",       "responsables": ["SALOME ROSALES"]},
+    {"numero": "007", "oficina": "Guayaquil",  "responsables": ["ALEXANDRA SILVA", "CARLOS GARCÍA"]},
+    {"numero": "008", "oficina": "Portoviejo", "responsables": ["CRISTIAN ROMERO", "XAVIER GALARZA"]},
+    {"numero": "009", "oficina": "Loja",       "responsables": ["KARLA MONCADA"]},
+    {"numero": "010", "oficina": "Portoviejo", "responsables": ["ALEJANDRA MURILLO", "CRISTIAN ROMERO"]},
+    {"numero": "011", "oficina": "Guayaquil",  "responsables": ["ALEXANDRA SILVA", "CARLOS GARCÍA"]},
+    {"numero": "012", "oficina": "Cuenca",     "responsables": ["MARIA MOROCHO"]},
+    {"numero": "013", "oficina": "Portoviejo", "responsables": ["ALEJANDRA MURILLO", "CRISTIAN ROMERO"]},
+    {"numero": "014", "oficina": "Cuenca",     "responsables": ["MARIA MOROCHO"]},
+    {"numero": "015", "oficina": "Cuenca",     "responsables": ["MARIA MOROCHO"]},
+    {"numero": "016", "oficina": "Guayaquil",  "responsables": ["MILKA NAZARENO"]},
+    {"numero": "017", "oficina": "Loja",       "responsables": ["KARLA MONCADA", "SALOME ROSALES"]},
+    {"numero": "018", "oficina": "Guayaquil",  "responsables": ["MILKA NAZARENO"]},
+    {"numero": "019", "oficina": "Cuenca",     "responsables": ["MARIA MOROCHO"]},
+    {"numero": "020", "oficina": "Loja",       "responsables": ["KARLA MONCADA", "SALOME ROSALES"]},
+    {"numero": "021", "oficina": "Portoviejo", "responsables": ["CRISTIAN ROMERO", "ALEJANDRA MURILLO"]},
+    {"numero": "022", "oficina": "Guayaquil",  "responsables": ["MILKA NAZARENO"]},
+    {"numero": "023", "oficina": "Portoviejo", "responsables": ["ALEJANDRA MURILLO", "CRISTIAN ROMERO"]},
+    {"numero": "024", "oficina": "Cuenca",     "responsables": ["MARIA MOROCHO"]},
+    {"numero": "025", "oficina": "Loja",       "responsables": ["KARLA MONCADA"]},
+    {"numero": "026", "oficina": "Cuenca",     "responsables": ["MARIA MOROCHO", "ANGEL PEREZ"]},
+    {"numero": "027", "oficina": "Loja",       "responsables": ["ANAHI LOPEZ", "KARLA MONCADA"]},
+    {"numero": "028", "oficina": "Guayaquil",  "responsables": ["MILKA NAZARENO"]},
+    {"numero": "029", "oficina": "Portoviejo", "responsables": ["ALEJANDRA MURILLO"]},
+    {"numero": "030", "oficina": "Cuenca",     "responsables": ["MARIA MOROCHO"]},
+    {"numero": "031", "oficina": "Guayaquil",  "responsables": ["MILKA NAZARENO"]},
+    {"numero": "032", "oficina": "Portoviejo", "responsables": ["ALEJANDRA MURILLO", "CRISTIAN ROMERO"]},
+    {"numero": "033", "oficina": "Loja",       "responsables": ["KARLA MONCADA"]},
+    {"numero": "034", "oficina": "Cuenca",     "responsables": ["MARIA MOROCHO"]},
+    {"numero": "035", "oficina": "Guayaquil",  "responsables": ["MILKA NAZARENO"]},
+    {"numero": "036", "oficina": "Portoviejo", "responsables": ["ALEJANDRA MURILLO"]},
+    {"numero": "037", "oficina": "Cuenca",     "responsables": ["MARIA MOROCHO"]},
+    {"numero": "038", "oficina": "Loja",       "responsables": ["KARLA MONCADA"]},
+]
+
 COLORES_OFICINAS_DRAC = {
     "Portoviejo": "#2E86AB",
     "Loja":       "#A23B72",
@@ -372,6 +413,112 @@ def _grafico_distribucion_pie(
         title=titulo,
         showlegend=False,
         margin=dict(l=10, r=10, t=50, b=10),
+    )
+    return fig
+
+
+def _df_responsables_detalle() -> pd.DataFrame:
+    """DataFrame expandido: una fila por (asamblea, responsable, oficina)."""
+    filas = []
+    for r in ASAMBLEAS_RESPONSABLES_RAW:
+        for resp in r["responsables"]:
+            filas.append({
+                "numero":      r["numero"],
+                "oficina":     r["oficina"].strip().title(),
+                "responsable": resp.strip().upper(),
+            })
+    return pd.DataFrame(filas)
+
+
+def _conteo_responsables() -> pd.DataFrame:
+    """Total de asambleas por responsable (participaciones individuales)."""
+    df = _df_responsables_detalle()
+    return (
+        df.groupby("responsable").size()
+        .reset_index(name="Asambleas")
+        .sort_values("Asambleas", ascending=True)
+        .rename(columns={"responsable": "Responsable"})
+    )
+
+
+def _grafico_responsables_asambleas() -> go.Figure:
+    """Barras horizontales: total de asambleas por responsable."""
+    df = _conteo_responsables()
+    fig = go.Figure(go.Bar(
+        y=df["Responsable"],
+        x=df["Asambleas"],
+        orientation="h",
+        marker_color=COLOR_PRIMARIO,
+        text=df["Asambleas"],
+        textposition="outside",
+    ))
+    fig.update_layout(
+        title="Participaciones por responsable (total nacional)",
+        xaxis_title="N° Asambleas",
+        yaxis_title="",
+        margin=dict(l=10, r=40, t=50, b=10),
+        plot_bgcolor="white",
+        showlegend=False,
+        height=420,
+    )
+    return fig
+
+
+def _grafico_responsables_por_oficina() -> go.Figure:
+    """Barras agrupadas: responsables por oficina."""
+    df = _df_responsables_detalle()
+    pivot = (
+        df.groupby(["oficina", "responsable"]).size()
+        .reset_index(name="Asambleas")
+    )
+    oficinas_orden = ["Portoviejo", "Loja", "Cuenca", "Guayaquil"]
+    fig = px.bar(
+        pivot,
+        x="responsable", y="Asambleas",
+        color="oficina",
+        barmode="group",
+        title="Responsables por oficina",
+        color_discrete_map={
+            "Portoviejo": COLORES_OFICINAS_DRAC["Portoviejo"],
+            "Loja":       COLORES_OFICINAS_DRAC["Loja"],
+            "Cuenca":     COLORES_OFICINAS_DRAC["Cuenca"],
+            "Guayaquil":  COLORES_OFICINAS_DRAC["Guayaquil"],
+        },
+        category_orders={"oficina": oficinas_orden},
+        text="Asambleas",
+    )
+    fig.update_traces(textposition="outside")
+    fig.update_layout(
+        xaxis_title="Responsable",
+        yaxis_title="N° Asambleas",
+        xaxis_tickangle=-35,
+        legend_title="Oficina",
+        margin=dict(l=10, r=10, t=55, b=120),
+        plot_bgcolor="white",
+        height=480,
+    )
+    return fig
+
+
+def _grafico_responsables_pie() -> go.Figure:
+    """Donut: distribución con número y porcentaje por responsable."""
+    df = _conteo_responsables().sort_values("Asambleas", ascending=False)
+    total = df["Asambleas"].sum()
+    textos = [f"{v}<br>({v/total*100:.1f}%)" for v in df["Asambleas"]]
+    fig = go.Figure(go.Pie(
+        labels=df["Responsable"],
+        values=df["Asambleas"],
+        hole=0.42,
+        text=textos,
+        textinfo="text+label",
+        textposition="inside",
+        hovertemplate="<b>%{label}</b><br>%{value} asambleas (%{percent})<extra></extra>",
+    ))
+    fig.update_layout(
+        title="Distribución de asambleas por responsable",
+        showlegend=False,
+        margin=dict(l=10, r=10, t=50, b=10),
+        height=420,
     )
     return fig
 
@@ -656,6 +803,31 @@ def mostrar_dashboard_drac() -> None:
         }),
         use_container_width=True, hide_index=True,
     )
+
+    # --- Estadísticas por responsable
+    st.subheader("Estadísticas por responsable")
+
+    # Fila 1: total nacional | donut
+    col_r1, col_r2 = st.columns(2)
+    with col_r1:
+        st.plotly_chart(_grafico_responsables_asambleas(), use_container_width=True)
+    with col_r2:
+        st.plotly_chart(_grafico_responsables_pie(), use_container_width=True)
+
+    # Fila 2: responsables por oficina (ancho completo)
+    st.plotly_chart(_grafico_responsables_por_oficina(), use_container_width=True)
+
+    # Tabla detalle con oficina
+    st.markdown("**Detalle — responsable y oficina por asamblea:**")
+    filas_resp = [
+        {
+            "N° Reporte":    f"Asamblea Productiva {r['numero']}",
+            "Oficina":       r["oficina"].strip().title(),
+            "Responsable(s)": " / ".join(r["responsables"]),
+        }
+        for r in ASAMBLEAS_RESPONSABLES_RAW
+    ]
+    st.dataframe(pd.DataFrame(filas_resp), use_container_width=True, hide_index=True)
 
     # --- Congresos Internacionales
     st.subheader("Congresos Internacionales 2025")
