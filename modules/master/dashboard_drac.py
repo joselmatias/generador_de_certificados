@@ -291,115 +291,124 @@ COLORES_OFICINAS_DRAC = {
 }
 
 
-def _grafico_capacitaciones_barras(df: pd.DataFrame) -> go.Figure:
-    """Barras agrupadas: número de capacitaciones y asistentes por oficina."""
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        name="Capacitaciones",
-        x=df["oficina"], y=df["numero"],
+def _grafico_num_capacitaciones(df: pd.DataFrame) -> go.Figure:
+    """Barras simples: número de capacitaciones por oficina."""
+    fig = go.Figure(go.Bar(
+        x=df["oficina"],
+        y=df["numero"],
         marker_color=[COLORES_OFICINAS_DRAC.get(o, COLOR_PRIMARIO) for o in df["oficina"]],
-        text=df["numero"], textposition="outside",
-        yaxis="y1",
-    ))
-    fig.add_trace(go.Scatter(
-        name="Asistentes",
-        x=df["oficina"], y=df["asistentes"],
-        mode="lines+markers+text",
-        text=df["asistentes"], textposition="top center",
-        line=dict(color=COLOR_SECUNDARIO, width=2),
-        marker=dict(size=8, color=COLOR_SECUNDARIO),
-        yaxis="y2",
+        text=df["numero"],
+        textposition="outside",
     ))
     fig.update_layout(
-        title="Capacitaciones ejecutadas y asistentes por oficina",
+        title="N° de capacitaciones ejecutadas por oficina",
         xaxis_title="Oficina",
-        yaxis=dict(title="N° Capacitaciones", showgrid=False),
-        yaxis2=dict(title="Asistentes", overlaying="y", side="right"),
-        legend=dict(orientation="h", x=0, y=1.12),
-        margin=dict(l=10, r=10, t=60, b=10),
+        yaxis_title="N° Capacitaciones",
+        margin=dict(l=10, r=10, t=50, b=10),
         plot_bgcolor="white",
-        barmode="group",
+        showlegend=False,
     )
     return fig
 
 
-def _grafico_encuestados_pie(df: pd.DataFrame) -> go.Figure:
-    """Donut: distribución de encuestados por oficina."""
-    fig = px.pie(
-        df, names="oficina", values="encuestados",
-        title="Distribución de encuestados por oficina",
-        color="oficina",
-        color_discrete_map=COLORES_OFICINAS_DRAC,
-        hole=0.45,
-    )
-    fig.update_traces(textposition="inside", textinfo="percent+label")
-    fig.update_layout(margin=dict(l=10, r=10, t=50, b=10), showlegend=False)
-    return fig
-
-
-def _grafico_asambleas(df: pd.DataFrame) -> go.Figure:
-    """Barras agrupadas: número de asambleas y asistentes por oficina."""
+def _grafico_asistentes_encuestados_barras(df: pd.DataFrame) -> go.Figure:
+    """Barras agrupadas: asistentes y encuestados por oficina."""
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        name="Asambleas",
-        x=df["oficina"], y=df["numero"],
-        marker_color=[COLORES_OFICINAS_DRAC.get(o, COLOR_PRIMARIO) for o in df["oficina"]],
-        text=df["numero"], textposition="outside",
-        yaxis="y1",
-    ))
-    fig.add_trace(go.Scatter(
         name="Asistentes",
-        x=df["oficina"], y=df["asistentes"],
-        mode="lines+markers+text",
-        text=df["asistentes"], textposition="top center",
-        line=dict(color=COLOR_SECUNDARIO, width=2),
-        marker=dict(size=8, color=COLOR_SECUNDARIO),
-        yaxis="y2",
-    ))
-    fig.update_layout(
-        title="Asambleas Productivas y asistentes por oficina",
-        xaxis_title="Oficina",
-        yaxis=dict(title="N° Asambleas", showgrid=False),
-        yaxis2=dict(title="Asistentes", overlaying="y", side="right"),
-        legend=dict(orientation="h", x=0, y=1.12),
-        margin=dict(l=10, r=10, t=60, b=10),
-        plot_bgcolor="white",
-    )
-    return fig
-
-
-def _grafico_asistentes_comparativo(
-    df_cap: pd.DataFrame, df_asm: pd.DataFrame
-) -> go.Figure:
-    """Barras apiladas horizontales: asistentes totales por oficina y actividad."""
-    oficinas = df_cap["oficina"].tolist()
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        name="Capacitaciones",
-        y=oficinas,
-        x=df_cap.set_index("oficina").loc[oficinas, "asistentes"].values,
-        orientation="h",
+        x=df["oficina"],
+        y=df["asistentes"],
         marker_color=COLOR_PRIMARIO,
-        text=df_cap.set_index("oficina").loc[oficinas, "asistentes"].values,
-        textposition="inside",
+        text=df["asistentes"],
+        textposition="outside",
     ))
-    asm_idx = df_asm.set_index("oficina")
     fig.add_trace(go.Bar(
-        name="Asambleas",
-        y=oficinas,
-        x=[asm_idx.loc[o, "asistentes"] if o in asm_idx.index else 0 for o in oficinas],
-        orientation="h",
+        name="Encuestados",
+        x=df["oficina"],
+        y=df["encuestados"],
         marker_color=COLOR_SECUNDARIO,
-        text=[asm_idx.loc[o, "asistentes"] if o in asm_idx.index else 0 for o in oficinas],
-        textposition="inside",
+        text=df["encuestados"],
+        textposition="outside",
     ))
     fig.update_layout(
-        title="Asistentes totales por oficina y tipo de actividad",
-        xaxis_title="Asistentes", yaxis_title="",
-        barmode="stack",
+        title="Asistentes y encuestados por oficina",
+        xaxis_title="Oficina",
+        yaxis_title="Personas",
+        barmode="group",
         legend=dict(orientation="h", x=0, y=1.1),
         margin=dict(l=10, r=10, t=55, b=10),
         plot_bgcolor="white",
+    )
+    return fig
+
+
+def _grafico_distribucion_pie(
+    df: pd.DataFrame, columna: str, titulo: str
+) -> go.Figure:
+    """Donut con porcentaje Y número absoluto visibles."""
+    total = df[columna].sum()
+    etiquetas = df["oficina"].tolist()
+    valores   = df[columna].tolist()
+    colores   = [COLORES_OFICINAS_DRAC.get(o, COLOR_PRIMARIO) for o in etiquetas]
+
+    textos_personalizados = [
+        f"{v:,}<br>({v/total*100:.1f}%)" for v in valores
+    ]
+
+    fig = go.Figure(go.Pie(
+        labels=etiquetas,
+        values=valores,
+        hole=0.45,
+        marker_colors=colores,
+        text=textos_personalizados,
+        textinfo="text+label",
+        textposition="inside",
+        hovertemplate="<b>%{label}</b><br>%{value:,} personas<br>%{percent}<extra></extra>",
+    ))
+    fig.update_layout(
+        title=titulo,
+        showlegend=False,
+        margin=dict(l=10, r=10, t=50, b=10),
+    )
+    return fig
+
+
+def _grafico_num_asambleas(df: pd.DataFrame) -> go.Figure:
+    """Barras simples: número de asambleas por oficina."""
+    fig = go.Figure(go.Bar(
+        x=df["oficina"],
+        y=df["numero"],
+        marker_color=[COLORES_OFICINAS_DRAC.get(o, COLOR_PRIMARIO) for o in df["oficina"]],
+        text=df["numero"],
+        textposition="outside",
+    ))
+    fig.update_layout(
+        title="N° de Asambleas Productivas por oficina",
+        xaxis_title="Oficina",
+        yaxis_title="N° Asambleas",
+        margin=dict(l=10, r=10, t=50, b=10),
+        plot_bgcolor="white",
+        showlegend=False,
+    )
+    return fig
+
+
+def _grafico_asistentes_asambleas(df: pd.DataFrame) -> go.Figure:
+    """Barras simples: asistentes a asambleas por oficina."""
+    fig = go.Figure(go.Bar(
+        x=df["oficina"],
+        y=df["asistentes"],
+        marker_color=[COLORES_OFICINAS_DRAC.get(o, COLOR_SECUNDARIO) for o in df["oficina"]],
+        text=df["asistentes"],
+        textposition="outside",
+    ))
+    fig.update_layout(
+        title="Asistentes a Asambleas Productivas por oficina",
+        xaxis_title="Oficina",
+        yaxis_title="Asistentes",
+        margin=dict(l=10, r=10, t=50, b=10),
+        plot_bgcolor="white",
+        showlegend=False,
     )
     return fig
 
@@ -565,11 +574,26 @@ def mostrar_dashboard_drac() -> None:
 
     # --- Capacitaciones ejecutadas
     st.subheader("Capacitaciones Ejecutadas 2025")
-    col_cap_bar, col_cap_pie = st.columns(2)
-    with col_cap_bar:
-        st.plotly_chart(_grafico_capacitaciones_barras(df_cap25), use_container_width=True)
-    with col_cap_pie:
-        st.plotly_chart(_grafico_encuestados_pie(df_cap25), use_container_width=True)
+
+    # Fila 1: N° capacitaciones | asistentes + encuestados agrupados
+    col_c1, col_c2 = st.columns(2)
+    with col_c1:
+        st.plotly_chart(_grafico_num_capacitaciones(df_cap25), use_container_width=True)
+    with col_c2:
+        st.plotly_chart(_grafico_asistentes_encuestados_barras(df_cap25), use_container_width=True)
+
+    # Fila 2: donut encuestados | donut asistentes
+    col_c3, col_c4 = st.columns(2)
+    with col_c3:
+        st.plotly_chart(
+            _grafico_distribucion_pie(df_cap25, "encuestados", "Distribución de encuestados por oficina"),
+            use_container_width=True,
+        )
+    with col_c4:
+        st.plotly_chart(
+            _grafico_distribucion_pie(df_cap25, "asistentes", "Distribución de asistentes por oficina"),
+            use_container_width=True,
+        )
 
     # Tabla capacitaciones
     df_cap_tabla = df_cap25.copy()
@@ -587,12 +611,22 @@ def mostrar_dashboard_drac() -> None:
 
     # --- Asambleas Productivas
     st.subheader("Asambleas Productivas 2025")
-    col_asm, col_comp = st.columns(2)
-    with col_asm:
-        st.plotly_chart(_grafico_asambleas(df_asm25), use_container_width=True)
-    with col_comp:
+
+    col_a1, col_a2 = st.columns(2)
+    with col_a1:
+        st.plotly_chart(_grafico_num_asambleas(df_asm25), use_container_width=True)
+    with col_a2:
+        st.plotly_chart(_grafico_asistentes_asambleas(df_asm25), use_container_width=True)
+
+    col_a3, col_a4 = st.columns(2)
+    with col_a3:
         st.plotly_chart(
-            _grafico_asistentes_comparativo(df_cap25, df_asm25),
+            _grafico_distribucion_pie(df_asm25, "numero", "Distribución de asambleas por oficina"),
+            use_container_width=True,
+        )
+    with col_a4:
+        st.plotly_chart(
+            _grafico_distribucion_pie(df_asm25, "asistentes", "Distribución de asistentes — Asambleas"),
             use_container_width=True,
         )
 
