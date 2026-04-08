@@ -117,15 +117,14 @@ with st.sidebar:
     st.divider()
 
     MODULOS_REGIONAL = {
-        "📋 Capacitaciones — Carga":         "cap_carga",
-        "🎓 Capacitaciones — Certificados":  "cap_certificados",
-        "📊 Capacitaciones — Dashboard":     "cap_dashboard",
+        "📋 Capacitaciones — Carga":           "cap_carga",
+        "🎓 Capacitaciones — Certificados":    "cap_certificados",
+        "🖥️ Capacitación Virtual":             "cap_virtual",
     }
 
     MODULOS_MASTER = {
         **MODULOS_REGIONAL,
-        "🌐 Dashboard Global": "dashboard_global",
-        "📊 Dashboard DRAC":   "dashboard_drac",
+        "📊 Dashboard DRAC": "dashboard_drac",
     }
 
     modulos_disponibles = MODULOS_MASTER if es_master else MODULOS_REGIONAL
@@ -158,13 +157,9 @@ elif modulo_id == "cap_certificados":
     from modules.capacitaciones.certificados import mostrar_certificados
     mostrar_certificados()
 
-elif modulo_id == "cap_dashboard":
-    from modules.capacitaciones.dashboard import mostrar_dashboard
-    mostrar_dashboard()
-
-elif modulo_id == "dashboard_global" and es_master:
-    from modules.master.dashboard_global import mostrar_dashboard_global
-    mostrar_dashboard_global()
+elif modulo_id == "cap_virtual":
+    from modules.capacitaciones.capacitacion_virtual import mostrar_capacitacion_virtual
+    mostrar_capacitacion_virtual()
 
 elif modulo_id == "dashboard_drac" and es_master:
     from modules.master.dashboard_drac import mostrar_dashboard_drac
