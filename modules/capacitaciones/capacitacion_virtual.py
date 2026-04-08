@@ -232,12 +232,22 @@ def _paso_video() -> None:
     )
     st.markdown("")
 
-    # Embed del video de YouTube
-    st.components.v1.iframe(
-        src=_VIDEO_URL,
-        width=None,
-        height=480,
-        scrolling=False,
+    # Embed del video de YouTube (compatible con móvil)
+    st.markdown(
+        f"""
+        <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;
+                    border-radius:8px;margin-bottom:1rem;">
+            <iframe
+                src="{_VIDEO_URL}"
+                style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media;
+                       gyroscope; picture-in-picture; web-share"
+                allowfullscreen
+                loading="lazy"
+            ></iframe>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
     st.markdown("")
@@ -246,21 +256,18 @@ def _paso_video() -> None:
         "El test está basado en su contenido."
     )
 
-    col_izq, col_der = st.columns([3, 1])
-    with col_der:
-        if st.button(
-            "✅ He visto el video — Ir al test",
-            type="primary",
-            use_container_width=True,
-        ):
-            _set("cv_video_confirmado", True)
-            _set("cv_paso", 2)
-            st.rerun()
+    if st.button(
+        "✅ He visto el video completo — Ir al test",
+        type="primary",
+        use_container_width=True,
+    ):
+        _set("cv_video_confirmado", True)
+        _set("cv_paso", 2)
+        st.rerun()
 
-    with col_izq:
-        if st.button("← Volver al registro", use_container_width=True):
-            _reset_modulo()
-            st.rerun()
+    if st.button("← Volver al registro", use_container_width=True):
+        _reset_modulo()
+        st.rerun()
 
 
 # ---------------------------------------------------------------------------
