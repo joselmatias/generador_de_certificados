@@ -17,7 +17,7 @@ from datetime import date
 
 import streamlit as st
 
-from utils.docx_generator import generar_certificado_docx
+from utils.docx_generator import generar_certificado_docx, generar_certificado_pdf
 
 # ---------------------------------------------------------------------------
 # Constantes
@@ -397,27 +397,49 @@ def _paso_resultado() -> None:
         st.markdown("")
 
         try:
-            docx_bytes = generar_certificado_docx(
+            pdf_bytes = generar_certificado_pdf(
                 nombre=nombre,
                 cedula=cedula,
                 nombre_curso=_NOMBRE_CURSO,
                 fecha_capacitacion=str(date.today()),
                 codigo_certificado=codigo,
             )
-            nombre_archivo = f"certificado_{cedula}_{_NOMBRE_CURSO[:30].replace(' ', '_')}.docx"
+            nombre_archivo = f"certificado_{cedula}_{_NOMBRE_CURSO[:30].replace(' ', '_')}.pdf"
             st.download_button(
-                label="📥 Descargar certificado (.docx)",
-                data=docx_bytes,
+                label="📥 Descargar certificado (PDF)",
+                data=pdf_bytes,
                 file_name=nombre_archivo,
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                mime="application/pdf",
                 type="primary",
                 use_container_width=False,
             )
         except Exception as exc:
             st.warning(
-                f"No se pudo generar el certificado automáticamente: {exc}. "
-                "Comunícate con el administrador indicando tu código de certificado."
+                f"No se pudo generar el PDF: {exc}. "
+                "Intentando con formato Word..."
             )
+            try:
+                docx_bytes = generar_certificado_docx(
+                    nombre=nombre,
+                    cedula=cedula,
+                    nombre_curso=_NOMBRE_CURSO,
+                    fecha_capacitacion=str(date.today()),
+                    codigo_certificado=codigo,
+                )
+                nombre_archivo = f"certificado_{cedula}_{_NOMBRE_CURSO[:30].replace(' ', '_')}.docx"
+                st.download_button(
+                    label="📥 Descargar certificado (.docx)",
+                    data=docx_bytes,
+                    file_name=nombre_archivo,
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    type="primary",
+                    use_container_width=False,
+                )
+            except Exception as exc2:
+                st.error(
+                    f"No se pudo generar el certificado: {exc2}. "
+                    "Comunícate con el administrador indicando tu código de certificado."
+                )
     else:
         st.info(
             f"Obtuviste {calificacion}/10. Necesitas **{_NOTA_APROBACION}/10** para certificarte. "
