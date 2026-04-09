@@ -24,7 +24,8 @@ from utils.docx_generator import generar_certificado_docx, generar_certificado_p
 # ---------------------------------------------------------------------------
 _NOMBRE_CURSO   = "Competencia Económica: Fundamentos y Marco Regulatorio"
 _VIDEO_ID        = "rcztQzGXYvI"
-_VIDEO_URL       = f"https://www.youtube.com/watch?v={_VIDEO_ID}&t=924s"
+_VIDEO_EMBED_URL = f"https://www.youtube.com/embed/{_VIDEO_ID}?start=924&rel=0"
+_VIDEO_WATCH_URL = f"https://www.youtube.com/watch?v={_VIDEO_ID}&t=924s"
 _VIDEO_THUMBNAIL = f"https://img.youtube.com/vi/{_VIDEO_ID}/hqdefault.jpg"
 _NOTA_APROBACION = 8   # calificación mínima para obtener certificado (≥ 8/10)
 
@@ -233,34 +234,60 @@ def _paso_video() -> None:
     )
     st.markdown("")
 
-    # Thumbnail clicable que abre YouTube en el navegador / app nativa
+    # PC: iframe embebido | Móvil (<768 px): thumbnail con enlace externo
     st.markdown(
         f"""
-        <a href="{_VIDEO_URL}" target="_blank" rel="noopener noreferrer"
-           style="display:block;position:relative;border-radius:10px;
-                  overflow:hidden;cursor:pointer;text-decoration:none;">
-            <img src="{_VIDEO_THUMBNAIL}"
-                 style="width:100%;display:block;border-radius:10px;" />
-            <div style="position:absolute;top:50%;left:50%;
-                        transform:translate(-50%,-50%);
-                        background:rgba(255,0,0,0.85);border-radius:50%;
-                        width:64px;height:64px;display:flex;
-                        align-items:center;justify-content:center;">
-                <svg viewBox="0 0 24 24" width="32" height="32" fill="white">
-                    <path d="M8 5v14l11-7z"/>
-                </svg>
-            </div>
-        </a>
-        <p style="text-align:center;color:#888;font-size:0.85rem;margin-top:6px;">
-            Toca la imagen para abrir el video en YouTube
-        </p>
+        <style>
+            .yt-desktop {{ display: block; }}
+            .yt-mobile  {{ display: none;  }}
+            @media (max-width: 768px) {{
+                .yt-desktop {{ display: none;  }}
+                .yt-mobile  {{ display: block; }}
+            }}
+        </style>
+
+        <!-- DESKTOP: iframe embebido -->
+        <div class="yt-desktop"
+             style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;
+                    border-radius:8px;margin-bottom:0.5rem;">
+            <iframe
+                src="{_VIDEO_EMBED_URL}"
+                style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media;
+                       gyroscope; picture-in-picture; web-share"
+                allowfullscreen
+                loading="lazy"
+            ></iframe>
+        </div>
+
+        <!-- MÓVIL: thumbnail clicable -->
+        <div class="yt-mobile">
+            <a href="{_VIDEO_WATCH_URL}" target="_blank" rel="noopener noreferrer"
+               style="display:block;position:relative;border-radius:10px;
+                      overflow:hidden;cursor:pointer;text-decoration:none;">
+                <img src="{_VIDEO_THUMBNAIL}"
+                     style="width:100%;display:block;border-radius:10px;" />
+                <div style="position:absolute;top:50%;left:50%;
+                            transform:translate(-50%,-50%);
+                            background:rgba(255,0,0,0.88);border-radius:50%;
+                            width:68px;height:68px;display:flex;
+                            align-items:center;justify-content:center;">
+                    <svg viewBox="0 0 24 24" width="34" height="34" fill="white">
+                        <path d="M8 5v14l11-7z"/>
+                    </svg>
+                </div>
+            </a>
+            <p style="text-align:center;color:#888;font-size:0.85rem;margin-top:6px;">
+                Toca la imagen para ver el video en YouTube
+            </p>
+        </div>
         """,
         unsafe_allow_html=True,
     )
 
     st.info(
-        "📺 El video se abrirá en YouTube (o en la app de YouTube si la tienes instalada). "
-        "Una vez que lo hayas visto completo, regresa aquí y presiona el botón para continuar."
+        "📺 Asegúrate de ver el video completo antes de confirmar. "
+        "El test está basado en su contenido."
     )
     st.markdown("")
 
