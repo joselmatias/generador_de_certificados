@@ -23,9 +23,9 @@ from utils.docx_generator import generar_certificado_docx, generar_certificado_p
 # Constantes
 # ---------------------------------------------------------------------------
 _NOMBRE_CURSO   = "Competencia Económica: Fundamentos y Marco Regulatorio"
-_VIDEO_ID        = "rcztQzGXYvI"
-_VIDEO_EMBED_URL = f"https://www.youtube.com/embed/{_VIDEO_ID}?start=924&rel=0"
-_VIDEO_WATCH_URL = f"https://www.youtube.com/watch?v={_VIDEO_ID}&t=924s"
+_VIDEO_ID        = "aK9WKIohvRI"
+_VIDEO_EMBED_URL = f"https://www.youtube.com/embed/{_VIDEO_ID}?rel=0"
+_VIDEO_WATCH_URL = f"https://www.youtube.com/watch?v={_VIDEO_ID}"
 _VIDEO_THUMBNAIL = f"https://img.youtube.com/vi/{_VIDEO_ID}/hqdefault.jpg"
 _NOTA_APROBACION = 8   # calificación mínima para obtener certificado (≥ 8/10)
 
