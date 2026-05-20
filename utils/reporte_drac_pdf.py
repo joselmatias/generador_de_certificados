@@ -44,11 +44,11 @@ GRIS_FILA   = colors.HexColor("#F5F5F5")
 PAGE_W, PAGE_H = A4                 # 21 x 29.7 cm
 MARGIN_L = 2.0 * cm
 MARGIN_R = 2.0 * cm
-MARGIN_T = 0.8 * cm                 # arriba del logo
+MARGIN_T = 0.3 * cm                 # arriba del logo (más arriba)
 MARGIN_B = 1.5 * cm
 
-LOGO_W   = 3.0 * cm                 # ancho del logo en PDF
-LOGO_H   = 3.9 * cm                 # alto del logo (ratio 206/271 ≈ 0.76)
+LOGO_W   = 2.4 * cm                 # ancho del logo (20 % menor)
+LOGO_H   = 3.12 * cm               # alto del logo (20 % menor, ratio 206/271 ≈ 0.76)
 FRANJA_H = 1.6 * cm                 # altura de la franja azul
 HEADER_H = LOGO_H + FRANJA_H       # altura total del encabezado
 
@@ -330,7 +330,7 @@ def generar_reporte_drac(
          _p(fecha_elaboracion, estilo_tdc), ""],
     ]
     resp_table = Table(resp_data, colWidths=col_w,
-                       rowHeights=[0.7 * cm, 0.7 * cm, 1.0 * cm, 1.0 * cm])
+                       rowHeights=[0.7 * cm, 0.7 * cm, 2.2 * cm, 2.2 * cm])
     resp_table.setStyle(TableStyle([
         ("SPAN",          (0, 0), (-1, 0)),
         ("BACKGROUND",    (0, 0), (-1, 0), AZUL_OSCURO),
