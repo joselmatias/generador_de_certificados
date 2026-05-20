@@ -15,6 +15,7 @@ from datetime import date
 
 import streamlit as st
 
+from database.init_db import init_db
 from database.db import (
     get_connection,
     obtener_siguiente_numero_reporte,
@@ -25,6 +26,9 @@ from database.db import (
     estadisticas_mensuales,
 )
 from utils.reporte_drac_pdf import generar_reporte_drac, TIPOS_EVENTO
+
+# Garantiza que las tablas existan aunque el caché haya bloqueado init_db() en app.py
+init_db()
 
 _MESES_ESP = {
     1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",
