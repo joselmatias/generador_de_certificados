@@ -47,10 +47,11 @@ MARGIN_R = 2.0 * cm
 MARGIN_T = 0.3 * cm                 # arriba del logo (más arriba)
 MARGIN_B = 1.5 * cm
 
-LOGO_W   = 2.4 * cm                 # ancho del logo (20 % menor)
-LOGO_H   = 3.12 * cm               # alto del logo (20 % menor, ratio 206/271 ≈ 0.76)
-FRANJA_H = 1.6 * cm                 # altura de la franja azul
-HEADER_H = LOGO_H + FRANJA_H       # altura total del encabezado
+LOGO_W      = 2.4 * cm              # ancho del logo (20 % menor)
+LOGO_H      = 3.12 * cm            # alto del logo (20 % menor, ratio 206/271 ≈ 0.76)
+GAP_FRANJA  = 0.35 * cm            # separación entre logo y franja azul
+FRANJA_H    = 1.6 * cm             # altura de la franja azul
+HEADER_H    = LOGO_H + GAP_FRANJA + FRANJA_H   # altura total del encabezado
 
 TIPOS_EVENTO = ["Capacitación", "Foros", "Congresos", "Seminarios"]
 
@@ -121,8 +122,8 @@ def _dibujar_encabezado(canvas, doc, codigo_reporte: str, fecha_txt: str) -> Non
             preserveAspectRatio=True,
         )
 
-    # --- Franja azul: ocupa todo el ancho, debajo del logo ---
-    franja_y = logo_y - FRANJA_H
+    # --- Franja azul: ocupa todo el ancho, con separación respecto al logo ---
+    franja_y = logo_y - GAP_FRANJA - FRANJA_H
     franja_w = ancho_pag - MARGIN_L - MARGIN_R
 
     canvas.setFillColor(AZUL_OSCURO)
@@ -308,7 +309,7 @@ def generar_reporte_drac(
     # ------------------------------------------------------------------
     # Áreas y Personas Responsables
     # ------------------------------------------------------------------
-    col_w = [ancho_util * p for p in [0.22, 0.28, 0.16, 0.18, 0.16]]
+    col_w = [ancho_util * p for p in [0.20, 0.26, 0.13, 0.15, 0.26]]
 
     estilo_th  = ParagraphStyle("th",  fontName="Helvetica-Bold", fontSize=9,
                                 alignment=TA_CENTER, textColor=BLANCO)
