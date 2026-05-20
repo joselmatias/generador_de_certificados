@@ -117,9 +117,10 @@ with st.sidebar:
     st.divider()
 
     MODULOS_REGIONAL = {
-        "📋 Capacitaciones — Carga":           "cap_carga",
-        "🎓 Capacitaciones — Certificados":    "cap_certificados",
-        "🖥️ Capacitación Virtual":             "cap_virtual",
+        "📋 Capacitaciones — Carga":                    "cap_carga",
+        "🎓 Capacitaciones — Certificados":             "cap_certificados",
+        "🖥️ Capacitación Virtual":                      "cap_virtual",
+        "📝 Generador de Reportes":                     "generador_reportes",
     }
 
     MODULOS_MASTER = {
@@ -160,6 +161,10 @@ elif modulo_id == "cap_certificados":
 elif modulo_id == "cap_virtual":
     from modules.capacitaciones.capacitacion_virtual import mostrar_capacitacion_virtual
     mostrar_capacitacion_virtual()
+
+elif modulo_id == "generador_reportes":
+    from modules.reportes.generador import mostrar_generador_reportes
+    mostrar_generador_reportes()
 
 elif modulo_id == "dashboard_drac" and es_master:
     from modules.master.dashboard_drac import mostrar_dashboard_drac

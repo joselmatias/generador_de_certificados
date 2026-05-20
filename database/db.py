@@ -190,3 +190,157 @@ def listar_cursos(con: sqlite3.Connection, oficina: str | None = None) -> list[s
             "SELECT DISTINCT nombre_curso FROM capacitaciones ORDER BY nombre_curso"
         ).fetchall()
     return [f["nombre_curso"] for f in filas]
+
+
+# ---------------------------------------------------------------------------
+# Reportes de Capacitación
+# ---------------------------------------------------------------------------
+
+def obtener_siguiente_numero_reporte(con: sqlite3.Connection) -> int:
+    """
+    Incrementa de forma atómica el contador global de reportes y devuelve
+    el nuevo número. La secuencia comienza en 049.
+    """
+    con.execute("UPDATE contador_reporte SET ultimo_numero = ultimo_numero + 1 WHERE id = 1")
+    row = con.execute("SELECT ultimo_numero FROM contador_reporte WHERE id = 1").fetchone()
+    return row["ultimo_numero"]
+
+
+def insertar_reporte_capacitacion(con: sqlite3.Connection, datos: dict[str, Any]) -> int:
+    con.execute(
+        """
+        INSERT INTO reportes_capacitacion (
+            numero_reporte, year_reporte, oficina, fecha_reporte, tipo_evento,
+            institucion_invitada, fecha_evento, modalidad, tema,
+            capacitadores, publico_objetivo, descripcion,
+            observaciones, adjuntos, elaborado_por, revisado_por,
+            num_personas_capacitadas
+        ) VALUES (
+            :numero_reporte, :year_reporte, :oficina, :fecha_reporte, :tipo_evento,
+            :institucion_invitada, :fecha_evento, :modalidad, :tema,
+            :capacitadores, :publico_objetivo, :descripcion,
+            :observaciones, :adjuntos, :elaborado_por, :revisado_por,
+            :num_personas_capacitadas
+        )
+        """,
+        datos,
+    )
+    return con.lastrowid  # type: ignore[return-value]
+
+
+def consultar_reportes_capacitacion(
+    con: sqlite3.Connection,
+    oficina: str | None = None,
+    anio: int | None = None,
+    mes: int | None = None,
+) -> list[sqlite3.Row]:
+    condiciones: list[str] = []
+    params: list[Any] = []
+
+    if oficina:
+        condiciones.append("oficina = ?")
+        params.append(oficina)
+    if anio:
+        condiciones.append("year_reporte = ?")
+        params.append(anio)
+    if mes:
+        condiciones.append("strftime('%m', fecha_reporte) = ?")
+        params.append(f"{mes:02d}")
+
+    where = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
+    return con.execute(
+        f"SELECT * FROM reportes_capacitacion {where} ORDER BY fecha_reporte DESC",
+        params,
+    ).fetchall()
+
+
+# ---------------------------------------------------------------------------
+# Asambleas Productivas
+# ---------------------------------------------------------------------------
+
+def insertar_asamblea_productiva(con: sqlite3.Connection, datos: dict[str, Any]) -> int:
+    con.execute(
+        """
+        INSERT INTO asamblea_productiva (oficina, fecha, num_asistentes)
+        VALUES (:oficina, :fecha, :num_asistentes)
+        """,
+        datos,
+    )
+    return con.lastrowid  # type: ignore[return-value]
+
+
+def consultar_asambleas_productivas(
+    con: sqlite3.Connection,
+    oficina: str | None = None,
+    anio: int | None = None,
+    mes: int | None = None,
+) -> list[sqlite3.Row]:
+    condiciones: list[str] = []
+    params: list[Any] = []
+
+    if oficina:
+        condiciones.append("oficina = ?")
+        params.append(oficina)
+    if anio:
+        condiciones.append("strftime('%Y', fecha) = ?")
+        params.append(str(anio))
+    if mes:
+        condiciones.append("strftime('%m', fecha) = ?")
+        params.append(f"{mes:02d}")
+
+    where = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
+    return con.execute(
+        f"SELECT * FROM asamblea_productiva {where} ORDER BY fecha DESC",
+        params,
+    ).fetchall()
+
+
+def estadisticas_mensuales(
+    con: sqlite3.Connection,
+    oficina: str | None = None,
+    anio: int | None = None,
+    mes: int | None = None,
+) -> dict[str, int]:
+    """Devuelve KPIs del mes: capacitaciones, personas capacitadas, asambleas, personas en asambleas."""
+    condiciones_rep: list[str] = []
+    condiciones_asm: list[str] = []
+    params_rep: list[Any] = []
+    params_asm: list[Any] = []
+
+    if oficina:
+        condiciones_rep.append("oficina = ?")
+        condiciones_asm.append("oficina = ?")
+        params_rep.append(oficina)
+        params_asm.append(oficina)
+    if anio:
+        condiciones_rep.append("year_reporte = ?")
+        condiciones_asm.append("strftime('%Y', fecha) = ?")
+        params_rep.append(anio)
+        params_asm.append(str(anio))
+    if mes:
+        condiciones_rep.append("strftime('%m', fecha_reporte) = ?")
+        condiciones_asm.append("strftime('%m', fecha) = ?")
+        params_rep.append(f"{mes:02d}")
+        params_asm.append(f"{mes:02d}")
+
+    where_rep = ("WHERE " + " AND ".join(condiciones_rep)) if condiciones_rep else ""
+    where_asm = ("WHERE " + " AND ".join(condiciones_asm)) if condiciones_asm else ""
+
+    r = con.execute(
+        f"SELECT COUNT(*) as cnt, COALESCE(SUM(num_personas_capacitadas),0) as personas "
+        f"FROM reportes_capacitacion {where_rep}",
+        params_rep,
+    ).fetchone()
+
+    a = con.execute(
+        f"SELECT COUNT(*) as cnt, COALESCE(SUM(num_asistentes),0) as personas "
+        f"FROM asamblea_productiva {where_asm}",
+        params_asm,
+    ).fetchone()
+
+    return {
+        "num_capacitaciones":        r["cnt"] if r else 0,
+        "personas_capacitadas":      r["personas"] if r else 0,
+        "num_asambleas":             a["cnt"] if a else 0,
+        "personas_asambleas":        a["personas"] if a else 0,
+    }

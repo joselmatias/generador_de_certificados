@@ -72,6 +72,47 @@ CREATE TABLE IF NOT EXISTS convenios (
 );
 """
 
+_DDL_REPORTES_CAPACITACION = """
+CREATE TABLE IF NOT EXISTS reportes_capacitacion (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero_reporte          INTEGER NOT NULL,
+    year_reporte            INTEGER NOT NULL,
+    oficina                 TEXT NOT NULL,
+    fecha_reporte           TEXT NOT NULL,
+    tipo_evento             TEXT NOT NULL,
+    institucion_invitada    TEXT,
+    fecha_evento            TEXT,
+    modalidad               TEXT,
+    tema                    TEXT,
+    capacitadores           TEXT,
+    publico_objetivo        TEXT,
+    descripcion             TEXT,
+    observaciones           TEXT,
+    adjuntos                TEXT,
+    elaborado_por           TEXT,
+    revisado_por            TEXT,
+    num_personas_capacitadas INTEGER DEFAULT 0,
+    fecha_registro          TEXT DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
+_DDL_ASAMBLEA_PRODUCTIVA = """
+CREATE TABLE IF NOT EXISTS asamblea_productiva (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    oficina             TEXT NOT NULL,
+    fecha               TEXT NOT NULL,
+    num_asistentes      INTEGER NOT NULL DEFAULT 0,
+    fecha_registro      TEXT DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
+_DDL_CONTADOR_REPORTE = """
+CREATE TABLE IF NOT EXISTS contador_reporte (
+    id              INTEGER PRIMARY KEY CHECK (id = 1),
+    ultimo_numero   INTEGER NOT NULL DEFAULT 48
+);
+"""
+
 # Índices para mejorar rendimiento de consultas frecuentes
 _INDICES = [
     "CREATE INDEX IF NOT EXISTS idx_cap_oficina ON capacitaciones(oficina);",
@@ -80,6 +121,9 @@ _INDICES = [
     "CREATE INDEX IF NOT EXISTS idx_cap_curso ON capacitaciones(nombre_curso);",
     "CREATE INDEX IF NOT EXISTS idx_asm_oficina ON asambleas(oficina);",
     "CREATE INDEX IF NOT EXISTS idx_conv_oficina ON convenios(oficina);",
+    "CREATE INDEX IF NOT EXISTS idx_rep_oficina ON reportes_capacitacion(oficina);",
+    "CREATE INDEX IF NOT EXISTS idx_rep_fecha ON reportes_capacitacion(fecha_reporte);",
+    "CREATE INDEX IF NOT EXISTS idx_asm_prod_oficina ON asamblea_productiva(oficina);",
 ]
 
 
@@ -102,6 +146,10 @@ def init_db() -> None:
             con.execute(_DDL_CAPACITACIONES)
             con.execute(_DDL_ASAMBLEAS)
             con.execute(_DDL_CONVENIOS)
+            con.execute(_DDL_REPORTES_CAPACITACION)
+            con.execute(_DDL_ASAMBLEA_PRODUCTIVA)
+            con.execute(_DDL_CONTADOR_REPORTE)
+            con.execute("INSERT OR IGNORE INTO contador_reporte (id, ultimo_numero) VALUES (1, 48)")
             for idx in _INDICES:
                 con.execute(idx)
 
