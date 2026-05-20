@@ -1,11 +1,10 @@
 """
 reporte_drac_pdf.py — Generación de Reporte DRAC en PDF con ReportLab.
 
-Replica la estructura del archivo Word Reporte 049_2026.docx:
-- Encabezado con logo, código de reporte y fecha
-- Tabla de Tipo de Evento (checkbox)
-- Secciones de contenido
-- Tabla de Áreas y Personas Responsables
+Encabezado en cada página:
+  - Logo superior derecho sin fondo ni sombreado
+  - Franja azul debajo con 3 columnas: Institución | Código reporte | Fecha
+Cuerpo: secciones del reporte según formato Word Reporte 049_2026.docx
 """
 
 from __future__ import annotations
@@ -17,10 +16,14 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import cm
-from reportlab.lib.enums import TA_LEFT, TA_CENTER
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, KeepTogether
+    BaseDocTemplate, PageTemplate, Frame,
+    Paragraph, Spacer, Table, TableStyle,
+    KeepTogether, HRFlowable,
 )
+from reportlab.platypus.flowables import Flowable
+from reportlab.lib.utils import ImageReader
 
 LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "image1.png"
 
@@ -29,15 +32,32 @@ _MESES = [
     "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ]
 
-COLOR_HEADER  = colors.HexColor("#1F3864")
-COLOR_SECTION = colors.HexColor("#2E5EA8")
-COLOR_TABLA   = colors.HexColor("#D6E4F0")
-COLOR_NEGRO   = colors.black
-COLOR_BLANCO  = colors.white
-COLOR_GRIS    = colors.HexColor("#F2F2F2")
+# Colores
+AZUL_OSCURO = colors.HexColor("#1F3864")
+AZUL_MEDIO  = colors.HexColor("#2E5EA8")
+AZUL_CLARO  = colors.HexColor("#D6E4F0")
+NEGRO       = colors.black
+BLANCO      = colors.white
+GRIS_FILA   = colors.HexColor("#F5F5F5")
+
+# Geometría de página
+PAGE_W, PAGE_H = A4                 # 21 x 29.7 cm
+MARGIN_L = 2.0 * cm
+MARGIN_R = 2.0 * cm
+MARGIN_T = 0.8 * cm                 # arriba del logo
+MARGIN_B = 1.5 * cm
+
+LOGO_W   = 3.0 * cm                 # ancho del logo en PDF
+LOGO_H   = 3.9 * cm                 # alto del logo (ratio 206/271 ≈ 0.76)
+FRANJA_H = 1.6 * cm                 # altura de la franja azul
+HEADER_H = LOGO_H + FRANJA_H       # altura total del encabezado
 
 TIPOS_EVENTO = ["Capacitación", "Foros", "Congresos", "Seminarios"]
 
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def _fecha_esp(fecha_iso: str) -> str:
     from datetime import datetime
@@ -48,27 +68,115 @@ def _fecha_esp(fecha_iso: str) -> str:
         return fecha_iso
 
 
-def _estilo_seccion() -> ParagraphStyle:
-    return ParagraphStyle(
-        "SeccionHeader",
-        fontName="Helvetica-Bold",
-        fontSize=10,
-        textColor=COLOR_NEGRO,
-        spaceBefore=8,
-        spaceAfter=2,
-    )
+def _p(text: str, style: ParagraphStyle) -> Paragraph:
+    return Paragraph(text, style)
 
 
-def _estilo_cuerpo() -> ParagraphStyle:
-    return ParagraphStyle(
-        "Cuerpo",
-        fontName="Helvetica",
-        fontSize=10,
-        textColor=COLOR_NEGRO,
-        leading=14,
-        spaceAfter=4,
-    )
+# ---------------------------------------------------------------------------
+# Estilos de párrafo
+# ---------------------------------------------------------------------------
 
+def _estilos() -> dict:
+    base = dict(fontName="Helvetica", fontSize=10, textColor=NEGRO,
+                leading=14, spaceAfter=2)
+    return {
+        "sec":    ParagraphStyle("sec",    fontName="Helvetica-Bold", fontSize=10,
+                                 textColor=NEGRO, spaceBefore=10, spaceAfter=3),
+        "cuerpo": ParagraphStyle("cuerpo", **base, alignment=TA_JUSTIFY),
+        "hdr_w":  ParagraphStyle("hdr_w",  fontName="Helvetica-Bold", fontSize=9,
+                                 textColor=BLANCO, leading=12, alignment=TA_CENTER),
+        "hdr_ws": ParagraphStyle("hdr_ws", fontName="Helvetica",      fontSize=8,
+                                 textColor=BLANCO, leading=11, alignment=TA_CENTER),
+        "etiq":   ParagraphStyle("etiq",   fontName="Helvetica-Bold", fontSize=9,
+                                 textColor=AZUL_MEDIO),
+        "valor":  ParagraphStyle("valor",  fontName="Helvetica",      fontSize=10,
+                                 textColor=NEGRO, leading=13),
+        "td":     ParagraphStyle("td",     fontName="Helvetica",      fontSize=9,
+                                 alignment=TA_CENTER),
+        "tdb":    ParagraphStyle("tdb",    fontName="Helvetica-Bold", fontSize=9),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Encabezado dibujado en canvas (aparece en cada página)
+# ---------------------------------------------------------------------------
+
+def _dibujar_encabezado(canvas, doc, codigo_reporte: str, fecha_txt: str) -> None:
+    canvas.saveState()
+
+    ancho_pag = PAGE_W
+    top       = PAGE_H - MARGIN_T          # y de la parte superior del logo
+
+    # --- Logo: esquina superior derecha, sin fondo ---
+    logo_x = ancho_pag - MARGIN_R - LOGO_W
+    logo_y = top - LOGO_H
+
+    if LOGO_PATH.exists():
+        img = ImageReader(str(LOGO_PATH))
+        canvas.drawImage(
+            img,
+            logo_x, logo_y,
+            width=LOGO_W, height=LOGO_H,
+            mask="auto",          # respeta transparencia PNG
+            preserveAspectRatio=True,
+        )
+
+    # --- Franja azul: ocupa todo el ancho, debajo del logo ---
+    franja_y = logo_y - FRANJA_H
+    franja_w = ancho_pag - MARGIN_L - MARGIN_R
+
+    canvas.setFillColor(AZUL_OSCURO)
+    canvas.rect(MARGIN_L, franja_y, franja_w, FRANJA_H, fill=1, stroke=0)
+
+    # Divisores verticales de la franja (2 líneas)
+    col1_w = franja_w * 0.42
+    col2_w = franja_w * 0.32
+    col3_w = franja_w - col1_w - col2_w
+
+    canvas.setStrokeColor(colors.HexColor("#4472C4"))
+    canvas.setLineWidth(0.5)
+    # línea 1
+    x1 = MARGIN_L + col1_w
+    canvas.line(x1, franja_y, x1, franja_y + FRANJA_H)
+    # línea 2
+    x2 = x1 + col2_w
+    canvas.line(x2, franja_y, x2, franja_y + FRANJA_H)
+
+    # Borde exterior de la franja
+    canvas.setStrokeColor(NEGRO)
+    canvas.setLineWidth(0.8)
+    canvas.rect(MARGIN_L, franja_y, franja_w, FRANJA_H, fill=0, stroke=1)
+
+    # Texto en la franja — col 1: institución
+    canvas.setFillColor(BLANCO)
+    canvas.setFont("Helvetica-Bold", 7.5)
+    txt1a = "Intendencia Regional /"
+    txt1b = "Dirección Regional de"
+    txt1c = "Abogacía de la Competencia"
+    cy = franja_y + FRANJA_H * 0.68
+    cx1 = MARGIN_L + col1_w / 2
+    canvas.drawCentredString(cx1, cy,              txt1a)
+    canvas.drawCentredString(cx1, cy - 9,          txt1b)
+    canvas.drawCentredString(cx1, cy - 18,         txt1c)
+
+    # col 2: código de reporte
+    canvas.setFont("Helvetica-Bold", 9)
+    cx2 = x1 + col2_w / 2
+    canvas.drawCentredString(cx2, franja_y + FRANJA_H * 0.35, codigo_reporte)
+
+    # col 3: fecha
+    canvas.setFont("Helvetica-Bold", 7.5)
+    cx3 = x2 + col3_w / 2
+    canvas.drawCentredString(cx3, franja_y + FRANJA_H * 0.65, "Fecha:")
+    canvas.setFont("Helvetica", 7.5)
+    canvas.drawCentredString(cx3, franja_y + FRANJA_H * 0.30, fecha_txt)
+
+    canvas.restoreState()
+
+
+# ---------------------------------------------------------------------------
+# Función principal de generación
+# ---------------------------------------------------------------------------
 
 def generar_reporte_drac(
     numero_reporte: int,
@@ -89,250 +197,198 @@ def generar_reporte_drac(
     fecha_elaboracion: str,
     num_personas_capacitadas: int = 0,
 ) -> bytes:
-    """
-    Genera el Reporte DRAC en PDF y lo devuelve como bytes.
-    """
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
+
+    codigo_reporte = f"Reporte DRAC-{numero_reporte:03d}-{year_reporte}"
+    fecha_txt      = _fecha_esp(fecha_reporte)
+
+    # Margen superior del contenido debe dejar espacio al encabezado
+    top_margin = MARGIN_T + HEADER_H + 0.5 * cm
+
+    def on_page(canvas, doc):
+        _dibujar_encabezado(canvas, doc, codigo_reporte, fecha_txt)
+
+    frame = Frame(
+        MARGIN_L, MARGIN_B,
+        PAGE_W - MARGIN_L - MARGIN_R,
+        PAGE_H - MARGIN_B - top_margin,
+        leftPadding=0, rightPadding=0,
+        topPadding=0,  bottomPadding=0,
+    )
+    template = PageTemplate(id="main", frames=[frame], onPage=on_page)
+    doc = BaseDocTemplate(
         buffer,
         pagesize=A4,
-        topMargin=1.5 * cm,
-        bottomMargin=1.5 * cm,
-        leftMargin=2.0 * cm,
-        rightMargin=2.0 * cm,
+        pageTemplates=[template],
     )
 
+    estilos = _estilos()
+    ancho_util = PAGE_W - MARGIN_L - MARGIN_R
     elementos: list = []
-    ancho_util = A4[0] - 4.0 * cm
-
-    estilo_sec = _estilo_seccion()
-    estilo_cuerpo = _estilo_cuerpo()
 
     # ------------------------------------------------------------------
-    # 1. Encabezado: logo | código reporte | fecha
+    # Tipo de Evento — tabla checkboxes
     # ------------------------------------------------------------------
-    codigo_reporte = f"Reporte DRAC-{numero_reporte:03d}-{year_reporte}"
-    fecha_formateada = _fecha_esp(fecha_reporte)
+    elementos.append(_p("Tipo de Evento:", estilos["sec"]))
 
-    logo_cell: list = []
-    if LOGO_PATH.exists():
-        logo_cell = [Image(str(LOGO_PATH), width=1.8 * cm, height=2.3 * cm)]
-
-    header_data = [[
-        logo_cell[0] if logo_cell else "",
-        Paragraph(
-            f"<b>Intendencia Regional /</b><br/>Dirección Regional de<br/>Abogacía de la Competencia",
-            ParagraphStyle("hdr", fontName="Helvetica-Bold", fontSize=9,
-                           alignment=TA_CENTER, textColor=COLOR_BLANCO, leading=12),
-        ),
-        Paragraph(
-            f"<b>{codigo_reporte}</b>",
-            ParagraphStyle("hdr2", fontName="Helvetica-Bold", fontSize=11,
-                           alignment=TA_CENTER, textColor=COLOR_BLANCO),
-        ),
-        Paragraph(
-            f"<b>Fecha:</b><br/>{fecha_formateada}",
-            ParagraphStyle("hdr3", fontName="Helvetica", fontSize=9,
-                           alignment=TA_CENTER, textColor=COLOR_BLANCO, leading=13),
-        ),
-    ]]
-
-    header_table = Table(
-        header_data,
-        colWidths=[2.2 * cm, 6.5 * cm, 5.0 * cm, 3.8 * cm],
-        rowHeights=[2.6 * cm],
-    )
-    header_table.setStyle(TableStyle([
-        ("BACKGROUND",   (0, 0), (-1, -1), COLOR_HEADER),
+    ev_data = []
+    for t in TIPOS_EVENTO:
+        marca = "✓" if t == tipo_evento else ""
+        ev_data.append([
+            _p(t, estilos["valor"]),
+            _p(f"<b>{marca}</b>",
+               ParagraphStyle("mk", fontName="Helvetica-Bold", fontSize=12,
+                              alignment=TA_CENTER, textColor=AZUL_MEDIO)),
+        ])
+    ev_table = Table(ev_data, colWidths=[5.5 * cm, 1.0 * cm])
+    ev_table.setStyle(TableStyle([
+        ("BOX",          (0, 0), (-1, -1), 0.8, NEGRO),
+        ("INNERGRID",    (0, 0), (-1, -1), 0.4, colors.lightgrey),
         ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
-        ("BOX",          (0, 0), (-1, -1), 1, COLOR_NEGRO),
-        ("INNERGRID",    (0, 0), (-1, -1), 0.5, colors.HexColor("#4472C4")),
-        ("TOPPADDING",   (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("ALIGN",        (1, 0), (1, -1), "CENTER"),
+        ("TOPPADDING",   (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 3),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 6),
+        ("ROWBACKGROUNDS",(0, 0), (-1, -1), [BLANCO, GRIS_FILA]),
     ]))
-    elementos.append(header_table)
+    elementos.append(ev_table)
     elementos.append(Spacer(1, 0.4 * cm))
 
     # ------------------------------------------------------------------
-    # 2. Tipo de Evento — tabla de checkbox
+    # Sección tabla: Institución — Fecha — Modalidad — Tema
     # ------------------------------------------------------------------
-    elementos.append(Paragraph("Tipo de Evento:", estilo_sec))
-    evento_data = []
-    for t in TIPOS_EVENTO:
-        marca = "✓" if t == tipo_evento else ""
-        evento_data.append([
-            Paragraph(t, ParagraphStyle("ev", fontName="Helvetica", fontSize=10)),
-            Paragraph(
-                f"<b>{marca}</b>",
-                ParagraphStyle("mk", fontName="Helvetica-Bold", fontSize=12,
-                               alignment=TA_CENTER, textColor=COLOR_SECTION),
-            ),
-        ])
-
-    evento_table = Table(evento_data, colWidths=[5.5 * cm, 1.2 * cm])
-    evento_table.setStyle(TableStyle([
-        ("BOX",         (0, 0), (-1, -1), 0.8, COLOR_NEGRO),
-        ("INNERGRID",   (0, 0), (-1, -1), 0.5, colors.lightgrey),
-        ("VALIGN",      (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN",       (1, 0), (1, -1), "CENTER"),
-        ("TOPPADDING",  (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 3),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("ROWBACKGROUNDS", (0, 0), (-1, -1), [COLOR_BLANCO, COLOR_GRIS]),
-    ]))
-    elementos.append(evento_table)
-    elementos.append(Spacer(1, 0.3 * cm))
-
-    # ------------------------------------------------------------------
-    # 3. Institución Invitada — Fecha — Modalidad — Tema
-    # ------------------------------------------------------------------
-    def seccion_tabla(titulo: str, filas_datos: list[tuple[str, str]]) -> list:
-        bloque = []
-        bloque.append(Paragraph(titulo, estilo_sec))
-        tdata = []
-        for etiqueta, valor in filas_datos:
-            tdata.append([
-                Paragraph(f"<b>{etiqueta}</b>",
-                          ParagraphStyle("et", fontName="Helvetica-Bold", fontSize=9,
-                                         textColor=COLOR_SECTION)),
-                Paragraph(valor or "—",
-                          ParagraphStyle("vl", fontName="Helvetica", fontSize=10)),
-            ])
-        t = Table(tdata, colWidths=[4.0 * cm, ancho_util - 4.0 * cm])
-        t.setStyle(TableStyle([
-            ("BOX",          (0, 0), (-1, -1), 0.8, COLOR_NEGRO),
-            ("INNERGRID",    (0, 0), (-1, -1), 0.3, colors.lightgrey),
-            ("BACKGROUND",   (0, 0), (0, -1), COLOR_TABLA),
-            ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING",   (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING",(0, 0), (-1, -1), 4),
-            ("LEFTPADDING",  (0, 0), (-1, -1), 6),
-        ]))
-        bloque.append(t)
-        bloque.append(Spacer(1, 0.25 * cm))
-        return bloque
-
-    def seccion_parrafo(titulo: str, texto: str) -> list:
-        bloque = []
-        bloque.append(Paragraph(titulo, estilo_sec))
-        tdata = [[Paragraph(texto or "—", estilo_cuerpo)]]
-        t = Table(tdata, colWidths=[ancho_util])
-        t.setStyle(TableStyle([
-            ("BOX",          (0, 0), (-1, -1), 0.8, COLOR_NEGRO),
-            ("TOPPADDING",   (0, 0), (-1, -1), 6),
-            ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
-            ("LEFTPADDING",  (0, 0), (-1, -1), 8),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-        ]))
-        bloque.append(t)
-        bloque.append(Spacer(1, 0.25 * cm))
-        return bloque
-
-    elementos += seccion_tabla(
+    elementos += _seccion_tabla(
         "Institución Invitada - Fecha - Modalidad - Tema:",
         [
             ("Institución:", institucion_invitada),
-            ("Fecha:",       fecha_evento),
+            ("Fecha del evento:", _fecha_esp(fecha_evento) if fecha_evento else ""),
             ("Modalidad:",   modalidad),
             ("Tema:",        tema),
         ],
+        ancho_util, estilos,
     )
 
-    elementos += seccion_parrafo("Nombre de los Capacitadores:", capacitadores)
-    elementos += seccion_parrafo("Público Objetivo:", publico_objetivo)
-    elementos += seccion_parrafo("Descripción de la Capacitación:", descripcion)
-    elementos += seccion_parrafo("Observaciones:", observaciones)
-    elementos += seccion_parrafo("Adjuntos (medios de verificación):", adjuntos)
+    # ------------------------------------------------------------------
+    # Secciones de párrafo
+    # ------------------------------------------------------------------
+    elementos += _seccion_parrafo("Nombre de los Capacitadores:", capacitadores,
+                                  ancho_util, estilos)
+    elementos += _seccion_parrafo("Público Objetivo:", publico_objetivo,
+                                  ancho_util, estilos)
+    elementos += _seccion_parrafo("Descripción de la Capacitación:", descripcion,
+                                  ancho_util, estilos)
+    elementos += _seccion_parrafo("Observaciones:", observaciones,
+                                  ancho_util, estilos)
+    elementos += _seccion_parrafo("Adjuntos (medios de verificación):", adjuntos,
+                                  ancho_util, estilos)
 
     # ------------------------------------------------------------------
-    # 4. Número de personas capacitadas
+    # N.° de personas capacitadas
     # ------------------------------------------------------------------
     personas_data = [[
-        Paragraph("<b>N.° de personas capacitadas:</b>",
-                  ParagraphStyle("pc_lbl", fontName="Helvetica-Bold", fontSize=10,
-                                 textColor=COLOR_SECTION)),
-        Paragraph(
-            str(num_personas_capacitadas),
-            ParagraphStyle("pc_val", fontName="Helvetica-Bold", fontSize=12,
-                           alignment=TA_CENTER),
-        ),
+        _p("<b>N.° de personas capacitadas:</b>",
+           ParagraphStyle("pclbl", fontName="Helvetica-Bold", fontSize=10,
+                          textColor=AZUL_MEDIO)),
+        _p(f"<b>{num_personas_capacitadas}</b>",
+           ParagraphStyle("pcval", fontName="Helvetica-Bold", fontSize=12,
+                          alignment=TA_CENTER)),
     ]]
-    personas_table = Table(personas_data, colWidths=[9.0 * cm, 2.5 * cm])
-    personas_table.setStyle(TableStyle([
-        ("BOX",          (0, 0), (-1, -1), 0.8, COLOR_NEGRO),
-        ("BACKGROUND",   (0, 0), (0, 0), COLOR_TABLA),
+    pers_table = Table(personas_data, colWidths=[9.0 * cm, 2.5 * cm])
+    pers_table.setStyle(TableStyle([
+        ("BOX",          (0, 0), (-1, -1), 0.8, NEGRO),
+        ("BACKGROUND",   (0, 0), (0, 0), AZUL_CLARO),
         ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING",   (0, 0), (-1, -1), 5),
         ("BOTTOMPADDING",(0, 0), (-1, -1), 5),
         ("LEFTPADDING",  (0, 0), (-1, -1), 8),
     ]))
-    elementos.append(personas_table)
-    elementos.append(Spacer(1, 0.5 * cm))
+    elementos.append(pers_table)
+    elementos.append(Spacer(1, 0.6 * cm))
 
     # ------------------------------------------------------------------
-    # 5. Áreas y Personas Responsables
+    # Áreas y Personas Responsables
     # ------------------------------------------------------------------
-    estilo_th = ParagraphStyle(
-        "th", fontName="Helvetica-Bold", fontSize=9,
-        alignment=TA_CENTER, textColor=COLOR_BLANCO,
-    )
-    estilo_td = ParagraphStyle(
-        "td", fontName="Helvetica", fontSize=9, alignment=TA_CENTER,
-    )
-    estilo_td_bold = ParagraphStyle(
-        "tdb", fontName="Helvetica-Bold", fontSize=9,
-    )
+    col_w = [ancho_util * p for p in [0.22, 0.28, 0.16, 0.18, 0.16]]
 
-    resp_col = [ancho_util * 0.22, ancho_util * 0.28, ancho_util * 0.18,
-                ancho_util * 0.16, ancho_util * 0.16]
+    estilo_th  = ParagraphStyle("th",  fontName="Helvetica-Bold", fontSize=9,
+                                alignment=TA_CENTER, textColor=BLANCO)
+    estilo_tdb = ParagraphStyle("tdb", fontName="Helvetica-Bold", fontSize=9)
+    estilo_tdc = ParagraphStyle("tdc", fontName="Helvetica",      fontSize=9,
+                                alignment=TA_CENTER)
 
     resp_data = [
-        [
-            Paragraph("ÁREAS Y PERSONAS RESPONSABLES", estilo_th),
-            "", "", "", "",
-        ],
-        [
-            Paragraph("ACCIÓN",   estilo_th),
-            Paragraph("NOMBRE",   estilo_th),
-            Paragraph("ÁREA",     estilo_th),
-            Paragraph("FECHA",    estilo_th),
-            Paragraph("FIRMA",    estilo_th),
-        ],
-        [
-            Paragraph("Elaborado por:", estilo_td_bold),
-            Paragraph(elaborado_por,    estilo_td),
-            Paragraph("DRAC",           estilo_td),
-            Paragraph(fecha_elaboracion, estilo_td),
-            "",
-        ],
-        [
-            Paragraph("Revisado y aprobado por:", estilo_td_bold),
-            Paragraph(revisado_por,     estilo_td),
-            Paragraph("DRAC",           estilo_td),
-            Paragraph(fecha_elaboracion, estilo_td),
-            "",
-        ],
+        [_p("ÁREAS Y PERSONAS RESPONSABLES", estilo_th), "", "", "", ""],
+        [_p("ACCIÓN", estilo_th), _p("NOMBRE", estilo_th), _p("ÁREA", estilo_th),
+         _p("FECHA",  estilo_th), _p("FIRMA",  estilo_th)],
+        [_p("Elaborado por:", estilo_tdb),
+         _p(elaborado_por,    estilo_tdc),
+         _p("DRAC",           estilo_tdc),
+         _p(fecha_elaboracion, estilo_tdc), ""],
+        [_p("Revisado y\naprobado por:", estilo_tdb),
+         _p(revisado_por,     estilo_tdc),
+         _p("DRAC",           estilo_tdc),
+         _p(fecha_elaboracion, estilo_tdc), ""],
     ]
-
-    resp_table = Table(resp_data, colWidths=resp_col)
+    resp_table = Table(resp_data, colWidths=col_w,
+                       rowHeights=[0.7 * cm, 0.7 * cm, 1.0 * cm, 1.0 * cm])
     resp_table.setStyle(TableStyle([
-        ("SPAN",         (0, 0), (-1, 0)),
-        ("BACKGROUND",   (0, 0), (-1, 0), COLOR_HEADER),
-        ("BACKGROUND",   (0, 1), (-1, 1), COLOR_SECTION),
-        ("BACKGROUND",   (0, 2), (-1, 3), COLOR_BLANCO),
-        ("ROWBACKGROUNDS",(0, 2), (-1, 3), [COLOR_BLANCO, COLOR_GRIS]),
-        ("BOX",          (0, 0), (-1, -1), 1, COLOR_NEGRO),
-        ("INNERGRID",    (0, 0), (-1, -1), 0.5, colors.lightgrey),
-        ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
-        ("TOPPADDING",   (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 5),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 4),
+        ("SPAN",          (0, 0), (-1, 0)),
+        ("BACKGROUND",    (0, 0), (-1, 0), AZUL_OSCURO),
+        ("BACKGROUND",    (0, 1), (-1, 1), AZUL_MEDIO),
+        ("ROWBACKGROUNDS",(0, 2), (-1, 3), [BLANCO, GRIS_FILA]),
+        ("BOX",           (0, 0), (-1, -1), 1, NEGRO),
+        ("INNERGRID",     (0, 0), (-1, -1), 0.4, colors.lightgrey),
+        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
+        ("TOPPADDING",    (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 4),
     ]))
     elementos.append(KeepTogether(resp_table))
 
     doc.build(elementos)
     return buffer.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Helpers de construcción de secciones
+# ---------------------------------------------------------------------------
+
+def _seccion_tabla(titulo: str, filas: list[tuple[str, str]],
+                   ancho: float, estilos: dict) -> list:
+    bloque = [_p(titulo, estilos["sec"])]
+    tdata = [
+        [_p(f"<b>{etq}</b>", estilos["etiq"]),
+         _p(val or "—",      estilos["valor"])]
+        for etq, val in filas
+    ]
+    t = Table(tdata, colWidths=[3.8 * cm, ancho - 3.8 * cm])
+    t.setStyle(TableStyle([
+        ("BOX",          (0, 0), (-1, -1), 0.8, NEGRO),
+        ("INNERGRID",    (0, 0), (-1, -1), 0.3, colors.lightgrey),
+        ("BACKGROUND",   (0, 0), (0, -1), AZUL_CLARO),
+        ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING",   (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 4),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 6),
+    ]))
+    bloque.append(t)
+    bloque.append(Spacer(1, 0.3 * cm))
+    return bloque
+
+
+def _seccion_parrafo(titulo: str, texto: str,
+                     ancho: float, estilos: dict) -> list:
+    bloque = [_p(titulo, estilos["sec"])]
+    tdata = [[_p(texto or "—", estilos["cuerpo"])]]
+    t = Table(tdata, colWidths=[ancho])
+    t.setStyle(TableStyle([
+        ("BOX",          (0, 0), (-1, -1), 0.8, NEGRO),
+        ("TOPPADDING",   (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    bloque.append(t)
+    bloque.append(Spacer(1, 0.3 * cm))
+    return bloque
