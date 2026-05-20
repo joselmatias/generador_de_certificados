@@ -113,7 +113,11 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
     c1, c2 = st.columns(2)
     with c1:
         institucion_invitada = st.text_input("Institución Invitada", key="rep_institucion")
-        modalidad = st.text_input("Modalidad (ej: Presencial / Virtual)", key="rep_modalidad")
+        modalidad = st.selectbox(
+            "Modalidad",
+            options=["Presencial", "Virtual", "Híbrida"],
+            key="rep_modalidad",
+        )
     with c2:
         fecha_evento = st.date_input("Fecha del Evento", value=date.today(), key="rep_fecha_evento")
         tema = st.text_input("Tema", key="rep_tema")
@@ -182,25 +186,20 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
 
     st.divider()
 
-    # Observaciones
+    # Observaciones — valor fijo
     st.markdown("#### Observaciones:")
-    observaciones = st.text_area(
-        "Observaciones",
-        key="rep_observaciones",
-        height=80,
-        label_visibility="collapsed",
-        placeholder="(Opcional) Observaciones relevantes...",
-    )
+    st.info("Ninguna")
+    observaciones = "Ninguna"
 
-    # Adjuntos
-    st.markdown("#### Adjuntos (medios de verificación):")
-    adjuntos = st.text_area(
-        "Adjuntos",
-        key="rep_adjuntos",
-        height=60,
-        label_visibility="collapsed",
-        placeholder="Ej: Fotografías, listas de asistencia, actas...",
+    # Adjuntos — valor fijo
+    _ADJUNTOS_FIJO = (
+        "La Dirección Regional de Abogacía de la Competencia, cuenta con archivos digitales "
+        "de la capacitación efectuada, cuya documentación se detalla a continuación:\n\n"
+        "a)\tRegistro de asistencia.\nb)\tFotografías."
     )
+    st.markdown("#### Adjuntos (medios de verificación):")
+    st.info(_ADJUNTOS_FIJO)
+    adjuntos = _ADJUNTOS_FIJO
 
     st.divider()
 

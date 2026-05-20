@@ -207,7 +207,7 @@ def obtener_siguiente_numero_reporte(con: sqlite3.Connection) -> int:
 
 
 def insertar_reporte_capacitacion(con: sqlite3.Connection, datos: dict[str, Any]) -> int:
-    con.execute(
+    cur = con.execute(
         """
         INSERT INTO reportes_capacitacion (
             numero_reporte, year_reporte, oficina, fecha_reporte, tipo_evento,
@@ -225,7 +225,7 @@ def insertar_reporte_capacitacion(con: sqlite3.Connection, datos: dict[str, Any]
         """,
         datos,
     )
-    return con.lastrowid  # type: ignore[return-value]
+    return cur.lastrowid  # type: ignore[return-value]
 
 
 def consultar_reportes_capacitacion(
@@ -259,14 +259,14 @@ def consultar_reportes_capacitacion(
 # ---------------------------------------------------------------------------
 
 def insertar_asamblea_productiva(con: sqlite3.Connection, datos: dict[str, Any]) -> int:
-    con.execute(
+    cur = con.execute(
         """
         INSERT INTO asamblea_productiva (oficina, fecha, num_asistentes)
         VALUES (:oficina, :fecha, :num_asistentes)
         """,
         datos,
     )
-    return con.lastrowid  # type: ignore[return-value]
+    return cur.lastrowid  # type: ignore[return-value]
 
 
 def consultar_asambleas_productivas(
