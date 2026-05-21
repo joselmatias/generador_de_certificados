@@ -216,17 +216,18 @@ def generar_reporte_drac(
             "Abogacía de la Competencia",
         ]
 
-    top_margin   = MARGIN_T + HEADER_H + 0.5 * cm
-    frame_bottom = AREAS_Y + AREAS_H + 0.4 * cm
-    ancho_util   = PAGE_W - MARGIN_L - MARGIN_R
+    top_margin        = MARGIN_T + HEADER_H + 0.5 * cm
+    frame_bottom_last = AREAS_Y + AREAS_H + 0.4 * cm   # solo última página
+    ancho_util        = PAGE_W - MARGIN_L - MARGIN_R
 
     # ------------------------------------------------------------------
     # Funciones que crean flowables SIEMPRE FRESCOS (se llaman dos veces)
     # ------------------------------------------------------------------
     def _nuevo_frame() -> Frame:
+        # Frame completo: sin reserva para ÁREAS en páginas intermedias
         return Frame(
-            MARGIN_L, frame_bottom, ancho_util,
-            PAGE_H - frame_bottom - top_margin,
+            MARGIN_L, MARGIN_B, ancho_util,
+            PAGE_H - MARGIN_B - top_margin,
             leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
         )
 
@@ -353,6 +354,12 @@ def generar_reporte_drac(
         _pg2[0] += 1
         _dibujar_encabezado(c, d, codigo_reporte, fecha_txt, lineas_institucion)
         if _pg2[0] == total_pages:
+            # onPage se llama ANTES de frame._reset() → modificar aquí afecta
+            # el espacio disponible para el contenido de esta página
+            for frame in d.pageTemplate.frames:
+                frame._y1     = frame_bottom_last
+                frame._height = PAGE_H - frame_bottom_last - top_margin
+            # Dibujar ÁREAS en posición fija al pie
             fr = Frame(MARGIN_L, AREAS_Y, ancho_util, AREAS_H,
                        leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
                        showBoundary=0)
