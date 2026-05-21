@@ -41,7 +41,7 @@ _OFICINA_CFG: dict[str, dict] = {
     "guayaquil": {
         "revisado_por":       "José Matías",
         "area_elaborado":     "DRAC",
-        "nombre_institucion": "la Dirección Regional de Abogacía de la Competencia",
+        "nombre_institucion": "Dirección Regional de Abogacía de la Competencia",
         "lineas_institucion": [
             "Intendencia Regional /",
             "Dirección Regional de",
@@ -51,7 +51,7 @@ _OFICINA_CFG: dict[str, dict] = {
     "cuenca": {
         "revisado_por":       "Roberto Carlos Santos Suarez",
         "area_elaborado":     "OTAC",
-        "nombre_institucion": "la Oficina Técnica de Apoyo de Cuenca",
+        "nombre_institucion": "Oficina Técnica de Apoyo de Cuenca",
         "lineas_institucion": [
             "Intendencia Regional /",
             "Oficina Técnica de Apoyo",
@@ -61,7 +61,7 @@ _OFICINA_CFG: dict[str, dict] = {
     "manabi": {
         "revisado_por":       "Roberto Carlos Santos Suarez",
         "area_elaborado":     "OTAP",
-        "nombre_institucion": "la Oficina Técnica de Apoyo de Portoviejo",
+        "nombre_institucion": "Oficina Técnica de Apoyo de Portoviejo",
         "lineas_institucion": [
             "Intendencia Regional /",
             "Oficina Técnica de Apoyo",
@@ -71,7 +71,7 @@ _OFICINA_CFG: dict[str, dict] = {
     "loja": {
         "revisado_por":       "Roberto Carlos Santos Suarez",
         "area_elaborado":     "OTAL",
-        "nombre_institucion": "la Oficina Técnica de Apoyo de Loja",
+        "nombre_institucion": "Oficina Técnica de Apoyo de Loja",
         "lineas_institucion": [
             "Intendencia Regional /",
             "Oficina Técnica de Apoyo",
