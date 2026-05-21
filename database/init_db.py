@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS asamblea_productiva (
 _DDL_CONTADOR_REPORTE = """
 CREATE TABLE IF NOT EXISTS contador_reporte (
     id              INTEGER PRIMARY KEY CHECK (id = 1),
-    ultimo_numero   INTEGER NOT NULL DEFAULT 48
+    ultimo_numero   INTEGER NOT NULL DEFAULT 73
 );
 """
 
@@ -149,7 +149,10 @@ def init_db() -> None:
             con.execute(_DDL_REPORTES_CAPACITACION)
             con.execute(_DDL_ASAMBLEA_PRODUCTIVA)
             con.execute(_DDL_CONTADOR_REPORTE)
-            con.execute("INSERT OR IGNORE INTO contador_reporte (id, ultimo_numero) VALUES (1, 48)")
+            con.execute("INSERT OR IGNORE INTO contador_reporte (id, ultimo_numero) VALUES (1, 73)")
+            # Migración: si el contador está por debajo de 73, actualizarlo
+            # (los reportes 1-73 son históricos; el sistema comienza desde el 74)
+            con.execute("UPDATE contador_reporte SET ultimo_numero = 73 WHERE id = 1 AND ultimo_numero < 73")
             for idx in _INDICES:
                 con.execute(idx)
 

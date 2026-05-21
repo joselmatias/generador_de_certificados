@@ -199,7 +199,7 @@ def listar_cursos(con: sqlite3.Connection, oficina: str | None = None) -> list[s
 def obtener_siguiente_numero_reporte(con: sqlite3.Connection) -> int:
     """
     Incrementa de forma atómica el contador global de reportes y devuelve
-    el nuevo número. La secuencia comienza en 049.
+    el nuevo número. La secuencia comienza en 074.
     """
     con.execute("UPDATE contador_reporte SET ultimo_numero = ultimo_numero + 1 WHERE id = 1")
     row = con.execute("SELECT ultimo_numero FROM contador_reporte WHERE id = 1").fetchone()
