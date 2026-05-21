@@ -395,17 +395,17 @@ def _seccion_tabla(titulo: str, filas: list[tuple[str, str]],
 
 def _seccion_parrafo(titulo: str, texto: str,
                      ancho: float, estilos: dict) -> list:
-    # El título tiene keepWithNext=True en el estilo "sec": nunca quedará huérfano
-    # porque ReportLab lo moverá a la siguiente página si no puede empezar la tabla.
-    # Sin KeepTogether: la tabla puede dividirse entre páginas sin dejar espacios en blanco.
+    # Usamos Paragraph con borde (no Table) para que el contenido largo
+    # pueda dividirse entre páginas sin dejar espacios en blanco.
+    # keepWithNext=True en el estilo "sec" evita el título huérfano.
     titulo_p = _p(titulo, estilos["sec"])
-    tdata = [[_p(texto or "—", estilos["cuerpo"])]]
-    t = Table(tdata, colWidths=[ancho])
-    t.setStyle(TableStyle([
-        ("BOX",          (0, 0), (-1, -1), 0.8, NEGRO),
-        ("TOPPADDING",   (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-    ]))
-    return [titulo_p, t, Spacer(1, 0.3 * cm)]
+    estilo_caja = ParagraphStyle(
+        "cuerpo_caja",
+        parent=estilos["cuerpo"],
+        borderColor=NEGRO,
+        borderWidth=0.8,
+        borderPadding=8,
+        spaceAfter=3,
+    )
+    contenido_p = _p(texto or "—", estilo_caja)
+    return [titulo_p, contenido_p, Spacer(1, 0.3 * cm)]
