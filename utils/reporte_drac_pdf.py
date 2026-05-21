@@ -86,7 +86,8 @@ def _estilos() -> dict:
                 leading=14, spaceAfter=2)
     return {
         "sec":    ParagraphStyle("sec",    fontName="Helvetica-Bold", fontSize=10,
-                                 textColor=NEGRO, spaceBefore=10, spaceAfter=3),
+                                 textColor=NEGRO, spaceBefore=10, spaceAfter=3,
+                                 keepWithNext=True),
         "cuerpo": ParagraphStyle("cuerpo", **base, alignment=TA_JUSTIFY),
         "hdr_w":  ParagraphStyle("hdr_w",  fontName="Helvetica-Bold", fontSize=9,
                                  textColor=BLANCO, leading=12, alignment=TA_CENTER),
@@ -181,32 +182,7 @@ def _dibujar_encabezado(
 
 
 # ---------------------------------------------------------------------------
-# DocTemplate con tabla ÁREAS en posición fija al final de la última página
-# ---------------------------------------------------------------------------
-
-class _ReporteDoc(BaseDocTemplate):
-    """BaseDocTemplate que dibuja la tabla de responsables en Y fijo en la última página."""
-
-    def __init__(self, *args, resp_table: Table, ancho_util: float, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._resp_table = resp_table
-        self._ancho_util = ancho_util
-
-    def handle_documentEnd(self) -> None:
-        # Usa un Frame temporal en posición fija para renderizar la tabla
-        # correctamente en la última página antes de canv.save().
-        temp_frame = Frame(
-            MARGIN_L, AREAS_Y,
-            self._ancho_util, AREAS_H,
-            leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
-            showBoundary=0,
-        )
-        temp_frame.addFromList([self._resp_table], self.canv)
-        super().handle_documentEnd()
-
-
-# ---------------------------------------------------------------------------
-# Función principal de generación
+# Función principal de generación — build de dos pasos
 # ---------------------------------------------------------------------------
 
 def generar_reporte_drac(
@@ -230,7 +206,6 @@ def generar_reporte_drac(
     area_elaborado: str = "DRAC",
     num_personas_capacitadas: int = 0,
 ) -> bytes:
-    buffer = io.BytesIO()
 
     codigo_reporte = f"Reporte DRAC-{numero_reporte:03d}-{year_reporte}"
     fecha_txt      = _fecha_esp(fecha_reporte)
@@ -242,155 +217,152 @@ def generar_reporte_drac(
             "Abogacía de la Competencia",
         ]
 
-    # Margen superior del contenido debe dejar espacio al encabezado
-    top_margin = MARGIN_T + HEADER_H + 0.5 * cm
-    # El frame NO ocupa la zona reservada para ÁREAS al pie de cada página
+    top_margin   = MARGIN_T + HEADER_H + 0.5 * cm
     frame_bottom = AREAS_Y + AREAS_H + 0.4 * cm
-
-    def on_page(canvas, doc):
-        _dibujar_encabezado(canvas, doc, codigo_reporte, fecha_txt, lineas_institucion)
-
-    frame = Frame(
-        MARGIN_L, frame_bottom,
-        PAGE_W - MARGIN_L - MARGIN_R,
-        PAGE_H - frame_bottom - top_margin,
-        leftPadding=0, rightPadding=0,
-        topPadding=0,  bottomPadding=0,
-    )
-    template = PageTemplate(id="main", frames=[frame], onPage=on_page)
-
-    estilos = _estilos()
-    ancho_util = PAGE_W - MARGIN_L - MARGIN_R
-    elementos: list = []
+    ancho_util   = PAGE_W - MARGIN_L - MARGIN_R
 
     # ------------------------------------------------------------------
-    # Tipo de Evento — tabla checkboxes
+    # Funciones que crean flowables SIEMPRE FRESCOS (se llaman dos veces)
     # ------------------------------------------------------------------
-    elementos.append(_p("Tipo de Evento:", estilos["sec"]))
+    def _nuevo_frame() -> Frame:
+        return Frame(
+            MARGIN_L, frame_bottom, ancho_util,
+            PAGE_H - frame_bottom - top_margin,
+            leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
+        )
 
-    ev_data = []
-    for t in TIPOS_EVENTO:
-        marca = "✓" if t == tipo_evento else ""
-        ev_data.append([
-            _p(t, estilos["valor"]),
-            _p(f"<b>{marca}</b>",
-               ParagraphStyle("mk", fontName="Helvetica-Bold", fontSize=12,
-                              alignment=TA_CENTER, textColor=AZUL_MEDIO)),
-        ])
-    ev_table = Table(ev_data, colWidths=[5.5 * cm, 1.0 * cm])
-    ev_table.setStyle(TableStyle([
-        ("BOX",          (0, 0), (-1, -1), 0.8, NEGRO),
-        ("INNERGRID",    (0, 0), (-1, -1), 0.4, colors.lightgrey),
-        ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN",        (1, 0), (1, -1), "CENTER"),
-        ("TOPPADDING",   (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 3),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 6),
-        ("ROWBACKGROUNDS",(0, 0), (-1, -1), [BLANCO, GRIS_FILA]),
-    ]))
-    elementos.append(ev_table)
-    elementos.append(Spacer(1, 0.4 * cm))
+    def _nueva_resp_table() -> Table:
+        est  = _estilos()
+        col_w = [ancho_util * p for p in [0.20, 0.26, 0.13, 0.15, 0.26]]
+        th   = ParagraphStyle("th2",  fontName="Helvetica-Bold", fontSize=9,
+                               alignment=TA_CENTER, textColor=BLANCO)
+        tdb  = ParagraphStyle("tdb2", fontName="Helvetica-Bold", fontSize=9)
+        tdc  = ParagraphStyle("tdc2", fontName="Helvetica", fontSize=9,
+                               alignment=TA_CENTER)
+        data = [
+            [_p("ÁREAS Y PERSONAS RESPONSABLES", th), "", "", "", ""],
+            [_p("ACCIÓN", th), _p("NOMBRE", th), _p("ÁREA", th),
+             _p("FECHA",  th), _p("FIRMA",  th)],
+            [_p("Elaborado por:", tdb),
+             _p(elaborado_por,    tdc),
+             _p(area_elaborado,   tdc),
+             _p(fecha_elaboracion, tdc), ""],
+            [_p("Revisado y\naprobado por:", tdb),
+             _p(revisado_por,     tdc),
+             _p("IR",             tdc),
+             _p(fecha_elaboracion, tdc), ""],
+        ]
+        t = Table(data, colWidths=col_w,
+                  rowHeights=[0.7*cm, 0.7*cm, 2.2*cm, 2.2*cm])
+        t.setStyle(TableStyle([
+            ("SPAN",          (0,0), (-1,0)),
+            ("BACKGROUND",    (0,0), (-1,0), AZUL_OSCURO),
+            ("BACKGROUND",    (0,1), (-1,1), AZUL_MEDIO),
+            ("ROWBACKGROUNDS",(0,2), (-1,3), [BLANCO, GRIS_FILA]),
+            ("BOX",           (0,0), (-1,-1), 1, NEGRO),
+            ("INNERGRID",     (0,0), (-1,-1), 0.4, colors.lightgrey),
+            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+            ("ALIGN",         (0,0), (-1,-1), "CENTER"),
+            ("TOPPADDING",    (0,0), (-1,-1), 4),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+            ("LEFTPADDING",   (0,0), (-1,-1), 4),
+        ]))
+        return t
+
+    def _nuevos_elementos() -> list:
+        est  = _estilos()
+        elems: list = []
+
+        # Tipo de Evento
+        elems.append(_p("Tipo de Evento:", est["sec"]))
+        ev_data = []
+        for te in TIPOS_EVENTO:
+            marca = "✓" if te == tipo_evento else ""
+            ev_data.append([
+                _p(te, est["valor"]),
+                _p(f"<b>{marca}</b>",
+                   ParagraphStyle("mk2", fontName="Helvetica-Bold", fontSize=12,
+                                  alignment=TA_CENTER, textColor=AZUL_MEDIO)),
+            ])
+        ev_t = Table(ev_data, colWidths=[5.5*cm, 1.0*cm])
+        ev_t.setStyle(TableStyle([
+            ("BOX",           (0,0),(-1,-1), 0.8, NEGRO),
+            ("INNERGRID",     (0,0),(-1,-1), 0.4, colors.lightgrey),
+            ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
+            ("ALIGN",         (1,0),(1,-1),  "CENTER"),
+            ("TOPPADDING",    (0,0),(-1,-1), 3),
+            ("BOTTOMPADDING", (0,0),(-1,-1), 3),
+            ("LEFTPADDING",   (0,0),(-1,-1), 6),
+            ("ROWBACKGROUNDS",(0,0),(-1,-1), [BLANCO, GRIS_FILA]),
+        ]))
+        elems.append(ev_t)
+        elems.append(Spacer(1, 0.4*cm))
+
+        elems += _seccion_tabla(
+            "Institución Invitada - Fecha - Modalidad - Tema:",
+            [("Institución:", institucion_invitada),
+             ("Fecha del evento:", _fecha_esp(fecha_evento) if fecha_evento else ""),
+             ("Modalidad:", modalidad),
+             ("Tema:", tema)],
+            ancho_util, est,
+        )
+        elems += _seccion_parrafo("Nombre de los Capacitadores:", capacitadores, ancho_util, est)
+        elems += _seccion_parrafo("Público Objetivo:",            publico_objetivo, ancho_util, est)
+        elems += _seccion_parrafo("Descripción de la Capacitación:", descripcion,  ancho_util, est)
+        elems += _seccion_parrafo("Observaciones:",                observaciones,  ancho_util, est)
+        elems += _seccion_parrafo("Adjuntos (medios de verificación):", adjuntos,  ancho_util, est)
+
+        # N.° personas
+        pd_data = [[
+            _p("<b>N.° de personas capacitadas:</b>",
+               ParagraphStyle("pclbl2", fontName="Helvetica-Bold", fontSize=10,
+                              textColor=AZUL_MEDIO)),
+            _p(f"<b>{num_personas_capacitadas}</b>",
+               ParagraphStyle("pcval2", fontName="Helvetica-Bold", fontSize=12,
+                              alignment=TA_CENTER)),
+        ]]
+        pt = Table(pd_data, colWidths=[9.0*cm, 2.5*cm])
+        pt.setStyle(TableStyle([
+            ("BOX",          (0,0),(-1,-1), 0.8, NEGRO),
+            ("BACKGROUND",   (0,0),(0,0),   AZUL_CLARO),
+            ("VALIGN",       (0,0),(-1,-1), "MIDDLE"),
+            ("TOPPADDING",   (0,0),(-1,-1), 5),
+            ("BOTTOMPADDING",(0,0),(-1,-1), 5),
+            ("LEFTPADDING",  (0,0),(-1,-1), 8),
+        ]))
+        elems.append(pt)
+        return elems
 
     # ------------------------------------------------------------------
-    # Sección tabla: Institución — Fecha — Modalidad — Tema
+    # Paso 1 — contar páginas (build a buffer desechable)
     # ------------------------------------------------------------------
-    elementos += _seccion_tabla(
-        "Institución Invitada - Fecha - Modalidad - Tema:",
-        [
-            ("Institución:", institucion_invitada),
-            ("Fecha del evento:", _fecha_esp(fecha_evento) if fecha_evento else ""),
-            ("Modalidad:",   modalidad),
-            ("Tema:",        tema),
-        ],
-        ancho_util, estilos,
-    )
+    _pg = [0]
+    def _on_count(c, d): _pg[0] += 1
+
+    buf_dummy = io.BytesIO()
+    tmpl_count = PageTemplate(id="c", frames=[_nuevo_frame()], onPage=_on_count)
+    doc_count  = BaseDocTemplate(buf_dummy, pagesize=A4, pageTemplates=[tmpl_count])
+    doc_count.build(_nuevos_elementos())
+    total_pages = _pg[0]
 
     # ------------------------------------------------------------------
-    # Secciones de párrafo
+    # Paso 2 — build final: ÁREAS dibujado en onPage de la última página
     # ------------------------------------------------------------------
-    elementos += _seccion_parrafo("Nombre de los Capacitadores:", capacitadores,
-                                  ancho_util, estilos)
-    elementos += _seccion_parrafo("Público Objetivo:", publico_objetivo,
-                                  ancho_util, estilos)
-    elementos += _seccion_parrafo("Descripción de la Capacitación:", descripcion,
-                                  ancho_util, estilos)
-    elementos += _seccion_parrafo("Observaciones:", observaciones,
-                                  ancho_util, estilos)
-    elementos += _seccion_parrafo("Adjuntos (medios de verificación):", adjuntos,
-                                  ancho_util, estilos)
+    _pg2 = [0]
 
-    # ------------------------------------------------------------------
-    # N.° de personas capacitadas
-    # ------------------------------------------------------------------
-    personas_data = [[
-        _p("<b>N.° de personas capacitadas:</b>",
-           ParagraphStyle("pclbl", fontName="Helvetica-Bold", fontSize=10,
-                          textColor=AZUL_MEDIO)),
-        _p(f"<b>{num_personas_capacitadas}</b>",
-           ParagraphStyle("pcval", fontName="Helvetica-Bold", fontSize=12,
-                          alignment=TA_CENTER)),
-    ]]
-    pers_table = Table(personas_data, colWidths=[9.0 * cm, 2.5 * cm])
-    pers_table.setStyle(TableStyle([
-        ("BOX",          (0, 0), (-1, -1), 0.8, NEGRO),
-        ("BACKGROUND",   (0, 0), (0, 0), AZUL_CLARO),
-        ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING",   (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 5),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 8),
-    ]))
-    elementos.append(pers_table)
-    elementos.append(Spacer(1, 0.6 * cm))
+    def _on_page_final(c, d):
+        _pg2[0] += 1
+        _dibujar_encabezado(c, d, codigo_reporte, fecha_txt, lineas_institucion)
+        if _pg2[0] == total_pages:
+            fr = Frame(MARGIN_L, AREAS_Y, ancho_util, AREAS_H,
+                       leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
+                       showBoundary=0)
+            fr.addFromList([_nueva_resp_table()], c)
 
-    # ------------------------------------------------------------------
-    # Áreas y Personas Responsables
-    # ------------------------------------------------------------------
-    col_w = [ancho_util * p for p in [0.20, 0.26, 0.13, 0.15, 0.26]]
-
-    estilo_th  = ParagraphStyle("th",  fontName="Helvetica-Bold", fontSize=9,
-                                alignment=TA_CENTER, textColor=BLANCO)
-    estilo_tdb = ParagraphStyle("tdb", fontName="Helvetica-Bold", fontSize=9)
-    estilo_tdc = ParagraphStyle("tdc", fontName="Helvetica",      fontSize=9,
-                                alignment=TA_CENTER)
-
-    resp_data = [
-        [_p("ÁREAS Y PERSONAS RESPONSABLES", estilo_th), "", "", "", ""],
-        [_p("ACCIÓN", estilo_th), _p("NOMBRE", estilo_th), _p("ÁREA", estilo_th),
-         _p("FECHA",  estilo_th), _p("FIRMA",  estilo_th)],
-        [_p("Elaborado por:", estilo_tdb),
-         _p(elaborado_por,    estilo_tdc),
-         _p(area_elaborado,   estilo_tdc),
-         _p(fecha_elaboracion, estilo_tdc), ""],
-        [_p("Revisado y\naprobado por:", estilo_tdb),
-         _p(revisado_por,     estilo_tdc),
-         _p("IR",             estilo_tdc),
-         _p(fecha_elaboracion, estilo_tdc), ""],
-    ]
-    resp_table = Table(resp_data, colWidths=col_w,
-                       rowHeights=[0.7 * cm, 0.7 * cm, 2.2 * cm, 2.2 * cm])
-    resp_table.setStyle(TableStyle([
-        ("SPAN",          (0, 0), (-1, 0)),
-        ("BACKGROUND",    (0, 0), (-1, 0), AZUL_OSCURO),
-        ("BACKGROUND",    (0, 1), (-1, 1), AZUL_MEDIO),
-        ("ROWBACKGROUNDS",(0, 2), (-1, 3), [BLANCO, GRIS_FILA]),
-        ("BOX",           (0, 0), (-1, -1), 1, NEGRO),
-        ("INNERGRID",     (0, 0), (-1, -1), 0.4, colors.lightgrey),
-        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 4),
-    ]))
-    # resp_table NO se agrega a elementos: se dibuja en posición fija en handle_documentEnd
-
-    doc = _ReporteDoc(
-        buffer,
-        pagesize=A4,
-        pageTemplates=[template],
-        resp_table=resp_table,
-        ancho_util=ancho_util,
-    )
-    doc.build(elementos)
+    buffer = io.BytesIO()
+    tmpl_final = PageTemplate(id="m", frames=[_nuevo_frame()], onPage=_on_page_final)
+    doc_final  = BaseDocTemplate(buffer, pagesize=A4, pageTemplates=[tmpl_final])
+    doc_final.build(_nuevos_elementos())
     return buffer.getvalue()
 
 
