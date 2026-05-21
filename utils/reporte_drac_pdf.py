@@ -193,9 +193,15 @@ class _ReporteDoc(BaseDocTemplate):
         self._ancho_util = ancho_util
 
     def handle_documentEnd(self) -> None:
-        # Se llama antes de canv.save() → podemos dibujar en la última página.
-        self._resp_table.wrap(self._ancho_util, AREAS_H)
-        self._resp_table.drawOn(self.canv, MARGIN_L, AREAS_Y)
+        # Usa un Frame temporal en posición fija para renderizar la tabla
+        # correctamente en la última página antes de canv.save().
+        temp_frame = Frame(
+            MARGIN_L, AREAS_Y,
+            self._ancho_util, AREAS_H,
+            leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
+            showBoundary=0,
+        )
+        temp_frame.addFromList([self._resp_table], self.canv)
         super().handle_documentEnd()
 
 
@@ -417,7 +423,7 @@ def _seccion_tabla(titulo: str, filas: list[tuple[str, str]],
 
 def _seccion_parrafo(titulo: str, texto: str,
                      ancho: float, estilos: dict) -> list:
-    bloque = [_p(titulo, estilos["sec"])]
+    titulo_p = _p(titulo, estilos["sec"])
     tdata = [[_p(texto or "—", estilos["cuerpo"])]]
     t = Table(tdata, colWidths=[ancho])
     t.setStyle(TableStyle([
@@ -427,6 +433,5 @@ def _seccion_parrafo(titulo: str, texto: str,
         ("LEFTPADDING",  (0, 0), (-1, -1), 8),
         ("RIGHTPADDING", (0, 0), (-1, -1), 8),
     ]))
-    bloque.append(t)
-    bloque.append(Spacer(1, 0.3 * cm))
-    return bloque
+    # KeepTogether evita que el título quede solo al pie de página (huérfano)
+    return [KeepTogether([titulo_p, t]), Spacer(1, 0.3 * cm)]
