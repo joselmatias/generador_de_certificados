@@ -395,6 +395,9 @@ def _seccion_tabla(titulo: str, filas: list[tuple[str, str]],
 
 def _seccion_parrafo(titulo: str, texto: str,
                      ancho: float, estilos: dict) -> list:
+    # El título tiene keepWithNext=True en el estilo "sec": nunca quedará huérfano
+    # porque ReportLab lo moverá a la siguiente página si no puede empezar la tabla.
+    # Sin KeepTogether: la tabla puede dividirse entre páginas sin dejar espacios en blanco.
     titulo_p = _p(titulo, estilos["sec"])
     tdata = [[_p(texto or "—", estilos["cuerpo"])]]
     t = Table(tdata, colWidths=[ancho])
@@ -405,5 +408,4 @@ def _seccion_parrafo(titulo: str, texto: str,
         ("LEFTPADDING",  (0, 0), (-1, -1), 8),
         ("RIGHTPADDING", (0, 0), (-1, -1), 8),
     ]))
-    # KeepTogether evita que el título quede solo al pie de página (huérfano)
-    return [KeepTogether([titulo_p, t]), Spacer(1, 0.3 * cm)]
+    return [titulo_p, t, Spacer(1, 0.3 * cm)]
