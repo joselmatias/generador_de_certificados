@@ -41,6 +41,7 @@ _OFICINA_CFG: dict[str, dict] = {
     "guayaquil": {
         "revisado_por":       "José Matías",
         "area_elaborado":     "DRAC",
+        "nombre_institucion": "la Dirección Regional de Abogacía de la Competencia",
         "lineas_institucion": [
             "Intendencia Regional /",
             "Dirección Regional de",
@@ -50,6 +51,7 @@ _OFICINA_CFG: dict[str, dict] = {
     "cuenca": {
         "revisado_por":       "Roberto Carlos Santos Suarez",
         "area_elaborado":     "OTAC",
+        "nombre_institucion": "la Oficina Técnica de Apoyo de Cuenca",
         "lineas_institucion": [
             "Intendencia Regional /",
             "Oficina Técnica de Apoyo",
@@ -59,6 +61,7 @@ _OFICINA_CFG: dict[str, dict] = {
     "manabi": {
         "revisado_por":       "Roberto Carlos Santos Suarez",
         "area_elaborado":     "OTAP",
+        "nombre_institucion": "la Oficina Técnica de Apoyo de Portoviejo",
         "lineas_institucion": [
             "Intendencia Regional /",
             "Oficina Técnica de Apoyo",
@@ -68,6 +71,7 @@ _OFICINA_CFG: dict[str, dict] = {
     "loja": {
         "revisado_por":       "Roberto Carlos Santos Suarez",
         "area_elaborado":     "OTAL",
+        "nombre_institucion": "la Oficina Técnica de Apoyo de Loja",
         "lineas_institucion": [
             "Intendencia Regional /",
             "Oficina Técnica de Apoyo",
@@ -79,6 +83,7 @@ _OFICINA_CFG: dict[str, dict] = {
 _CFG_DEFAULT = {
     "revisado_por":       "Roberto Carlos Santos Suarez",
     "area_elaborado":     "OTA",
+    "nombre_institucion": "la Oficina Técnica de Apoyo",
     "lineas_institucion": [
         "Intendencia Regional /",
         "Oficina Técnica de Apoyo",
@@ -125,9 +130,10 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
     st.divider()
 
     cfg = _cfg_oficina(oficina_id)
-    revisado_por      = cfg["revisado_por"]
-    area_elaborado    = cfg["area_elaborado"]
+    revisado_por       = cfg["revisado_por"]
+    area_elaborado     = cfg["area_elaborado"]
     lineas_institucion = cfg["lineas_institucion"]
+    nombre_institucion = cfg["nombre_institucion"]
 
     col_num, col_fecha = st.columns([1, 2])
     with col_num:
@@ -248,15 +254,14 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
     st.info("Ninguna")
     observaciones = "Ninguna"
 
-    # Adjuntos — valor fijo
-    _ADJUNTOS_FIJO = (
-        "La Dirección Regional de Abogacía de la Competencia, cuenta con archivos digitales "
+    # Adjuntos — texto dinámico según oficina
+    adjuntos = (
+        f"La {nombre_institucion}, cuenta con archivos digitales "
         "de la capacitación efectuada, cuya documentación se detalla a continuación:\n\n"
         "a)\tRegistro de asistencia.\nb)\tFotografías."
     )
     st.markdown("#### Adjuntos (medios de verificación):")
-    st.info(_ADJUNTOS_FIJO)
-    adjuntos = _ADJUNTOS_FIJO
+    st.info(adjuntos)
 
     st.divider()
 
