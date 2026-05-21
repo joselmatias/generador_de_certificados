@@ -224,10 +224,18 @@ def generar_reporte_drac(
     # Funciones que crean flowables SIEMPRE FRESCOS (se llaman dos veces)
     # ------------------------------------------------------------------
     def _nuevo_frame() -> Frame:
-        # Frame completo: sin reserva para ÁREAS en páginas intermedias
+        """Frame completo para páginas intermedias (sin reserva de ÁREAS)."""
         return Frame(
             MARGIN_L, MARGIN_B, ancho_util,
             PAGE_H - MARGIN_B - top_margin,
+            leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
+        )
+
+    def _nuevo_frame_reducido() -> Frame:
+        """Frame reducido (con reserva para ÁREAS). Usado en pass-1 para contar páginas."""
+        return Frame(
+            MARGIN_L, frame_bottom_last, ancho_util,
+            PAGE_H - frame_bottom_last - top_margin,
             leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
         )
 
@@ -339,8 +347,10 @@ def generar_reporte_drac(
     _pg = [0]
     def _on_count(c, d): _pg[0] += 1
 
+    # Usa frame REDUCIDO en el conteo: garantiza que si el contenido
+    # cabe en 1 página completa, el conteo devuelve 2 (la última con ÁREAS reservado).
     buf_dummy = io.BytesIO()
-    tmpl_count = PageTemplate(id="c", frames=[_nuevo_frame()], onPage=_on_count)
+    tmpl_count = PageTemplate(id="c", frames=[_nuevo_frame_reducido()], onPage=_on_count)
     doc_count  = BaseDocTemplate(buf_dummy, pagesize=A4, pageTemplates=[tmpl_count])
     doc_count.build(_nuevos_elementos())
     total_pages = _pg[0]
