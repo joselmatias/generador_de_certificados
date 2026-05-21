@@ -231,14 +231,6 @@ def generar_reporte_drac(
             leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
         )
 
-    def _nuevo_frame_reducido() -> Frame:
-        """Frame reducido (con reserva para ÁREAS). Usado en pass-1 para contar páginas."""
-        return Frame(
-            MARGIN_L, frame_bottom_last, ancho_util,
-            PAGE_H - frame_bottom_last - top_margin,
-            leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
-        )
-
     def _nueva_resp_table() -> Table:
         est  = _estilos()
         col_w = [ancho_util * p for p in [0.20, 0.26, 0.13, 0.15, 0.26]]
@@ -342,21 +334,47 @@ def generar_reporte_drac(
         return elems
 
     # ------------------------------------------------------------------
-    # Paso 1 — contar páginas (build a buffer desechable)
+    # Paso 1 — estimación inicial: frame COMPLETO en todas las páginas
     # ------------------------------------------------------------------
-    _pg = [0]
-    def _on_count(c, d): _pg[0] += 1
+    _pg1 = [0]
+    def _on_count1(c, d): _pg1[0] += 1
 
-    # Usa frame REDUCIDO en el conteo: garantiza que si el contenido
-    # cabe en 1 página completa, el conteo devuelve 2 (la última con ÁREAS reservado).
-    buf_dummy = io.BytesIO()
-    tmpl_count = PageTemplate(id="c", frames=[_nuevo_frame_reducido()], onPage=_on_count)
-    doc_count  = BaseDocTemplate(buf_dummy, pagesize=A4, pageTemplates=[tmpl_count])
-    doc_count.build(_nuevos_elementos())
-    total_pages = _pg[0]
+    buf1 = io.BytesIO()
+    tmpl1 = PageTemplate(id="c1", frames=[_nuevo_frame()], onPage=_on_count1)
+    doc1  = BaseDocTemplate(buf1, pagesize=A4, pageTemplates=[tmpl1])
+    doc1.build(_nuevos_elementos())
+    total_pages = _pg1[0]
+
+    # ------------------------------------------------------------------
+    # Paso 1b — refinamiento iterativo: frame reducido solo en la última
+    # página. Se itera hasta que el conteo sea estable (máx 4 veces).
+    # Esto es necesario porque reducir la última página puede provocar
+    # que el contenido necesite una página más.
+    # ------------------------------------------------------------------
+    def _contar_con_ultima_reducida(ref_total: int) -> int:
+        _pg = [0]
+        def _on_pg(c, d):
+            _pg[0] += 1
+            if _pg[0] == ref_total:
+                for fr in d.pageTemplate.frames:
+                    fr._y1     = frame_bottom_last
+                    fr._height = PAGE_H - frame_bottom_last - top_margin
+        buf = io.BytesIO()
+        tmpl = PageTemplate(id="ref", frames=[_nuevo_frame()], onPage=_on_pg)
+        doc  = BaseDocTemplate(buf, pagesize=A4, pageTemplates=[tmpl])
+        doc.build(_nuevos_elementos())
+        return _pg[0]
+
+    for _ in range(4):
+        new_total = _contar_con_ultima_reducida(total_pages)
+        if new_total == total_pages:
+            break
+        total_pages = new_total
 
     # ------------------------------------------------------------------
     # Paso 2 — build final: ÁREAS dibujado en onPage de la última página
+    # El frame que se usa en cada iteración coincide exactamente con el
+    # paso 1b, por lo que no hay desajuste en la distribución.
     # ------------------------------------------------------------------
     _pg2 = [0]
 
