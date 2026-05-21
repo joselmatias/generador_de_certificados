@@ -444,5 +444,6 @@ def _seccion_parrafo(titulo: str, texto: str,
         leftIndent=4,
         rightIndent=4,
     )
-    contenido_p = _p(texto or "—", estilo_caja)
+    texto_html = (texto or "—").replace("\n", "<br/>")
+    contenido_p = _p(texto_html, estilo_caja)
     return [titulo_p, contenido_p, Spacer(1, 0.25 * cm)]
