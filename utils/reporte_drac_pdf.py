@@ -86,8 +86,7 @@ def _estilos() -> dict:
                 leading=14, spaceAfter=2)
     return {
         "sec":    ParagraphStyle("sec",    fontName="Helvetica-Bold", fontSize=10,
-                                 textColor=NEGRO, spaceBefore=10, spaceAfter=3,
-                                 keepWithNext=True),
+                                 textColor=NEGRO, spaceBefore=8, spaceAfter=0),
         "cuerpo": ParagraphStyle("cuerpo", **base, alignment=TA_JUSTIFY),
         "hdr_w":  ParagraphStyle("hdr_w",  fontName="Helvetica-Bold", fontSize=9,
                                  textColor=BLANCO, leading=12, alignment=TA_CENTER),
@@ -395,17 +394,20 @@ def _seccion_tabla(titulo: str, filas: list[tuple[str, str]],
 
 def _seccion_parrafo(titulo: str, texto: str,
                      ancho: float, estilos: dict) -> list:
-    # Usamos Paragraph con borde (no Table) para que el contenido largo
-    # pueda dividirse entre páginas sin dejar espacios en blanco.
-    # keepWithNext=True en el estilo "sec" evita el título huérfano.
+    # Paragraph con borde: puede dividirse entre páginas (no Table de 1 fila).
+    # borderPadding=3 evita que el borde se superponga con el título superior.
+    # spaceBefore=4 asegura separación visual suficiente del título.
     titulo_p = _p(titulo, estilos["sec"])
     estilo_caja = ParagraphStyle(
         "cuerpo_caja",
         parent=estilos["cuerpo"],
         borderColor=NEGRO,
         borderWidth=0.8,
-        borderPadding=8,
-        spaceAfter=3,
+        borderPadding=4,
+        spaceBefore=4,
+        spaceAfter=4,
+        leftIndent=4,
+        rightIndent=4,
     )
     contenido_p = _p(texto or "—", estilo_caja)
-    return [titulo_p, contenido_p, Spacer(1, 0.3 * cm)]
+    return [titulo_p, contenido_p, Spacer(1, 0.25 * cm)]
