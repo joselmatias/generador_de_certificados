@@ -434,8 +434,34 @@ def _tab_estadisticas(oficina_id: str, oficina_nombre: str) -> None:
     st.markdown("Resumen de actividades del mes seleccionado.")
     st.divider()
 
+    es_master = st.session_state.get("oficina_rol", "") == "master"
+
     hoy = date.today()
-    col_anio, col_mes = st.columns(2)
+
+    # Guayaquil (master) puede elegir ver todas las oficinas o una específica
+    if es_master:
+        _OPCIONES_OFICINA = {
+            "todas":      "Todas las oficinas",
+            "guayaquil":  "Guayaquil",
+            "manabi":     "Manabí",
+            "loja":       "Loja",
+            "cuenca":     "Cuenca",
+        }
+        col_of, col_anio, col_mes = st.columns(3)
+        with col_of:
+            sel_of = st.selectbox(
+                "Oficina",
+                options=list(_OPCIONES_OFICINA.keys()),
+                format_func=lambda k: _OPCIONES_OFICINA[k],
+                key="stats_oficina",
+            )
+        oficina_filtro = None if sel_of == "todas" else sel_of
+        label_oficina  = _OPCIONES_OFICINA[sel_of]
+    else:
+        col_anio, col_mes = st.columns(2)
+        oficina_filtro = oficina_id
+        label_oficina  = oficina_nombre
+
     with col_anio:
         anio_sel = st.selectbox(
             "Año",
@@ -455,13 +481,13 @@ def _tab_estadisticas(oficina_id: str, oficina_nombre: str) -> None:
     with get_connection() as con:
         stats = estadisticas_mensuales(
             con,
-            oficina=oficina_id,
+            oficina=oficina_filtro,
             anio=int(anio_sel),
             mes=int(mes_sel),
         )
 
     mes_label = f"{_MESES_ESP[int(mes_sel)]} {int(anio_sel)}"
-    st.markdown(f"### Resultados — {mes_label}")
+    st.markdown(f"### Resultados — {label_oficina} · {mes_label}")
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Capacitaciones realizadas",     stats["num_capacitaciones"])
@@ -473,21 +499,26 @@ def _tab_estadisticas(oficina_id: str, oficina_nombre: str) -> None:
     st.markdown("**Detalle de Capacitaciones del mes:**")
     with get_connection() as con:
         reportes = consultar_reportes_capacitacion(
-            con, oficina=oficina_id, anio=int(anio_sel), mes=int(mes_sel)
+            con, oficina=oficina_filtro, anio=int(anio_sel), mes=int(mes_sel)
         )
 
     if reportes:
         import pandas as pd
         df_r = pd.DataFrame([dict(r) for r in reportes])
-        cols = [c for c in ["numero_reporte", "fecha_reporte", "tipo_evento",
-                             "tema", "elaborado_por", "num_personas_capacitadas"] if c in df_r.columns]
+        # Cuando se muestran todas las oficinas, incluir columna "oficina"
+        cols_base = ["numero_reporte", "fecha_reporte", "tipo_evento",
+                     "tema", "elaborado_por", "num_personas_capacitadas"]
+        if es_master and oficina_filtro is None:
+            cols_base = ["oficina"] + cols_base
+        cols = [c for c in cols_base if c in df_r.columns]
         st.dataframe(
             df_r[cols].rename(columns={
-                "numero_reporte": "N.° Reporte",
-                "fecha_reporte": "Fecha",
-                "tipo_evento": "Tipo",
-                "tema": "Tema",
-                "elaborado_por": "Elaborado por",
+                "oficina":                  "Oficina",
+                "numero_reporte":           "N.° Reporte",
+                "fecha_reporte":            "Fecha",
+                "tipo_evento":              "Tipo",
+                "tema":                     "Tema",
+                "elaborado_por":            "Elaborado por",
                 "num_personas_capacitadas": "Personas",
             }),
             use_container_width=True, hide_index=True,
@@ -498,16 +529,20 @@ def _tab_estadisticas(oficina_id: str, oficina_nombre: str) -> None:
     st.markdown("**Detalle de Asambleas del mes:**")
     with get_connection() as con:
         asambleas = consultar_asambleas_productivas(
-            con, oficina=oficina_id, anio=int(anio_sel), mes=int(mes_sel)
+            con, oficina=oficina_filtro, anio=int(anio_sel), mes=int(mes_sel)
         )
 
     if asambleas:
         import pandas as pd
         df_a = pd.DataFrame([dict(a) for a in asambleas])
-        cols_a = [c for c in ["fecha", "num_asistentes"] if c in df_a.columns]
+        cols_a_base = ["fecha", "num_asistentes"]
+        if es_master and oficina_filtro is None:
+            cols_a_base = ["oficina"] + cols_a_base
+        cols_a = [c for c in cols_a_base if c in df_a.columns]
         st.dataframe(
             df_a[cols_a].rename(columns={
-                "fecha": "Fecha",
+                "oficina":       "Oficina",
+                "fecha":         "Fecha",
                 "num_asistentes": "Personas Asistentes",
             }),
             use_container_width=True, hide_index=True,
