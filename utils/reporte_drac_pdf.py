@@ -102,7 +102,12 @@ def _estilos() -> dict:
 # Encabezado dibujado en canvas (aparece en cada página)
 # ---------------------------------------------------------------------------
 
-def _dibujar_encabezado(canvas, doc, codigo_reporte: str, fecha_txt: str) -> None:
+def _dibujar_encabezado(
+    canvas, doc,
+    codigo_reporte: str,
+    fecha_txt: str,
+    lineas_institucion: list[str],
+) -> None:
     canvas.saveState()
 
     ancho_pag = PAGE_W
@@ -148,17 +153,13 @@ def _dibujar_encabezado(canvas, doc, codigo_reporte: str, fecha_txt: str) -> Non
     canvas.setLineWidth(0.8)
     canvas.rect(MARGIN_L, franja_y, franja_w, FRANJA_H, fill=0, stroke=1)
 
-    # Texto en la franja — col 1: institución
+    # Texto en la franja — col 1: institución (3 líneas dinámicas)
     canvas.setFillColor(BLANCO)
     canvas.setFont("Helvetica-Bold", 7.5)
-    txt1a = "Intendencia Regional /"
-    txt1b = "Dirección Regional de"
-    txt1c = "Abogacía de la Competencia"
     cy = franja_y + FRANJA_H * 0.68
     cx1 = MARGIN_L + col1_w / 2
-    canvas.drawCentredString(cx1, cy,              txt1a)
-    canvas.drawCentredString(cx1, cy - 9,          txt1b)
-    canvas.drawCentredString(cx1, cy - 18,         txt1c)
+    for i, linea in enumerate(lineas_institucion[:3]):
+        canvas.drawCentredString(cx1, cy - i * 9, linea)
 
     # col 2: código de reporte
     canvas.setFont("Helvetica-Bold", 9)
@@ -196,6 +197,8 @@ def generar_reporte_drac(
     elaborado_por: str,
     revisado_por: str,
     fecha_elaboracion: str,
+    lineas_institucion: list[str] | None = None,
+    area_elaborado: str = "DRAC",
     num_personas_capacitadas: int = 0,
 ) -> bytes:
     buffer = io.BytesIO()
@@ -203,11 +206,18 @@ def generar_reporte_drac(
     codigo_reporte = f"Reporte DRAC-{numero_reporte:03d}-{year_reporte}"
     fecha_txt      = _fecha_esp(fecha_reporte)
 
+    if lineas_institucion is None:
+        lineas_institucion = [
+            "Intendencia Regional /",
+            "Dirección Regional de",
+            "Abogacía de la Competencia",
+        ]
+
     # Margen superior del contenido debe dejar espacio al encabezado
     top_margin = MARGIN_T + HEADER_H + 0.5 * cm
 
     def on_page(canvas, doc):
-        _dibujar_encabezado(canvas, doc, codigo_reporte, fecha_txt)
+        _dibujar_encabezado(canvas, doc, codigo_reporte, fecha_txt, lineas_institucion)
 
     frame = Frame(
         MARGIN_L, MARGIN_B,
@@ -323,11 +333,11 @@ def generar_reporte_drac(
          _p("FECHA",  estilo_th), _p("FIRMA",  estilo_th)],
         [_p("Elaborado por:", estilo_tdb),
          _p(elaborado_por,    estilo_tdc),
-         _p("DRAC",           estilo_tdc),
+         _p(area_elaborado,   estilo_tdc),
          _p(fecha_elaboracion, estilo_tdc), ""],
         [_p("Revisado y\naprobado por:", estilo_tdb),
          _p(revisado_por,     estilo_tdc),
-         _p("DRAC",           estilo_tdc),
+         _p("IR",             estilo_tdc),
          _p(fecha_elaboracion, estilo_tdc), ""],
     ]
     resp_table = Table(resp_data, colWidths=col_w,

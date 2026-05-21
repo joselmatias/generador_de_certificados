@@ -36,14 +36,59 @@ _MESES_ESP = {
     9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre",
 }
 
-REVISADO_POR = {
-    "guayaquil": "José Matías",
+# Configuración específica por oficina
+_OFICINA_CFG: dict[str, dict] = {
+    "guayaquil": {
+        "revisado_por":       "José Matías",
+        "area_elaborado":     "DRAC",
+        "lineas_institucion": [
+            "Intendencia Regional /",
+            "Dirección Regional de",
+            "Abogacía de la Competencia",
+        ],
+    },
+    "cuenca": {
+        "revisado_por":       "Roberto Carlos Santos Suarez",
+        "area_elaborado":     "OTAC",
+        "lineas_institucion": [
+            "Intendencia Regional /",
+            "Oficina Técnica de Apoyo",
+            "Cuenca",
+        ],
+    },
+    "manabi": {
+        "revisado_por":       "Roberto Carlos Santos Suarez",
+        "area_elaborado":     "OTAP",
+        "lineas_institucion": [
+            "Intendencia Regional /",
+            "Oficina Técnica de Apoyo",
+            "Portoviejo",
+        ],
+    },
+    "loja": {
+        "revisado_por":       "Roberto Carlos Santos Suarez",
+        "area_elaborado":     "OTAL",
+        "lineas_institucion": [
+            "Intendencia Regional /",
+            "Oficina Técnica de Apoyo",
+            "Loja",
+        ],
+    },
 }
-REVISADO_DEFAULT = "Roberto Santos"
+
+_CFG_DEFAULT = {
+    "revisado_por":       "Roberto Carlos Santos Suarez",
+    "area_elaborado":     "OTA",
+    "lineas_institucion": [
+        "Intendencia Regional /",
+        "Oficina Técnica de Apoyo",
+        "",
+    ],
+}
 
 
-def _revisado_por(oficina_id: str) -> str:
-    return REVISADO_POR.get(oficina_id.lower(), REVISADO_DEFAULT)
+def _cfg_oficina(oficina_id: str) -> dict:
+    return _OFICINA_CFG.get(oficina_id.lower(), _CFG_DEFAULT)
 
 
 def mostrar_generador_reportes() -> None:
@@ -78,6 +123,11 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
     st.subheader("Reporte de Capacitaciones")
     st.markdown("Completa los campos y haz clic en **Generar Reporte** para descargar el PDF.")
     st.divider()
+
+    cfg = _cfg_oficina(oficina_id)
+    revisado_por      = cfg["revisado_por"]
+    area_elaborado    = cfg["area_elaborado"]
+    lineas_institucion = cfg["lineas_institucion"]
 
     col_num, col_fecha = st.columns([1, 2])
     with col_num:
@@ -119,8 +169,16 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
             key="rep_modalidad",
         )
     with c2:
-        fecha_evento = st.date_input("Fecha del Evento", value=date.today(), key="rep_fecha_evento")
+        fecha_evento = st.date_input(
+            "Fecha del Evento",
+            value=date.today(),
+            key="rep_fecha_evento",
+            max_value=fecha_reporte,   # no puede ser posterior a la fecha del reporte
+        )
         tema = st.text_input("Tema", key="rep_tema")
+
+    if fecha_evento > fecha_reporte:
+        st.warning("⚠️ La fecha del evento no puede ser posterior a la fecha del reporte.")
 
     st.divider()
 
@@ -157,7 +215,6 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
         label_visibility="collapsed",
     )
 
-    revisado_por = _revisado_por(oficina_id)
     st.info(f"**Revisado y aprobado por:** {revisado_por}")
 
     st.divider()
@@ -219,6 +276,8 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
         errores = _validar_campos_reporte(
             institucion_invitada, tema, capacitadores_lista, publico_objetivo, descripcion
         )
+        if fecha_evento > fecha_reporte:
+            errores.append("La fecha del evento no puede ser posterior a la fecha del reporte.")
         if errores:
             for e in errores:
                 st.error(e)
@@ -263,6 +322,8 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
                 elaborado_por=elaborado_por,
                 revisado_por=revisado_por,
                 fecha_elaboracion=str(fecha_reporte),
+                lineas_institucion=lineas_institucion,
+                area_elaborado=area_elaborado,
                 num_personas_capacitadas=int(num_personas),
             )
 
