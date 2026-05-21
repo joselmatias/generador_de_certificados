@@ -53,6 +53,10 @@ GAP_FRANJA  = 0.35 * cm            # separación entre logo y franja azul
 FRANJA_H    = 1.6 * cm             # altura de la franja azul
 HEADER_H    = LOGO_H + GAP_FRANJA + FRANJA_H   # altura total del encabezado
 
+# Posición fija de la tabla ÁREAS Y PERSONAS RESPONSABLES
+AREAS_H = 6.0 * cm   # altura total de la tabla (filas: 0.7+0.7+2.2+2.2 + márgenes)
+AREAS_Y = MARGIN_B   # Y fija desde el borde inferior (1.5 cm)
+
 TIPOS_EVENTO = ["Capacitación", "Foros", "Congresos", "Seminarios"]
 
 
@@ -177,6 +181,25 @@ def _dibujar_encabezado(
 
 
 # ---------------------------------------------------------------------------
+# DocTemplate con tabla ÁREAS en posición fija al final de la última página
+# ---------------------------------------------------------------------------
+
+class _ReporteDoc(BaseDocTemplate):
+    """BaseDocTemplate que dibuja la tabla de responsables en Y fijo en la última página."""
+
+    def __init__(self, *args, resp_table: Table, ancho_util: float, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._resp_table = resp_table
+        self._ancho_util = ancho_util
+
+    def handle_documentEnd(self) -> None:
+        # Se llama antes de canv.save() → podemos dibujar en la última página.
+        self._resp_table.wrap(self._ancho_util, AREAS_H)
+        self._resp_table.drawOn(self.canv, MARGIN_L, AREAS_Y)
+        super().handle_documentEnd()
+
+
+# ---------------------------------------------------------------------------
 # Función principal de generación
 # ---------------------------------------------------------------------------
 
@@ -215,23 +238,20 @@ def generar_reporte_drac(
 
     # Margen superior del contenido debe dejar espacio al encabezado
     top_margin = MARGIN_T + HEADER_H + 0.5 * cm
+    # El frame NO ocupa la zona reservada para ÁREAS al pie de cada página
+    frame_bottom = AREAS_Y + AREAS_H + 0.4 * cm
 
     def on_page(canvas, doc):
         _dibujar_encabezado(canvas, doc, codigo_reporte, fecha_txt, lineas_institucion)
 
     frame = Frame(
-        MARGIN_L, MARGIN_B,
+        MARGIN_L, frame_bottom,
         PAGE_W - MARGIN_L - MARGIN_R,
-        PAGE_H - MARGIN_B - top_margin,
+        PAGE_H - frame_bottom - top_margin,
         leftPadding=0, rightPadding=0,
         topPadding=0,  bottomPadding=0,
     )
     template = PageTemplate(id="main", frames=[frame], onPage=on_page)
-    doc = BaseDocTemplate(
-        buffer,
-        pagesize=A4,
-        pageTemplates=[template],
-    )
 
     estilos = _estilos()
     ancho_util = PAGE_W - MARGIN_L - MARGIN_R
@@ -355,8 +375,15 @@ def generar_reporte_drac(
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ("LEFTPADDING",   (0, 0), (-1, -1), 4),
     ]))
-    elementos.append(KeepTogether(resp_table))
+    # resp_table NO se agrega a elementos: se dibuja en posición fija en handle_documentEnd
 
+    doc = _ReporteDoc(
+        buffer,
+        pagesize=A4,
+        pageTemplates=[template],
+        resp_table=resp_table,
+        ancho_util=ancho_util,
+    )
     doc.build(elementos)
     return buffer.getvalue()
 
