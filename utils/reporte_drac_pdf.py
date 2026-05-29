@@ -87,7 +87,7 @@ def _estilos() -> dict:
     return {
         "sec":    ParagraphStyle("sec",    fontName="Helvetica-Bold", fontSize=10,
                                  textColor=NEGRO, spaceBefore=8, spaceAfter=0),
-        "cuerpo": ParagraphStyle("cuerpo", **base, alignment=TA_JUSTIFY),
+        "cuerpo": ParagraphStyle("cuerpo", **base, alignment=TA_LEFT),
         "hdr_w":  ParagraphStyle("hdr_w",  fontName="Helvetica-Bold", fontSize=9,
                                  textColor=BLANCO, leading=12, alignment=TA_CENTER),
         "hdr_ws": ParagraphStyle("hdr_ws", fontName="Helvetica",      fontSize=8,
@@ -231,9 +231,17 @@ def generar_reporte_drac(
             leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
         )
 
+    def _nuevo_frame_reducido() -> Frame:
+        """Frame reducido para reservar espacio a firmas al pie."""
+        return Frame(
+            MARGIN_L, frame_bottom_last, ancho_util,
+            PAGE_H - frame_bottom_last - top_margin,
+            leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
+        )
+
     def _nueva_resp_table() -> Table:
         est  = _estilos()
-        col_w = [ancho_util * p for p in [0.20, 0.26, 0.13, 0.15, 0.26]]
+        col_w = [ancho_util * p for p in [0.20, 0.30, 0.12, 0.12, 0.26]]
         th   = ParagraphStyle("th2",  fontName="Helvetica-Bold", fontSize=9,
                                alignment=TA_CENTER, textColor=BLANCO)
         tdb  = ParagraphStyle("tdb2", fontName="Helvetica-Bold", fontSize=9)
@@ -331,6 +339,10 @@ def generar_reporte_drac(
             ("LEFTPADDING",  (0,0),(-1,-1), 8),
         ]))
         elems.append(pt)
+
+        # Tabla de firmas como flowable (no en canvas)
+        elems.append(Spacer(1, 0.3 * cm))
+        elems.append(KeepTogether([_nueva_resp_table()]))
         return elems
 
     # ------------------------------------------------------------------
@@ -381,20 +393,9 @@ def generar_reporte_drac(
     def _on_page_final(c, d):
         _pg2[0] += 1
         _dibujar_encabezado(c, d, codigo_reporte, fecha_txt, lineas_institucion)
-        if _pg2[0] == total_pages:
-            # onPage se llama ANTES de frame._reset() → modificar aquí afecta
-            # el espacio disponible para el contenido de esta página
-            for frame in d.pageTemplate.frames:
-                frame._y1     = frame_bottom_last
-                frame._height = PAGE_H - frame_bottom_last - top_margin
-            # Dibujar ÁREAS en posición fija al pie
-            fr = Frame(MARGIN_L, AREAS_Y, ancho_util, AREAS_H,
-                       leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
-                       showBoundary=0)
-            fr.addFromList([_nueva_resp_table()], c)
 
     buffer = io.BytesIO()
-    tmpl_final = PageTemplate(id="m", frames=[_nuevo_frame()], onPage=_on_page_final)
+    tmpl_final = PageTemplate(id="m", frames=[_nuevo_frame_reducido()], onPage=_on_page_final)
     doc_final  = BaseDocTemplate(buffer, pagesize=A4, pageTemplates=[tmpl_final])
     doc_final.build(_nuevos_elementos())
     return buffer.getvalue()
@@ -441,8 +442,8 @@ def _seccion_parrafo(titulo: str, texto: str,
         borderPadding=4,
         spaceBefore=4,
         spaceAfter=4,
-        leftIndent=4,
-        rightIndent=4,
+        leftIndent=2,
+        rightIndent=2,
     )
     texto_html = (texto or "—").replace("\n", "<br/>")
     contenido_p = _p(texto_html, estilo_caja)
