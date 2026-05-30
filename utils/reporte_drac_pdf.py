@@ -20,7 +20,7 @@ from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
 from reportlab.platypus import (
     BaseDocTemplate, PageTemplate, Frame,
     Paragraph, Spacer, Table, TableStyle,
-    KeepTogether, HRFlowable,
+    KeepTogether, HRFlowable, PageBreak,
 )
 from reportlab.platypus.flowables import Flowable
 from reportlab.lib.utils import ImageReader
@@ -342,51 +342,29 @@ def generar_reporte_drac(
         return elems
 
     # ------------------------------------------------------------------
-    # Paso 1 — estimación inicial: frame COMPLETO en todas las páginas
+    # Paso 1 — medir páginas que ocupa el CONTENIDO usando el frame
+    # reducido (que reserva el espacio inferior para las firmas en TODAS
+    # las páginas). Así el contenido nunca invade la zona de firmas.
     # ------------------------------------------------------------------
     _pg1 = [0]
     def _on_count1(c, d): _pg1[0] += 1
 
     buf1 = io.BytesIO()
-    tmpl1 = PageTemplate(id="c1", frames=[_nuevo_frame()], onPage=_on_count1)
+    tmpl1 = PageTemplate(id="c1", frames=[_nuevo_frame_reducido()], onPage=_on_count1)
     doc1  = BaseDocTemplate(buf1, pagesize=A4, pageTemplates=[tmpl1])
     doc1.build(_nuevos_elementos())
-    total_pages = _pg1[0]
+    content_pages = _pg1[0]
+
+    # Mínimo 2 páginas: las firmas SIEMPRE en una página dedicada al final.
+    # Si el contenido cabe en 1 página, forzamos una página 2 para las firmas.
+    forzar_pagina_extra = content_pages < 2
+    total_pages = max(2, content_pages)
 
     # ------------------------------------------------------------------
-    # Paso 1b — refinamiento iterativo: frame reducido solo en la última
-    # página. Se itera hasta que el conteo sea estable (máx 4 veces).
-    # Esto es necesario porque reducir la última página puede provocar
-    # que el contenido necesite una página más.
-    # ------------------------------------------------------------------
-    def _contar_con_ultima_reducida(ref_total: int) -> int:
-        _pg = [0]
-        def _on_pg(c, d):
-            _pg[0] += 1
-            if _pg[0] == ref_total:
-                for fr in d.pageTemplate.frames:
-                    fr._y1     = frame_bottom_last
-                    fr._height = PAGE_H - frame_bottom_last - top_margin
-        buf = io.BytesIO()
-        tmpl = PageTemplate(id="ref", frames=[_nuevo_frame_reducido()], onPage=_on_pg)
-        doc  = BaseDocTemplate(buf, pagesize=A4, pageTemplates=[tmpl])
-        doc.build(_nuevos_elementos())
-        return _pg[0]
-
-    for _ in range(4):
-        new_total = _contar_con_ultima_reducida(total_pages)
-        if new_total == total_pages:
-            break
-        total_pages = new_total
-
-    # Garantizar mínimo 2 páginas: si todo cabe en 1, crear página 2 para firmas
-    if total_pages < 2:
-        total_pages = 2
-
-    # ------------------------------------------------------------------
-    # Paso 2 — build final: ÁREAS dibujado en onPage de la última página
-    # El frame que se usa en cada iteración coincide exactamente con el
-    # paso 1b, por lo que no hay desajuste en la distribución.
+    # Paso 2 — build final. Frame reducido en todas las páginas (reserva
+    # firmas al pie). Las firmas se dibujan en el pie de la última página.
+    # Si hace falta, se añade un salto de página + contenido mínimo para
+    # materializar la página dedicada a las firmas.
     # ------------------------------------------------------------------
     _pg2 = [0]
 
@@ -400,10 +378,17 @@ def generar_reporte_drac(
                        showBoundary=0)
             fr.addFromList([_nueva_resp_table()], c)
 
+    elems_final = _nuevos_elementos()
+    if forzar_pagina_extra:
+        # PageBreak + párrafo mínimo: obliga a ReportLab a emitir la página 2
+        # (un salto de página al final, sin contenido, sería descartado).
+        elems_final.append(PageBreak())
+        elems_final.append(_p("&nbsp;", _estilos()["cuerpo"]))
+
     buffer = io.BytesIO()
-    tmpl_final = PageTemplate(id="m", frames=[_nuevo_frame()], onPage=_on_page_final)
+    tmpl_final = PageTemplate(id="m", frames=[_nuevo_frame_reducido()], onPage=_on_page_final)
     doc_final  = BaseDocTemplate(buffer, pagesize=A4, pageTemplates=[tmpl_final])
-    doc_final.build(_nuevos_elementos())
+    doc_final.build(elems_final)
     return buffer.getvalue()
 
 
