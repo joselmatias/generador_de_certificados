@@ -231,6 +231,14 @@ def generar_reporte_drac(
             leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
         )
 
+    def _nuevo_frame_reducido() -> Frame:
+        """Frame reducido: reserva espacio para firmas en última página."""
+        return Frame(
+            MARGIN_L, frame_bottom_last, ancho_util,
+            PAGE_H - frame_bottom_last - top_margin,
+            leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
+        )
+
     def _nueva_resp_table() -> Table:
         est  = _estilos()
         col_w = [ancho_util * p for p in [0.20, 0.30, 0.12, 0.12, 0.26]]
@@ -370,6 +378,10 @@ def generar_reporte_drac(
         if new_total == total_pages:
             break
         total_pages = new_total
+
+    # Garantizar mínimo 2 páginas: si todo cabe en 1, crear página 2 para firmas
+    if total_pages < 2:
+        total_pages = 2
 
     # ------------------------------------------------------------------
     # Paso 2 — build final: ÁREAS dibujado en onPage de la última página
