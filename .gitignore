@@ -1,6 +1,6 @@
 # Datos sensibles y locales
 .streamlit/secrets.toml
-data/
+# data/  — Comentado: necesitamos persistencia en Streamlit Cloud
 *.db
 
 # Python
