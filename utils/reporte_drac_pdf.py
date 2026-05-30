@@ -331,10 +331,6 @@ def generar_reporte_drac(
             ("LEFTPADDING",  (0,0),(-1,-1), 8),
         ]))
         elems.append(pt)
-
-        # Tabla de firmas como flowable (no en canvas)
-        elems.append(Spacer(1, 0.3 * cm))
-        elems.append(KeepTogether([_nueva_resp_table()]))
         return elems
 
     # ------------------------------------------------------------------
@@ -385,6 +381,12 @@ def generar_reporte_drac(
     def _on_page_final(c, d):
         _pg2[0] += 1
         _dibujar_encabezado(c, d, codigo_reporte, fecha_txt, lineas_institucion)
+        if _pg2[0] == total_pages:
+            # Dibujar tabla de firmas en posición fija al pie de la última página
+            fr = Frame(MARGIN_L, AREAS_Y, ancho_util, AREAS_H,
+                       leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
+                       showBoundary=0)
+            fr.addFromList([_nueva_resp_table()], c)
 
     buffer = io.BytesIO()
     tmpl_final = PageTemplate(id="m", frames=[_nuevo_frame()], onPage=_on_page_final)
