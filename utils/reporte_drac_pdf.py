@@ -342,29 +342,40 @@ def generar_reporte_drac(
         return elems
 
     # ------------------------------------------------------------------
-    # Paso 1 — medir páginas que ocupa el CONTENIDO usando el frame
-    # reducido (que reserva el espacio inferior para las firmas en TODAS
-    # las páginas). Así el contenido nunca invade la zona de firmas.
+    # Medición de páginas — se cuenta el contenido con DOS frames:
+    #   - frame completo  → el contenido usa toda la altura (llena las hojas)
+    #   - frame reducido  → reserva el espacio de firmas al pie
+    # Comparando ambos conteos decidimos si las firmas caben al pie de la
+    # última hoja de contenido (comparten hoja, sin invadirse) o si necesitan
+    # una hoja propia al final.
     # ------------------------------------------------------------------
-    _pg1 = [0]
-    def _on_count1(c, d): _pg1[0] += 1
+    def _contar_paginas(frame_factory) -> int:
+        _pg = [0]
+        def _on_pg(c, d): _pg[0] += 1
+        buf = io.BytesIO()
+        tmpl = PageTemplate(id="cnt", frames=[frame_factory()], onPage=_on_pg)
+        doc  = BaseDocTemplate(buf, pagesize=A4, pageTemplates=[tmpl])
+        doc.build(_nuevos_elementos())
+        return _pg[0]
 
-    buf1 = io.BytesIO()
-    tmpl1 = PageTemplate(id="c1", frames=[_nuevo_frame_reducido()], onPage=_on_count1)
-    doc1  = BaseDocTemplate(buf1, pagesize=A4, pageTemplates=[tmpl1])
-    doc1.build(_nuevos_elementos())
-    content_pages = _pg1[0]
+    n_full = _contar_paginas(_nuevo_frame)            # contenido a página completa
+    n_red  = _contar_paginas(_nuevo_frame_reducido)   # contenido reservando firmas
 
-    # Mínimo 2 páginas: las firmas SIEMPRE en una página dedicada al final.
-    # Si el contenido cabe en 1 página, forzamos una página 2 para las firmas.
-    forzar_pagina_extra = content_pages < 2
-    total_pages = max(2, content_pages)
+    # Si reservar el espacio de firmas NO añade páginas y ya hay ≥2 hojas, las
+    # firmas caben al pie de la última hoja de contenido (la comparten).
+    # En cualquier otro caso, las firmas van en una hoja dedicada al final.
+    if n_red == n_full and n_full >= 2:
+        total_pages = n_full
+        dedicar_pagina = False
+    else:
+        total_pages = n_full + 1          # ≥2 siempre (n_full ≥ 1)
+        dedicar_pagina = True
 
     # ------------------------------------------------------------------
-    # Paso 2 — build final. Frame reducido en todas las páginas (reserva
-    # firmas al pie). Las firmas se dibujan en el pie de la última página.
-    # Si hace falta, se añade un salto de página + contenido mínimo para
-    # materializar la página dedicada a las firmas.
+    # Build final — el contenido usa el frame COMPLETO (llena las hojas).
+    # Las firmas se dibujan con posición fija al pie de la última hoja.
+    # Si las firmas van en hoja dedicada, se fuerza esa hoja con un salto de
+    # página + contenido mínimo (un salto al final, vacío, sería descartado).
     # ------------------------------------------------------------------
     _pg2 = [0]
 
@@ -379,14 +390,12 @@ def generar_reporte_drac(
             fr.addFromList([_nueva_resp_table()], c)
 
     elems_final = _nuevos_elementos()
-    if forzar_pagina_extra:
-        # PageBreak + párrafo mínimo: obliga a ReportLab a emitir la página 2
-        # (un salto de página al final, sin contenido, sería descartado).
+    if dedicar_pagina:
         elems_final.append(PageBreak())
         elems_final.append(_p("&nbsp;", _estilos()["cuerpo"]))
 
     buffer = io.BytesIO()
-    tmpl_final = PageTemplate(id="m", frames=[_nuevo_frame_reducido()], onPage=_on_page_final)
+    tmpl_final = PageTemplate(id="m", frames=[_nuevo_frame()], onPage=_on_page_final)
     doc_final  = BaseDocTemplate(buffer, pagesize=A4, pageTemplates=[tmpl_final])
     doc_final.build(elems_final)
     return buffer.getvalue()
