@@ -82,6 +82,8 @@ CREATE TABLE IF NOT EXISTS reportes_capacitacion (
     tipo_evento             TEXT NOT NULL,
     institucion_invitada    TEXT,
     fecha_evento            TEXT,
+    hora_inicio             TEXT,
+    hora_fin                TEXT,
     modalidad               TEXT,
     tema                    TEXT,
     capacitadores           TEXT,
@@ -153,6 +155,16 @@ def init_db() -> None:
             # Migración: si el contador está por debajo de 73, actualizarlo
             # (los reportes 1-73 son históricos; el sistema comienza desde el 74)
             con.execute("UPDATE contador_reporte SET ultimo_numero = 73 WHERE id = 1 AND ultimo_numero < 73")
+
+            # Migración: agregar columnas nuevas a reportes_capacitacion si faltan
+            # (las BDs creadas antes de estos campos no las tienen).
+            cols_existentes = {
+                row[1] for row in con.execute("PRAGMA table_info(reportes_capacitacion)")
+            }
+            for col in ("hora_inicio", "hora_fin"):
+                if col not in cols_existentes:
+                    con.execute(f"ALTER TABLE reportes_capacitacion ADD COLUMN {col} TEXT")
+
             for idx in _INDICES:
                 con.execute(idx)
 

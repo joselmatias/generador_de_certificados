@@ -211,13 +211,13 @@ def insertar_reporte_capacitacion(con: sqlite3.Connection, datos: dict[str, Any]
         """
         INSERT INTO reportes_capacitacion (
             numero_reporte, year_reporte, oficina, fecha_reporte, tipo_evento,
-            institucion_invitada, fecha_evento, modalidad, tema,
+            institucion_invitada, fecha_evento, hora_inicio, hora_fin, modalidad, tema,
             capacitadores, publico_objetivo, descripcion,
             observaciones, adjuntos, elaborado_por, revisado_por,
             num_personas_capacitadas
         ) VALUES (
             :numero_reporte, :year_reporte, :oficina, :fecha_reporte, :tipo_evento,
-            :institucion_invitada, :fecha_evento, :modalidad, :tema,
+            :institucion_invitada, :fecha_evento, :hora_inicio, :hora_fin, :modalidad, :tema,
             :capacitadores, :publico_objetivo, :descripcion,
             :observaciones, :adjuntos, :elaborado_por, :revisado_por,
             :num_personas_capacitadas

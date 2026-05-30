@@ -11,7 +11,7 @@ Estadísticas mensuales al pie de la página.
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, time
 
 import streamlit as st
 
@@ -96,6 +96,24 @@ def _cfg_oficina(oficina_id: str) -> dict:
     return _OFICINA_CFG.get(oficina_id.lower(), _CFG_DEFAULT)
 
 
+def _construir_adjuntos(nombre_institucion: str, items: list[str]) -> str:
+    """
+    Arma el texto de adjuntos con el prefijo institucional y una lista
+    enumerada con letras (a, b, c, …). Si no hay ítems, devuelve solo el prefijo.
+    """
+    prefijo = (
+        f"La {nombre_institucion}, cuenta con archivos digitales "
+        "de la capacitación efectuada, cuya documentación se detalla a continuación:"
+    )
+    if not items:
+        return prefijo
+    letras = "abcdefghijklmnopqrstuvwxyz"
+    lista = "\n".join(
+        f"{letras[i]})\t{item.rstrip('.').strip()}." for i, item in enumerate(items)
+    )
+    return f"{prefijo}\n\n{lista}"
+
+
 def mostrar_generador_reportes() -> None:
     oficina_id     = st.session_state.get("oficina_id", "")
     oficina_nombre = st.session_state.get("oficina_nombre", oficina_id)
@@ -164,11 +182,11 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
 
     st.divider()
 
-    # Institución Invitada — Fecha — Modalidad — Tema
-    st.markdown("#### Institución Invitada - Fecha - Modalidad - Tema:")
+    # Institución /asociación capacitada — Fecha — Modalidad — Tema
+    st.markdown("#### Institución /asociación capacitada - Fecha - Modalidad - Tema:")
     c1, c2 = st.columns(2)
     with c1:
-        institucion_invitada = st.text_input("Institución Invitada", key="rep_institucion")
+        institucion_invitada = st.text_input("Institución /asociación capacitada", key="rep_institucion")
         modalidad = st.selectbox(
             "Modalidad",
             options=["Presencial", "Virtual", "Híbrida"],
@@ -182,6 +200,15 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
             max_value=fecha_reporte,   # no puede ser posterior a la fecha del reporte
         )
         tema = st.text_input("Tema", key="rep_tema")
+
+    # Horario del evento
+    ch1, ch2 = st.columns(2)
+    with ch1:
+        hora_inicio_val = st.time_input("Hora de inicio", value=time(9, 0), key="rep_hora_inicio")
+    with ch2:
+        hora_fin_val = st.time_input("Hora de fin", value=time(12, 0), key="rep_hora_fin")
+    hora_inicio_str = hora_inicio_val.strftime("%H:%M") if hora_inicio_val else ""
+    hora_fin_str    = hora_fin_val.strftime("%H:%M") if hora_fin_val else ""
 
     if fecha_evento > fecha_reporte:
         st.warning("⚠️ La fecha del evento no puede ser posterior a la fecha del reporte.")
@@ -211,15 +238,25 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
 
     st.divider()
 
-    # Elaborado por — dropdown con los capacitadores
+    # Elaborado por — dropdown con los capacitadores + opción "Otro"
     st.markdown("#### Elaborado por:")
-    opciones_elaborado = capacitadores_lista if capacitadores_lista else ["(Ingresa los capacitadores primero)"]
-    elaborado_por = st.selectbox(
+    opciones_elaborado = (capacitadores_lista if capacitadores_lista
+                          else ["(Ingresa los capacitadores primero)"])
+    opciones_elaborado = opciones_elaborado + ["Otro"]
+    elaborado_sel = st.selectbox(
         "Selecciona quién elaboró el reporte",
         options=opciones_elaborado,
         key="rep_elaborado",
         label_visibility="collapsed",
     )
+    if elaborado_sel == "Otro":
+        elaborado_por = st.text_input(
+            "Nombre de quien elaboró el reporte",
+            key="rep_elaborado_otro",
+            placeholder="Nombre completo",
+        )
+    else:
+        elaborado_por = elaborado_sel
 
     st.info(f"**Revisado y aprobado por:** {revisado_por}")
 
@@ -249,18 +286,44 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
 
     st.divider()
 
-    # Observaciones — valor fijo
+    # Observaciones — desplegable con opción "Otros"
     st.markdown("#### Observaciones:")
-    st.info("Ninguna")
-    observaciones = "Ninguna"
-
-    # Adjuntos — texto dinámico según oficina
-    adjuntos = (
-        f"La {nombre_institucion}, cuenta con archivos digitales "
-        "de la capacitación efectuada, cuya documentación se detalla a continuación:\n\n"
-        "a)\tRegistro de asistencia.\nb)\tFotografías."
+    obs_sel = st.selectbox(
+        "Observaciones",
+        options=["Ninguna", "Otros"],
+        key="rep_obs_sel",
+        label_visibility="collapsed",
     )
+    if obs_sel == "Otros":
+        observaciones = st.text_area(
+            "Detalle la observación",
+            key="rep_obs_otro",
+            height=80,
+            placeholder="Escribe la observación...",
+        ).strip() or "Ninguna"
+    else:
+        observaciones = "Ninguna"
+
+    # Adjuntos — desplegable de medios + opción "Otros" con ítems libres
     st.markdown("#### Adjuntos (medios de verificación):")
+    adj_sel = st.multiselect(
+        "Medios de verificación",
+        options=["Registro de asistencia", "Fotografías", "Otros"],
+        default=["Registro de asistencia", "Fotografías"],
+        key="rep_adj_sel",
+        label_visibility="collapsed",
+    )
+    items_adj = [m for m in adj_sel if m != "Otros"]
+    if "Otros" in adj_sel:
+        extra_adj = st.text_area(
+            "Otros medios (uno por línea)",
+            key="rep_adj_otro",
+            height=80,
+            placeholder="Ej:\nActa de la reunión\nMaterial entregado",
+        )
+        items_adj += [ln.strip() for ln in extra_adj.splitlines() if ln.strip()]
+
+    adjuntos = _construir_adjuntos(nombre_institucion, items_adj)
     st.info(adjuntos)
 
     st.divider()
@@ -297,6 +360,8 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
                     "tipo_evento":              tipo_evento,
                     "institucion_invitada":     institucion_invitada,
                     "fecha_evento":             str(fecha_evento),
+                    "hora_inicio":              hora_inicio_str,
+                    "hora_fin":                 hora_fin_str,
                     "modalidad":                modalidad,
                     "tema":                     tema,
                     "capacitadores":            json.dumps(capacitadores_lista, ensure_ascii=False),
@@ -317,6 +382,8 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
                 tipo_evento=tipo_evento,
                 institucion_invitada=institucion_invitada,
                 fecha_evento=str(fecha_evento),
+                hora_inicio=hora_inicio_str,
+                hora_fin=hora_fin_str,
                 modalidad=modalidad,
                 tema=tema,
                 capacitadores=capacitadores_str,

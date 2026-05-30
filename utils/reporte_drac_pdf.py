@@ -204,6 +204,8 @@ def generar_reporte_drac(
     lineas_institucion: list[str] | None = None,
     area_elaborado: str = "DRAC",
     num_personas_capacitadas: int = 0,
+    hora_inicio: str = "",
+    hora_fin: str = "",
 ) -> bytes:
 
     codigo_reporte = f"Reporte DRAC-{numero_reporte:03d}-{year_reporte}"
@@ -306,12 +308,19 @@ def generar_reporte_drac(
         elems.append(ev_t)
         elems.append(Spacer(1, 0.4*cm))
 
+        _filas_inst = [
+            ("Institución /asociación capacitada:", institucion_invitada),
+            ("Fecha del evento:", _fecha_esp(fecha_evento) if fecha_evento else ""),
+        ]
+        if hora_inicio or hora_fin:
+            _filas_inst.append(("Horario:", f"{hora_inicio} a {hora_fin}".strip()))
+        _filas_inst += [
+            ("Modalidad:", modalidad),
+            ("Tema:", tema),
+        ]
         elems += _seccion_tabla(
-            "Institución Invitada - Fecha - Modalidad - Tema:",
-            [("Institución:", institucion_invitada),
-             ("Fecha del evento:", _fecha_esp(fecha_evento) if fecha_evento else ""),
-             ("Modalidad:", modalidad),
-             ("Tema:", tema)],
+            "Institución /asociación capacitada - Fecha - Modalidad - Tema:",
+            _filas_inst,
             ancho_util, est,
         )
         elems += _seccion_parrafo("Nombre de los Capacitadores:", capacitadores, ancho_util, est)
