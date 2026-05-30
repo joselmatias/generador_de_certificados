@@ -231,14 +231,6 @@ def generar_reporte_drac(
             leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
         )
 
-    def _nuevo_frame_reducido() -> Frame:
-        """Frame reducido para reservar espacio a firmas al pie."""
-        return Frame(
-            MARGIN_L, frame_bottom_last, ancho_util,
-            PAGE_H - frame_bottom_last - top_margin,
-            leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
-        )
-
     def _nueva_resp_table() -> Table:
         est  = _estilos()
         col_w = [ancho_util * p for p in [0.20, 0.30, 0.12, 0.12, 0.26]]
@@ -395,7 +387,7 @@ def generar_reporte_drac(
         _dibujar_encabezado(c, d, codigo_reporte, fecha_txt, lineas_institucion)
 
     buffer = io.BytesIO()
-    tmpl_final = PageTemplate(id="m", frames=[_nuevo_frame_reducido()], onPage=_on_page_final)
+    tmpl_final = PageTemplate(id="m", frames=[_nuevo_frame()], onPage=_on_page_final)
     doc_final  = BaseDocTemplate(buffer, pagesize=A4, pageTemplates=[tmpl_final])
     doc_final.build(_nuevos_elementos())
     return buffer.getvalue()
