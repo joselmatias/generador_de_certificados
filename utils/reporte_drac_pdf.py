@@ -368,7 +368,7 @@ def generar_reporte_drac(
                     fr._y1     = frame_bottom_last
                     fr._height = PAGE_H - frame_bottom_last - top_margin
         buf = io.BytesIO()
-        tmpl = PageTemplate(id="ref", frames=[_nuevo_frame()], onPage=_on_pg)
+        tmpl = PageTemplate(id="ref", frames=[_nuevo_frame_reducido()], onPage=_on_pg)
         doc  = BaseDocTemplate(buf, pagesize=A4, pageTemplates=[tmpl])
         doc.build(_nuevos_elementos())
         return _pg[0]
