@@ -161,7 +161,7 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
             ultimo = _con.execute(
                 "SELECT ultimo_numero FROM contador_reporte WHERE id = 1"
             ).fetchone()
-            proximo = (ultimo["ultimo_numero"] if ultimo else 48) + 1
+            proximo = (ultimo["ultimo_numero"] if ultimo else 83) + 1
         st.info(f"Se generará: **DRAC-{proximo:03d}-{anio_actual}**")
 
     with col_fecha:
