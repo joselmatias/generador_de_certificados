@@ -1,83 +1,78 @@
 """
-db.py — Capa de acceso a datos (PostgreSQL / Supabase).
+db.py — Capa de acceso a datos.
 
 Provee conexión centralizada y queries parametrizadas para todas
-las operaciones CRUD del sistema. Nunca interpola valores en el SQL
-(usa placeholders) para evitar inyección SQL.
-
-Para no tocar los módulos consumidores, `get_connection()` entrega un
-wrapper con la misma API que se usaba con sqlite3:
-    con.execute(sql, params).fetchone() / .fetchall()
-Las filas son `RealDictRow` (subclase de dict), por lo que `row["col"]`
-y `dict(row)` siguen funcionando igual que antes.
+las operaciones CRUD del sistema. Nunca construye SQL con f-strings
+para evitar inyección SQL.
 """
 
+import sqlite3
 import contextlib
 from typing import Any, Generator
 
-import psycopg2
-from psycopg2.extras import RealDictCursor
-
-from database.init_db import _dsn
-
-
-class _Conn:
-    """Wrapper sobre una conexión psycopg2 que imita `con.execute(...)` de sqlite3."""
-
-    def __init__(self, raw: "psycopg2.extensions.connection") -> None:
-        self._raw = raw
-
-    def execute(self, sql: str, params: Any = None):
-        """Ejecuta el SQL en un cursor RealDict y devuelve el cursor (fetchone/fetchall)."""
-        cur = self._raw.cursor(cursor_factory=RealDictCursor)
-        cur.execute(sql, params)
-        return cur
+from database.init_db import DB_PATH
 
 
 @contextlib.contextmanager
-def get_connection() -> Generator[_Conn, None, None]:
+def get_connection() -> Generator[sqlite3.Connection, None, None]:
     """
-    Context manager que provee una conexión a Postgres.
+    Context manager que provee una conexión SQLite configurada.
     Hace commit automático al salir sin excepción; rollback en caso de error.
+
+    Yields:
+        sqlite3.Connection con row_factory = sqlite3.Row
     """
-    raw = psycopg2.connect(_dsn())
-    con = _Conn(raw)
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    con.execute("PRAGMA journal_mode=WAL;")
+    con.execute("PRAGMA foreign_keys=ON;")
     try:
         yield con
-        raw.commit()
+        con.commit()
     except Exception:
-        raw.rollback()
+        con.rollback()
         raise
     finally:
-        raw.close()
+        con.close()
 
 
 # ---------------------------------------------------------------------------
 # Capacitaciones
 # ---------------------------------------------------------------------------
 
-def obtener_siguiente_codigo_certificado(con: _Conn, year: int) -> str:
+def obtener_siguiente_codigo_certificado(con: sqlite3.Connection, year: int) -> str:
     """
     Genera el siguiente código de certificado con formato AGM-CAP-YYYY-NNNN.
     La secuencia es global (no por oficina) y atómica dentro de la transacción.
+
+    Args:
+        con: Conexión activa (debe estar dentro de una transacción).
+        year: Año del certificado (ej: 2024).
+
+    Returns:
+        Código único, ej: 'AGM-CAP-2024-0042'
     """
     prefix = f"AGM-CAP-{year}-"
     row = con.execute(
         """
         SELECT COUNT(*) AS total
         FROM capacitaciones
-        WHERE codigo_certificado LIKE %s
+        WHERE codigo_certificado LIKE ?
         """,
-        (f"{prefix}%",),
+        (f"{prefix}%",)
     ).fetchone()
     siguiente = (row["total"] if row else 0) + 1
     return f"{prefix}{siguiente:04d}"
 
 
-def insertar_capacitacion(con: _Conn, registro: dict[str, Any]) -> int:
+def insertar_capacitacion(con: sqlite3.Connection, registro: dict[str, Any]) -> int:
     """
     Inserta un registro de capacitación. El código de certificado
     se genera automáticamente si no viene en el registro.
+
+    Args:
+        con: Conexión activa.
+        registro: Diccionario con los campos del esquema interno.
 
     Returns:
         ID del registro insertado.
@@ -88,7 +83,7 @@ def insertar_capacitacion(con: _Conn, registro: dict[str, Any]) -> int:
     if not registro.get("codigo_certificado"):
         registro["codigo_certificado"] = obtener_siguiente_codigo_certificado(con, year)
 
-    row = con.execute(
+    con.execute(
         """
         INSERT INTO capacitaciones (
             oficina, timestamp_forms, nombre, email, cedula,
@@ -98,22 +93,21 @@ def insertar_capacitacion(con: _Conn, registro: dict[str, Any]) -> int:
             p6_logistica, p7_duracion, temas_adicionales, sugerencias,
             registrado_por
         ) VALUES (
-            %(oficina)s, %(timestamp_forms)s, %(nombre)s, %(email)s, %(cedula)s,
-            %(fecha_capacitacion)s, %(institucion)s, %(provincia)s, %(nombre_curso)s,
-            %(codigo_certificado)s, %(p1_conocimiento)s, %(p2_inquietudes)s,
-            %(p3_contenido)s, %(p4_presencialidad)s, %(p5_puntualidad)s,
-            %(p6_logistica)s, %(p7_duracion)s, %(temas_adicionales)s, %(sugerencias)s,
-            %(registrado_por)s
+            :oficina, :timestamp_forms, :nombre, :email, :cedula,
+            :fecha_capacitacion, :institucion, :provincia, :nombre_curso,
+            :codigo_certificado, :p1_conocimiento, :p2_inquietudes,
+            :p3_contenido, :p4_presencialidad, :p5_puntualidad,
+            :p6_logistica, :p7_duracion, :temas_adicionales, :sugerencias,
+            :registrado_por
         )
-        RETURNING id
         """,
         registro,
-    ).fetchone()
-    return row["id"]
+    )
+    return con.lastrowid  # type: ignore[return-value]
 
 
 def verificar_duplicados(
-    con: _Conn,
+    con: sqlite3.Connection,
     cedula: str,
     fecha_capacitacion: str,
     oficina: str,
@@ -121,11 +115,14 @@ def verificar_duplicados(
     """
     Verifica si ya existe un registro con la misma cédula y fecha
     dentro de la misma oficina.
+
+    Returns:
+        True si existe duplicado, False en caso contrario.
     """
     row = con.execute(
         """
         SELECT 1 FROM capacitaciones
-        WHERE cedula = %s AND fecha_capacitacion = %s AND oficina = %s
+        WHERE cedula = ? AND fecha_capacitacion = ? AND oficina = ?
         LIMIT 1
         """,
         (cedula, fecha_capacitacion, oficina),
@@ -134,30 +131,40 @@ def verificar_duplicados(
 
 
 def consultar_capacitaciones(
-    con: _Conn,
+    con: sqlite3.Connection,
     oficina: str | None = None,
     fecha_desde: str | None = None,
     fecha_hasta: str | None = None,
     nombre_curso: str | None = None,
-) -> list[Any]:
+) -> list[sqlite3.Row]:
     """
     Consulta capacitaciones con filtros opcionales.
     Si 'oficina' es None se devuelven todas (solo para rol master).
+
+    Args:
+        con: Conexión activa.
+        oficina: Filtro por oficina. None = todas (master).
+        fecha_desde: Fecha mínima de capacitación (YYYY-MM-DD).
+        fecha_hasta: Fecha máxima de capacitación (YYYY-MM-DD).
+        nombre_curso: Filtro exacto por nombre de curso.
+
+    Returns:
+        Lista de filas como sqlite3.Row.
     """
     condiciones: list[str] = []
     params: list[Any] = []
 
     if oficina is not None:
-        condiciones.append("oficina = %s")
+        condiciones.append("oficina = ?")
         params.append(oficina)
     if fecha_desde:
-        condiciones.append("fecha_capacitacion >= %s")
+        condiciones.append("fecha_capacitacion >= ?")
         params.append(fecha_desde)
     if fecha_hasta:
-        condiciones.append("fecha_capacitacion <= %s")
+        condiciones.append("fecha_capacitacion <= ?")
         params.append(fecha_hasta)
     if nombre_curso:
-        condiciones.append("nombre_curso = %s")
+        condiciones.append("nombre_curso = ?")
         params.append(nombre_curso)
 
     where = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
@@ -168,14 +175,14 @@ def consultar_capacitaciones(
     return filas
 
 
-def listar_cursos(con: _Conn, oficina: str | None = None) -> list[str]:
+def listar_cursos(con: sqlite3.Connection, oficina: str | None = None) -> list[str]:
     """
     Devuelve la lista de nombres de cursos distintos registrados.
     Respeta el filtro de oficina para usuarios regionales.
     """
     if oficina:
         filas = con.execute(
-            "SELECT DISTINCT nombre_curso FROM capacitaciones WHERE oficina = %s ORDER BY nombre_curso",
+            "SELECT DISTINCT nombre_curso FROM capacitaciones WHERE oficina = ? ORDER BY nombre_curso",
             (oficina,),
         ).fetchall()
     else:
@@ -189,20 +196,18 @@ def listar_cursos(con: _Conn, oficina: str | None = None) -> list[str]:
 # Reportes de Capacitación
 # ---------------------------------------------------------------------------
 
-def obtener_siguiente_numero_reporte(con: _Conn) -> int:
+def obtener_siguiente_numero_reporte(con: sqlite3.Connection) -> int:
     """
     Incrementa de forma atómica el contador global de reportes y devuelve
     el nuevo número. La secuencia comienza en 084.
     """
-    row = con.execute(
-        "UPDATE contador_reporte SET ultimo_numero = ultimo_numero + 1 "
-        "WHERE id = 1 RETURNING ultimo_numero"
-    ).fetchone()
+    con.execute("UPDATE contador_reporte SET ultimo_numero = ultimo_numero + 1 WHERE id = 1")
+    row = con.execute("SELECT ultimo_numero FROM contador_reporte WHERE id = 1").fetchone()
     return row["ultimo_numero"]
 
 
-def insertar_reporte_capacitacion(con: _Conn, datos: dict[str, Any]) -> int:
-    row = con.execute(
+def insertar_reporte_capacitacion(con: sqlite3.Connection, datos: dict[str, Any]) -> int:
+    cur = con.execute(
         """
         INSERT INTO reportes_capacitacion (
             numero_reporte, year_reporte, oficina, fecha_reporte, tipo_evento,
@@ -211,36 +216,35 @@ def insertar_reporte_capacitacion(con: _Conn, datos: dict[str, Any]) -> int:
             observaciones, adjuntos, elaborado_por, revisado_por,
             num_personas_capacitadas
         ) VALUES (
-            %(numero_reporte)s, %(year_reporte)s, %(oficina)s, %(fecha_reporte)s, %(tipo_evento)s,
-            %(institucion_invitada)s, %(fecha_evento)s, %(hora_inicio)s, %(hora_fin)s, %(modalidad)s, %(tema)s,
-            %(capacitadores)s, %(publico_objetivo)s, %(descripcion)s,
-            %(observaciones)s, %(adjuntos)s, %(elaborado_por)s, %(revisado_por)s,
-            %(num_personas_capacitadas)s
+            :numero_reporte, :year_reporte, :oficina, :fecha_reporte, :tipo_evento,
+            :institucion_invitada, :fecha_evento, :hora_inicio, :hora_fin, :modalidad, :tema,
+            :capacitadores, :publico_objetivo, :descripcion,
+            :observaciones, :adjuntos, :elaborado_por, :revisado_por,
+            :num_personas_capacitadas
         )
-        RETURNING id
         """,
         datos,
-    ).fetchone()
-    return row["id"]
+    )
+    return cur.lastrowid  # type: ignore[return-value]
 
 
 def consultar_reportes_capacitacion(
-    con: _Conn,
+    con: sqlite3.Connection,
     oficina: str | None = None,
     anio: int | None = None,
     mes: int | None = None,
-) -> list[Any]:
+) -> list[sqlite3.Row]:
     condiciones: list[str] = []
     params: list[Any] = []
 
     if oficina:
-        condiciones.append("oficina = %s")
+        condiciones.append("oficina = ?")
         params.append(oficina)
     if anio:
-        condiciones.append("year_reporte = %s")
+        condiciones.append("year_reporte = ?")
         params.append(anio)
     if mes:
-        condiciones.append("to_char(fecha_reporte::date, 'MM') = %s")
+        condiciones.append("strftime('%m', fecha_reporte) = ?")
         params.append(f"{mes:02d}")
 
     where = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
@@ -254,35 +258,34 @@ def consultar_reportes_capacitacion(
 # Asambleas Productivas
 # ---------------------------------------------------------------------------
 
-def insertar_asamblea_productiva(con: _Conn, datos: dict[str, Any]) -> int:
-    row = con.execute(
+def insertar_asamblea_productiva(con: sqlite3.Connection, datos: dict[str, Any]) -> int:
+    cur = con.execute(
         """
         INSERT INTO asamblea_productiva (oficina, fecha, num_asistentes)
-        VALUES (%(oficina)s, %(fecha)s, %(num_asistentes)s)
-        RETURNING id
+        VALUES (:oficina, :fecha, :num_asistentes)
         """,
         datos,
-    ).fetchone()
-    return row["id"]
+    )
+    return cur.lastrowid  # type: ignore[return-value]
 
 
 def consultar_asambleas_productivas(
-    con: _Conn,
+    con: sqlite3.Connection,
     oficina: str | None = None,
     anio: int | None = None,
     mes: int | None = None,
-) -> list[Any]:
+) -> list[sqlite3.Row]:
     condiciones: list[str] = []
     params: list[Any] = []
 
     if oficina:
-        condiciones.append("oficina = %s")
+        condiciones.append("oficina = ?")
         params.append(oficina)
     if anio:
-        condiciones.append("to_char(fecha::date, 'YYYY') = %s")
+        condiciones.append("strftime('%Y', fecha) = ?")
         params.append(str(anio))
     if mes:
-        condiciones.append("to_char(fecha::date, 'MM') = %s")
+        condiciones.append("strftime('%m', fecha) = ?")
         params.append(f"{mes:02d}")
 
     where = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
@@ -293,7 +296,7 @@ def consultar_asambleas_productivas(
 
 
 def estadisticas_mensuales(
-    con: _Conn,
+    con: sqlite3.Connection,
     oficina: str | None = None,
     anio: int | None = None,
     mes: int | None = None,
@@ -305,18 +308,18 @@ def estadisticas_mensuales(
     params_asm: list[Any] = []
 
     if oficina:
-        condiciones_rep.append("oficina = %s")
-        condiciones_asm.append("oficina = %s")
+        condiciones_rep.append("oficina = ?")
+        condiciones_asm.append("oficina = ?")
         params_rep.append(oficina)
         params_asm.append(oficina)
     if anio:
-        condiciones_rep.append("year_reporte = %s")
-        condiciones_asm.append("to_char(fecha::date, 'YYYY') = %s")
+        condiciones_rep.append("year_reporte = ?")
+        condiciones_asm.append("strftime('%Y', fecha) = ?")
         params_rep.append(anio)
         params_asm.append(str(anio))
     if mes:
-        condiciones_rep.append("to_char(fecha_reporte::date, 'MM') = %s")
-        condiciones_asm.append("to_char(fecha::date, 'MM') = %s")
+        condiciones_rep.append("strftime('%m', fecha_reporte) = ?")
+        condiciones_asm.append("strftime('%m', fecha) = ?")
         params_rep.append(f"{mes:02d}")
         params_asm.append(f"{mes:02d}")
 
