@@ -236,7 +236,7 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
                 "Tipo de actividad productiva", key="rep_actividad_productiva")
         else:
             publico_objetivo_capacitado = st.text_input(
-                "Público objetivo capacitado",
+                "Tipo de personal capacitado",
                 key="rep_publico_capacitado",
                 placeholder="Ej.: Estudiantes, Funcionarios Públicos, docentes, etc.",
             )
@@ -412,14 +412,24 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
 
     st.divider()
 
-    # Número de personas capacitadas
-    st.markdown("#### Número de Personas Capacitadas:")
-    num_personas = st.number_input(
-        "Ingresa el número total de personas capacitadas",
-        min_value=0, value=0, step=1,
-        key="rep_num_personas",
-        label_visibility="collapsed",
-    )
+    # Número de personas capacitadas + Encuestas realizadas
+    cnp1, cnp2 = st.columns(2)
+    with cnp1:
+        st.markdown("#### Número de Personas Capacitadas:")
+        num_personas = st.number_input(
+            "Ingresa el número total de personas capacitadas",
+            min_value=0, value=0, step=1,
+            key="rep_num_personas",
+            label_visibility="collapsed",
+        )
+    with cnp2:
+        st.markdown("#### Encuestas Realizadas:")
+        encuestas_realizadas = st.number_input(
+            "Ingresa el número de encuestas realizadas",
+            min_value=0, value=0, step=1,
+            key="rep_encuestas",
+            label_visibility="collapsed",
+        )
 
     st.divider()
 
@@ -450,7 +460,7 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
                 if not tipo_actividad_productiva.strip():
                     errores.append("Ingresa el tipo de actividad productiva.")
             elif not publico_objetivo_capacitado.strip():
-                errores.append("El campo 'Público objetivo capacitado' es obligatorio.")
+                errores.append("El campo 'Tipo de personal capacitado' es obligatorio.")
         if fecha_evento > fecha_reporte:
             errores.append("La fecha del evento no puede ser posterior a la fecha del reporte.")
         if errores:
@@ -486,6 +496,7 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
                     "elaborado_por":            elaborado_por,
                     "revisado_por":             revisado_por,
                     "num_personas_capacitadas": int(num_personas),
+                    "encuestas_realizadas":     int(encuestas_realizadas),
                 }
                 insertar_reporte_capacitacion(con, datos_db)
 

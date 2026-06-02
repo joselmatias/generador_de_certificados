@@ -212,7 +212,7 @@ def insertar_reporte_capacitacion(con: _Conn, datos: dict[str, Any]) -> int:
             fecha_evento, hora_inicio, hora_fin, modalidad, tema,
             capacitadores, publico_objetivo, descripcion,
             observaciones, adjuntos, elaborado_por, revisado_por,
-            num_personas_capacitadas
+            num_personas_capacitadas, encuestas_realizadas
         ) VALUES (
             %(numero_reporte)s, %(year_reporte)s, %(oficina)s, %(fecha_reporte)s, %(tipo_evento)s,
             %(institucion_invitada)s, %(tipo_institucion)s, %(provincia)s, %(canton)s,
@@ -221,7 +221,7 @@ def insertar_reporte_capacitacion(con: _Conn, datos: dict[str, Any]) -> int:
             %(fecha_evento)s, %(hora_inicio)s, %(hora_fin)s, %(modalidad)s, %(tema)s,
             %(capacitadores)s, %(publico_objetivo)s, %(descripcion)s,
             %(observaciones)s, %(adjuntos)s, %(elaborado_por)s, %(revisado_por)s,
-            %(num_personas_capacitadas)s
+            %(num_personas_capacitadas)s, %(encuestas_realizadas)s
         )
         RETURNING id
         """,

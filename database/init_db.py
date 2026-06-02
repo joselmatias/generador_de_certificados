@@ -125,6 +125,7 @@ CREATE TABLE IF NOT EXISTS reportes_capacitacion (
     elaborado_por           TEXT,
     revisado_por            TEXT,
     num_personas_capacitadas INTEGER DEFAULT 0,
+    encuestas_realizadas    INTEGER DEFAULT 0,
     fecha_registro          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 """
@@ -197,6 +198,10 @@ def init_db() -> None:
                     cur.execute(
                         f"ALTER TABLE reportes_capacitacion ADD COLUMN IF NOT EXISTS {col} TEXT"
                     )
+                cur.execute(
+                    "ALTER TABLE reportes_capacitacion "
+                    "ADD COLUMN IF NOT EXISTS encuestas_realizadas INTEGER DEFAULT 0"
+                )
                 for idx in _INDICES:
                     cur.execute(idx)
         finally:
