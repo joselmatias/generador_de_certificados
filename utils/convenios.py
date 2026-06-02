@@ -31,3 +31,9 @@ CONVENIOS_DATA = [
 # Derivados útiles para formularios
 NUMEROS_CONVENIO: list[str] = [c["numero"] for c in CONVENIOS_DATA]
 CONVENIO_CONTRAPARTE: dict[str, str] = {c["numero"]: c["contraparte"] for c in CONVENIOS_DATA}
+
+# Selección por contraparte → número(s) de convenio (una contraparte puede tener varios)
+CONTRAPARTES: list[str] = sorted({c["contraparte"] for c in CONVENIOS_DATA})
+CONTRAPARTE_NUMEROS: dict[str, list[str]] = {}
+for _c in CONVENIOS_DATA:
+    CONTRAPARTE_NUMEROS.setdefault(_c["contraparte"], []).append(_c["numero"])

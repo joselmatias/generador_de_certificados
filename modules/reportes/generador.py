@@ -27,7 +27,7 @@ from database.db import (
 )
 from utils.reporte_drac_pdf import generar_reporte_drac, TIPOS_EVENTO
 from utils.ubicaciones_ec import PROVINCIAS_CANTONES
-from utils.convenios import NUMEROS_CONVENIO, CONVENIO_CONTRAPARTE
+from utils.convenios import CONTRAPARTES, CONTRAPARTE_NUMEROS
 
 # Garantiza que las tablas existan aunque el caché haya bloqueado init_db() en app.py
 init_db()
@@ -311,16 +311,26 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
     numero_convenio = ""
     convenio_contraparte = ""
     if corresponde_convenio == "Sí":
-        numero_convenio = st.selectbox(
-            "Número de convenio",
-            options=NUMEROS_CONVENIO,
+        convenio_contraparte = st.selectbox(
+            "Contraparte del convenio",
+            options=CONTRAPARTES,
             index=None,
-            placeholder="Escribe o selecciona el número de convenio",
-            key="rep_numero_convenio",
+            placeholder="Escribe o selecciona la contraparte",
+            key="rep_convenio_contraparte",
         ) or ""
-        if numero_convenio:
-            convenio_contraparte = CONVENIO_CONTRAPARTE.get(numero_convenio, "")
-            st.info(f"**Contraparte:** {convenio_contraparte}")
+        if convenio_contraparte:
+            nums = CONTRAPARTE_NUMEROS[convenio_contraparte]
+            if len(nums) == 1:
+                numero_convenio = nums[0]
+                st.info(f"**N.° de convenio:** {numero_convenio}")
+            else:
+                numero_convenio = st.selectbox(
+                    "N.° de convenio (esta contraparte tiene varios)",
+                    options=nums,
+                    index=None,
+                    placeholder="Selecciona el número",
+                    key="rep_numero_convenio",
+                ) or ""
 
     st.divider()
 
@@ -470,8 +480,11 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
             errores.append("Selecciona el tipo de institución / asociación capacitada.")
         if tipo_evento_sel == "Otros" and not tipo_evento_otro:
             errores.append("Especifica el tipo de evento (opción 'Otros').")
-        if corresponde_convenio == "Sí" and not numero_convenio:
-            errores.append("Selecciona el número de convenio.")
+        if corresponde_convenio == "Sí":
+            if not convenio_contraparte:
+                errores.append("Selecciona la contraparte del convenio.")
+            elif not numero_convenio:
+                errores.append("Selecciona el número de convenio.")
         if not provincia:
             errores.append("Selecciona la provincia.")
         if not canton:
