@@ -105,6 +105,13 @@ CREATE TABLE IF NOT EXISTS reportes_capacitacion (
     fecha_reporte           TEXT NOT NULL,
     tipo_evento             TEXT NOT NULL,
     institucion_invitada    TEXT,
+    tipo_institucion        TEXT,
+    provincia               TEXT,
+    canton                  TEXT,
+    contacto_nombre         TEXT,
+    contacto_celular        TEXT,
+    tipo_actividad_productiva TEXT,
+    publico_objetivo_capacitado TEXT,
     fecha_evento            TEXT,
     hora_inicio             TEXT,
     hora_fin                TEXT,
@@ -181,7 +188,12 @@ def init_db() -> None:
                     "WHERE id = 1 AND ultimo_numero < 83"
                 )
                 # Migración idempotente: columnas nuevas en reportes_capacitacion
-                for col in ("hora_inicio", "hora_fin"):
+                for col in (
+                    "hora_inicio", "hora_fin",
+                    "tipo_institucion", "provincia", "canton",
+                    "contacto_nombre", "contacto_celular",
+                    "tipo_actividad_productiva", "publico_objetivo_capacitado",
+                ):
                     cur.execute(
                         f"ALTER TABLE reportes_capacitacion ADD COLUMN IF NOT EXISTS {col} TEXT"
                     )

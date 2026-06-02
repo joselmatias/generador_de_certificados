@@ -171,22 +171,87 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
             key="rep_fecha",
         )
 
-    # Tipo de Evento
+    # Tipo de Evento (con opción "Otros")
     st.markdown("**Tipo de Evento**")
-    tipo_evento = st.selectbox(
+    tipo_evento_sel = st.selectbox(
         "Selecciona el tipo de evento",
-        options=TIPOS_EVENTO,
+        options=TIPOS_EVENTO + ["Otros"],
         key="rep_tipo_evento",
         label_visibility="collapsed",
     )
+    if tipo_evento_sel == "Otros":
+        tipo_evento = st.text_input(
+            "Especifica el tipo de evento",
+            key="rep_tipo_evento_otro",
+            placeholder="Ej: Taller, Conversatorio...",
+        ).strip() or "Otros"
+    else:
+        tipo_evento = tipo_evento_sel
 
     st.divider()
 
-    # Institución /asociación capacitada — Fecha — Modalidad — Tema
+    # Institución /asociación capacitada — tipo + nombre + condicionales
     st.markdown("#### Institución /asociación capacitada - Fecha - Modalidad - Tema:")
+
+    _PLACEHOLDER_INST = "— Selecciona —"
+    tipo_inst_sel = st.selectbox(
+        "Tipo de institución / asociación capacitada",
+        options=[_PLACEHOLDER_INST, "Institución pública", "Institución Privada",
+                 "Asociación", "Universidad", "Otros"],
+        key="rep_tipo_institucion",
+    )
+
+    # Valores condicionales (se rellenan según el tipo elegido)
+    institucion_invitada = ""
+    tipo_institucion = ""
+    contacto_nombre = ""
+    contacto_celular = ""
+    tipo_actividad_productiva = ""
+    publico_objetivo_capacitado = ""
+
+    if tipo_inst_sel != _PLACEHOLDER_INST:
+        if tipo_inst_sel == "Otros":
+            tipo_institucion = st.text_input(
+                "Especifica el tipo de institución / asociación",
+                key="rep_tipo_institucion_otro",
+                placeholder="Ej: Gremio, Cooperativa...",
+            ).strip() or "Otros"
+        else:
+            tipo_institucion = tipo_inst_sel
+
+        # Nombre de la institución (siempre que haya un tipo elegido)
+        institucion_invitada = st.text_input(
+            "Nombre de la institución / asociación capacitada",
+            key="rep_institucion",
+            placeholder="Nombre completo",
+        )
+
+        if tipo_inst_sel == "Asociación":
+            st.markdown("**Datos de la asociación** (obligatorios)")
+            ca1, ca2 = st.columns(2)
+            with ca1:
+                contacto_nombre = st.text_input(
+                    "Nombres y apellidos del contacto", key="rep_contacto_nombre")
+            with ca2:
+                contacto_celular = st.text_input("Celular", key="rep_contacto_celular")
+            tipo_actividad_productiva = st.text_input(
+                "Tipo de actividad productiva", key="rep_actividad_productiva")
+        else:
+            publico_objetivo_capacitado = st.text_input(
+                "Público objetivo capacitado",
+                key="rep_publico_capacitado",
+                placeholder="Ej.: Estudiantes, Funcionarios Públicos, docentes, etc.",
+            )
+
+    # Provincia y Cantón
+    cpc1, cpc2 = st.columns(2)
+    with cpc1:
+        provincia = st.text_input("Provincia", key="rep_provincia")
+    with cpc2:
+        canton = st.text_input("Cantón", key="rep_canton")
+
     c1, c2 = st.columns(2)
     with c1:
-        institucion_invitada = st.text_input("Institución /asociación capacitada", key="rep_institucion")
         modalidad = st.selectbox(
             "Modalidad",
             options=["Presencial", "Virtual", "Híbrida"],
@@ -199,7 +264,7 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
             key="rep_fecha_evento",
             max_value=fecha_reporte,   # no puede ser posterior a la fecha del reporte
         )
-        tema = st.text_input("Tema", key="rep_tema")
+    tema = st.text_input("Tema", key="rep_tema")
 
     # Horario del evento
     ch1, ch2 = st.columns(2)
@@ -339,11 +404,23 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
 
     st.divider()
 
-    # Botón Generar Reporte
-    if st.button("📄 Generar Reporte de Capacitaciones", type="primary", use_container_width=True):
+    # Botón Generar Reporte — se inhabilita tras generar para no duplicar
+    ya_generado = st.session_state.get("rep_pdf") is not None
+
+    if st.button("📄 Generar Reporte de Capacitaciones", type="primary",
+                 use_container_width=True, disabled=ya_generado):
         errores = _validar_campos_reporte(
             institucion_invitada, tema, capacitadores_lista, publico_objetivo, descripcion
         )
+        if tipo_inst_sel == _PLACEHOLDER_INST:
+            errores.append("Selecciona el tipo de institución / asociación capacitada.")
+        if tipo_inst_sel == "Asociación":
+            if not contacto_nombre.strip():
+                errores.append("Ingresa los nombres y apellidos del contacto de la asociación.")
+            if not contacto_celular.strip():
+                errores.append("Ingresa el celular del contacto de la asociación.")
+            if not tipo_actividad_productiva.strip():
+                errores.append("Ingresa el tipo de actividad productiva.")
         if fecha_evento > fecha_reporte:
             errores.append("La fecha del evento no puede ser posterior a la fecha del reporte.")
         if errores:
@@ -359,6 +436,13 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
                     "fecha_reporte":            str(fecha_reporte),
                     "tipo_evento":              tipo_evento,
                     "institucion_invitada":     institucion_invitada,
+                    "tipo_institucion":         tipo_institucion,
+                    "provincia":                provincia,
+                    "canton":                   canton,
+                    "contacto_nombre":          contacto_nombre,
+                    "contacto_celular":         contacto_celular,
+                    "tipo_actividad_productiva": tipo_actividad_productiva,
+                    "publico_objetivo_capacitado": publico_objetivo_capacitado,
                     "fecha_evento":             str(fecha_evento),
                     "hora_inicio":              hora_inicio_str,
                     "hora_fin":                 hora_fin_str,
@@ -397,16 +481,34 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
                 lineas_institucion=lineas_institucion,
                 area_elaborado=area_elaborado,
                 num_personas_capacitadas=int(num_personas),
+                tipo_institucion=tipo_institucion,
+                provincia=provincia,
+                canton=canton,
+                publico_objetivo_capacitado=publico_objetivo_capacitado,
             )
 
-            st.success(f"✅ Reporte **DRAC-{numero:03d}-{anio_actual}** generado correctamente.")
-            st.download_button(
-                label=f"📥 Descargar DRAC-{numero:03d}-{anio_actual}.pdf",
-                data=pdf_bytes,
-                file_name=f"DRAC-{numero:03d}-{anio_actual}.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-            )
+            # Guardar en sesión para inhabilitar el botón y mostrar la descarga
+            st.session_state["rep_pdf"] = {
+                "bytes": pdf_bytes, "numero": numero, "year": anio_actual,
+            }
+            st.rerun()
+
+    # Si ya se generó un reporte: mostrar descarga + opción de empezar otro
+    if st.session_state.get("rep_pdf"):
+        info = st.session_state["rep_pdf"]
+        st.success(f"✅ Reporte **DRAC-{info['numero']:03d}-{info['year']}** generado correctamente.")
+        st.download_button(
+            label=f"📥 Descargar DRAC-{info['numero']:03d}-{info['year']}.pdf",
+            data=info["bytes"],
+            file_name=f"DRAC-{info['numero']:03d}-{info['year']}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
+        st.info("El botón de generar está deshabilitado para no crear un reporte duplicado. "
+                "Para registrar otro reporte, pulsa **Generar un nuevo reporte**.")
+        if st.button("✏️ Generar un nuevo reporte", use_container_width=True):
+            del st.session_state["rep_pdf"]
+            st.rerun()
 
     # Historial de reportes de la oficina
     st.divider()
@@ -631,7 +733,7 @@ def _validar_campos_reporte(
 ) -> list[str]:
     errores = []
     if not institucion.strip():
-        errores.append("El campo 'Institución Invitada' es obligatorio.")
+        errores.append("El campo 'Nombre de la institución / asociación capacitada' es obligatorio.")
     if not tema.strip():
         errores.append("El campo 'Tema' es obligatorio.")
     if not capacitadores:

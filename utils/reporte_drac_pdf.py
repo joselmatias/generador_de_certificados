@@ -206,6 +206,10 @@ def generar_reporte_drac(
     num_personas_capacitadas: int = 0,
     hora_inicio: str = "",
     hora_fin: str = "",
+    tipo_institucion: str = "",
+    provincia: str = "",
+    canton: str = "",
+    publico_objetivo_capacitado: str = "",
 ) -> bytes:
 
     codigo_reporte = f"Reporte DRAC-{numero_reporte:03d}-{year_reporte}"
@@ -283,17 +287,21 @@ def generar_reporte_drac(
         est  = _estilos()
         elems: list = []
 
-        # Tipo de Evento
+        # Tipo de Evento (4 estándar + fila "Otros" con texto libre)
         elems.append(_p("Tipo de Evento:", est["sec"]))
+        es_estandar = tipo_evento in TIPOS_EVENTO
+        _mk_style = ParagraphStyle("mk2", fontName="Helvetica-Bold", fontSize=12,
+                                   alignment=TA_CENTER, textColor=AZUL_MEDIO)
         ev_data = []
         for te in TIPOS_EVENTO:
             marca = "✓" if te == tipo_evento else ""
-            ev_data.append([
-                _p(te, est["valor"]),
-                _p(f"<b>{marca}</b>",
-                   ParagraphStyle("mk2", fontName="Helvetica-Bold", fontSize=12,
-                                  alignment=TA_CENTER, textColor=AZUL_MEDIO)),
-            ])
+            ev_data.append([_p(te, est["valor"]), _p(f"<b>{marca}</b>", _mk_style)])
+        # Fila "Otros": marcada y con el texto cuando el tipo no es uno de los estándar
+        etiqueta_otros = f"Otros: {tipo_evento}" if not es_estandar and tipo_evento else "Otros"
+        ev_data.append([
+            _p(etiqueta_otros, est["valor"]),
+            _p(f"<b>{'✓' if not es_estandar else ''}</b>", _mk_style),
+        ])
         ev_t = Table(ev_data, colWidths=[5.5*cm, 1.0*cm])
         ev_t.setStyle(TableStyle([
             ("BOX",           (0,0),(-1,-1), 0.8, NEGRO),
@@ -310,8 +318,16 @@ def generar_reporte_drac(
 
         _filas_inst = [
             ("Institución /asociación capacitada:", institucion_invitada),
-            ("Fecha del evento:", _fecha_esp(fecha_evento) if fecha_evento else ""),
         ]
+        if tipo_institucion:
+            _filas_inst.append(("Tipo:", tipo_institucion))
+        if provincia:
+            _filas_inst.append(("Provincia:", provincia))
+        if canton:
+            _filas_inst.append(("Cantón:", canton))
+        _filas_inst.append(
+            ("Fecha del evento:", _fecha_esp(fecha_evento) if fecha_evento else "")
+        )
         if hora_inicio or hora_fin:
             _filas_inst.append(("Horario:", f"{hora_inicio} a {hora_fin}".strip()))
         _filas_inst += [
@@ -325,6 +341,9 @@ def generar_reporte_drac(
         )
         elems += _seccion_parrafo("Nombre de los Capacitadores:", capacitadores, ancho_util, est)
         elems += _seccion_parrafo("Público Objetivo:",            publico_objetivo, ancho_util, est)
+        if publico_objetivo_capacitado:
+            elems += _seccion_parrafo("Público objetivo capacitado:",
+                                      publico_objetivo_capacitado, ancho_util, est)
         elems += _seccion_parrafo("Descripción de la Capacitación:", descripcion,  ancho_util, est)
         elems += _seccion_parrafo("Observaciones:",                observaciones,  ancho_util, est)
         elems += _seccion_parrafo("Adjuntos (medios de verificación):", adjuntos,  ancho_util, est)

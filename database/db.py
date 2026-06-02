@@ -206,13 +206,19 @@ def insertar_reporte_capacitacion(con: _Conn, datos: dict[str, Any]) -> int:
         """
         INSERT INTO reportes_capacitacion (
             numero_reporte, year_reporte, oficina, fecha_reporte, tipo_evento,
-            institucion_invitada, fecha_evento, hora_inicio, hora_fin, modalidad, tema,
+            institucion_invitada, tipo_institucion, provincia, canton,
+            contacto_nombre, contacto_celular, tipo_actividad_productiva,
+            publico_objetivo_capacitado,
+            fecha_evento, hora_inicio, hora_fin, modalidad, tema,
             capacitadores, publico_objetivo, descripcion,
             observaciones, adjuntos, elaborado_por, revisado_por,
             num_personas_capacitadas
         ) VALUES (
             %(numero_reporte)s, %(year_reporte)s, %(oficina)s, %(fecha_reporte)s, %(tipo_evento)s,
-            %(institucion_invitada)s, %(fecha_evento)s, %(hora_inicio)s, %(hora_fin)s, %(modalidad)s, %(tema)s,
+            %(institucion_invitada)s, %(tipo_institucion)s, %(provincia)s, %(canton)s,
+            %(contacto_nombre)s, %(contacto_celular)s, %(tipo_actividad_productiva)s,
+            %(publico_objetivo_capacitado)s,
+            %(fecha_evento)s, %(hora_inicio)s, %(hora_fin)s, %(modalidad)s, %(tema)s,
             %(capacitadores)s, %(publico_objetivo)s, %(descripcion)s,
             %(observaciones)s, %(adjuntos)s, %(elaborado_por)s, %(revisado_por)s,
             %(num_personas_capacitadas)s
