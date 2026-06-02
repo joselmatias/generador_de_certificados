@@ -26,6 +26,7 @@ from database.db import (
     estadisticas_mensuales,
 )
 from utils.reporte_drac_pdf import generar_reporte_drac, TIPOS_EVENTO
+from utils.ubicaciones_ec import PROVINCIAS_CANTONES
 
 # Garantiza que las tablas existan aunque el caché haya bloqueado init_db() en app.py
 init_db()
@@ -180,12 +181,14 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
         label_visibility="collapsed",
     )
     if tipo_evento_sel == "Otros":
-        tipo_evento = st.text_input(
+        tipo_evento_otro = st.text_input(
             "Especifica el tipo de evento",
             key="rep_tipo_evento_otro",
             placeholder="Ej: Taller, Conversatorio...",
-        ).strip() or "Otros"
+        ).strip()
+        tipo_evento = tipo_evento_otro or "Otros"
     else:
+        tipo_evento_otro = ""
         tipo_evento = tipo_evento_sel
 
     st.divider()
@@ -243,12 +246,27 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
                 placeholder="Ej.: Estudiantes, Funcionarios Públicos, docentes, etc.",
             )
 
-    # Provincia y Cantón
+    # Provincia y Cantón — listas desplegables encadenadas
     cpc1, cpc2 = st.columns(2)
     with cpc1:
-        provincia = st.text_input("Provincia", key="rep_provincia")
+        provincia = st.selectbox(
+            "Provincia",
+            options=[_PLACEHOLDER_INST] + sorted(PROVINCIAS_CANTONES),
+            key="rep_provincia",
+        )
+    cantones_opts = (
+        [_PLACEHOLDER_INST] + sorted(PROVINCIAS_CANTONES[provincia])
+        if provincia != _PLACEHOLDER_INST else [_PLACEHOLDER_INST]
+    )
+    # Si el cantón guardado ya no pertenece a la provincia elegida, se descarta
+    if st.session_state.get("rep_canton") not in cantones_opts:
+        st.session_state.pop("rep_canton", None)
     with cpc2:
-        canton = st.text_input("Cantón", key="rep_canton")
+        canton = st.selectbox("Cantón", options=cantones_opts, key="rep_canton")
+
+    # Para el reporte: cadena vacía si no se seleccionó (placeholder)
+    provincia = "" if provincia == _PLACEHOLDER_INST else provincia
+    canton    = "" if canton == _PLACEHOLDER_INST else canton
 
     c1, c2 = st.columns(2)
     with c1:
@@ -414,13 +432,22 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
         )
         if tipo_inst_sel == _PLACEHOLDER_INST:
             errores.append("Selecciona el tipo de institución / asociación capacitada.")
+        if tipo_evento_sel == "Otros" and not tipo_evento_otro:
+            errores.append("Especifica el tipo de evento (opción 'Otros').")
+        if not provincia:
+            errores.append("Selecciona la provincia.")
+        if not canton:
+            errores.append("Selecciona el cantón.")
         if tipo_inst_sel == "Asociación":
             if not contacto_nombre.strip():
                 errores.append("Ingresa los nombres y apellidos del contacto de la asociación.")
-            if not contacto_celular.strip():
-                errores.append("Ingresa el celular del contacto de la asociación.")
+            cel = contacto_celular.strip()
+            if not (cel.isdigit() and len(cel) == 10):
+                errores.append("El celular debe tener exactamente 10 dígitos numéricos.")
             if not tipo_actividad_productiva.strip():
                 errores.append("Ingresa el tipo de actividad productiva.")
+        elif tipo_inst_sel != _PLACEHOLDER_INST and not publico_objetivo_capacitado.strip():
+            errores.append("El campo 'Público objetivo capacitado' es obligatorio.")
         if fecha_evento > fecha_reporte:
             errores.append("La fecha del evento no puede ser posterior a la fecha del reporte.")
         if errores:

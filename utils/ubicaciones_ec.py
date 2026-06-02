@@ -1,0 +1,108 @@
+"""
+ubicaciones_ec.py — Catálogo de provincias y cantones del Ecuador.
+
+Se usa para poblar las listas desplegables encadenadas (Provincia → Cantón)
+en el formulario del Generador de Reportes. Los nombres están en mayúsculas y
+sin espacios sobrantes, tal como en la fuente entregada.
+"""
+
+PROVINCIAS_CANTONES: dict[str, list[str]] = {
+    "AZUAY": [
+        "CAMILO PONCE ENRIQUEZ", "CHORDELEG", "CUENCA", "EL PAN", "GIRON",
+        "GUACHAPALA", "GUALACEO", "NABON", "OÑA", "PAUTE", "PUCARA",
+        "SAN FERNANDO", "SANTA ISABEL", "SEVILLA DE ORO", "SIGSIG",
+    ],
+    "BOLIVAR": [
+        "CALUMA", "CHILLANES", "CHIMBO", "ECHEANDIA", "GUARANDA",
+        "LAS NAVES", "SAN MIGUEL",
+    ],
+    "CAÑAR": [
+        "AZOGUES", "BIBLIAN", "CAÑAR", "DELEG", "EL TAMBO", "LA TRONCAL", "SUSCAL",
+    ],
+    "CARCHI": [
+        "BOLIVAR", "ESPEJO", "MIRA", "MONTUFAR", "SAN PEDRO DE HUACA", "TULCAN",
+    ],
+    "CHIMBORAZO": [
+        "ALAUSI", "CHAMBO", "CHUNCHI", "COLTA", "CUMANDA", "GUAMOTE",
+        "GUANO", "PALLATANGA", "PENIPE", "RIOBAMBA",
+    ],
+    "COTOPAXI": [
+        "LA MANA", "LATACUNGA", "PANGUA", "PUJILI", "SALCEDO", "SAQUISILI", "SIGCHOS",
+    ],
+    "EL ORO": [
+        "ARENILLAS", "ATAHUALPA", "BALSAS", "CHILLA", "EL GUABO", "HUAQUILLAS",
+        "LAS LAJAS", "MACHALA", "MARCABELI", "PASAJE", "PIÑAS", "PORTOVELO",
+        "SANTA ROSA", "ZARUMA",
+    ],
+    "ESMERALDAS": [
+        "ATACAMES", "ELOY ALFARO", "ESMERALDAS", "LA CONCORDIA", "MUISNE",
+        "QUININDE", "RIOVERDE", "SAN LORENZO",
+    ],
+    "GALAPAGOS": [
+        "ISABELA", "SAN CRISTOBAL", "SANTA CRUZ",
+    ],
+    "GUAYAS": [
+        "ALFREDO BAQUERIZO MORENO (JUJAN)", "BALAO", "BALZAR", "COLIMES",
+        "CORONEL MARCELINO MARIDUEÑA", "DAULE", "DURAN", "EL EMPALME",
+        "EL TRIUNFO", "GENERAL ANTONIO ELIZALDE", "GUAYAQUIL", "ISIDRO AYORA",
+        "LOMAS DE SARGENTILLO", "MILAGRO", "NARANJAL", "NARANJITO", "NOBOL",
+        "PALESTINA", "PEDRO CARBO", "PLAYAS", "SALITRE (URBINA JADO)",
+        "SAMBORONDON", "SAN JACINTO DE YAGUACHI", "SANTA LUCIA", "SIMON BOLIVAR",
+    ],
+    "IMBABURA": [
+        "ANTONIO ANTE", "COTACACHI", "IBARRA", "OTAVALO", "PIMAMPIRO",
+        "SAN MIGUEL DE URCUQUI",
+    ],
+    "LOJA": [
+        "CALVAS", "CATAMAYO", "CELICA", "CHAGUARPAMBA", "ESPINDOLA", "GONZANAMA",
+        "LOJA", "MACARA", "OLMEDO", "PALTAS", "PINDAL", "PUYANGO", "QUILANGA",
+        "SARAGURO", "SOZORANGA", "ZAPOTILLO",
+    ],
+    "LOS RIOS": [
+        "BABA", "BABAHOYO", "BUENA FE", "MOCACHE", "MONTALVO", "PALENQUE",
+        "PUEBLOVIEJO", "QUEVEDO", "QUINSALOMA", "URDANETA", "VALENCIA",
+        "VENTANAS", "VINCES",
+    ],
+    "MANABI": [
+        "24 DE MAYO", "BOLIVAR", "CHONE", "EL CARMEN", "FLAVIO ALFARO", "JAMA",
+        "JARAMIJO", "JIPIJAPA", "JUNIN", "MANTA", "MONTECRISTI", "OLMEDO",
+        "PAJAN", "PEDERNALES", "PICHINCHA", "PORTOVIEJO", "PUERTO LOPEZ",
+        "ROCAFUERTE", "SAN VICENTE", "SANTA ANA", "SUCRE", "TOSAGUA",
+    ],
+    "MORONA SANTIAGO": [
+        "CANTON TIWINTZA", "GUALAQUIZA", "HUAMBOYA", "LIMON INDANZA", "LOGROÑO",
+        "MORONA", "PABLO SEXTO", "PALORA", "SAN JUAN BOSCO", "SANTIAGO",
+        "SUCUA", "TAISHA",
+    ],
+    "NAPO": [
+        "ARCHIDONA", "CARLOS JULIO AROSEMENA TOLA", "EL CHACO", "QUIJOS", "TENA",
+    ],
+    "ORELLANA": [
+        "AGUARICO", "LA JOYA DE LOS SACHAS", "LORETO", "ORELLANA",
+    ],
+    "PASTAZA": [
+        "ARAJUNO", "MERA", "PASTAZA", "SANTA CLARA",
+    ],
+    "PICHINCHA": [
+        "CAYAMBE", "MEJIA", "PEDRO MONCAYO", "PEDRO VICENTE MALDONADO",
+        "PUERTO QUITO", "QUITO", "RUMIÑAHUI", "SAN MIGUEL DE LOS BANCOS",
+    ],
+    "SANTA ELENA": [
+        "LA LIBERTAD", "SALINAS", "SANTA ELENA",
+    ],
+    "SANTO DOMINGO DE LOS TSACHILAS": [
+        "SANTO DOMINGO",
+    ],
+    "SUCUMBIOS": [
+        "CASCALES", "CUYABENO", "GONZALO PIZARRO", "LAGO AGRIO", "PUTUMAYO",
+        "SHUSHUFINDI", "SUCUMBIOS",
+    ],
+    "TUNGURAHUA": [
+        "AMBATO", "BAÑOS DE AGUA SANTA", "CEVALLOS", "MOCHA", "PATATE", "QUERO",
+        "SAN PEDRO DE PELILEO", "SANTIAGO DE PILLARO", "TISALEO",
+    ],
+    "ZAMORA CHINCHIPE": [
+        "CENTINELA DEL CONDOR", "CHINCHIPE", "EL PANGUI", "NANGARITZA", "PALANDA",
+        "PAQUISHA", "YACUAMBI", "YANTZAZA (YANZATZA)", "ZAMORA",
+    ],
+}
