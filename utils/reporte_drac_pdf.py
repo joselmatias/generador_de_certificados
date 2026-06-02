@@ -341,9 +341,7 @@ def generar_reporte_drac(
         )
         elems += _seccion_parrafo("Nombre de los Capacitadores:", capacitadores, ancho_util, est)
         elems += _seccion_parrafo("Público Objetivo:",            publico_objetivo, ancho_util, est)
-        if publico_objetivo_capacitado:
-            elems += _seccion_parrafo("Público objetivo capacitado:",
-                                      publico_objetivo_capacitado, ancho_util, est)
+        # Nota: "Público objetivo capacitado" se captura y guarda en BD, pero NO se imprime en el PDF.
         elems += _seccion_parrafo("Descripción de la Capacitación:", descripcion,  ancho_util, est)
         elems += _seccion_parrafo("Observaciones:",                observaciones,  ancho_util, est)
         elems += _seccion_parrafo("Adjuntos (medios de verificación):", adjuntos,  ancho_util, est)
