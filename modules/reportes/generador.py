@@ -196,11 +196,11 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
     # Institución /asociación capacitada — tipo + nombre + condicionales
     st.markdown("#### Institución /asociación capacitada - Fecha - Modalidad - Tema:")
 
-    _PLACEHOLDER_INST = "— Selecciona —"
     tipo_inst_sel = st.selectbox(
         "Tipo de institución / asociación capacitada",
-        options=[_PLACEHOLDER_INST, "Institución pública", "Institución Privada",
-                 "Asociación", "Universidad", "Otros"],
+        options=["Institución pública", "Institución Privada", "Asociación"],
+        index=None,
+        placeholder="Selecciona el tipo",
         key="rep_tipo_institucion",
     )
 
@@ -212,15 +212,8 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
     tipo_actividad_productiva = ""
     publico_objetivo_capacitado = ""
 
-    if tipo_inst_sel != _PLACEHOLDER_INST:
-        if tipo_inst_sel == "Otros":
-            tipo_institucion = st.text_input(
-                "Especifica el tipo de institución / asociación",
-                key="rep_tipo_institucion_otro",
-                placeholder="Ej: Gremio, Cooperativa...",
-            ).strip() or "Otros"
-        else:
-            tipo_institucion = tipo_inst_sel
+    if tipo_inst_sel:
+        tipo_institucion = tipo_inst_sel
 
         # Nombre de la institución (siempre que haya un tipo elegido)
         institucion_invitada = st.text_input(
@@ -229,14 +222,16 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
             placeholder="Nombre completo",
         )
 
+        # Datos de contacto — para los 3 tipos
+        st.markdown("**Datos de contacto** (obligatorios)")
+        ca1, ca2 = st.columns(2)
+        with ca1:
+            contacto_nombre = st.text_input(
+                "Nombres y apellidos del contacto", key="rep_contacto_nombre")
+        with ca2:
+            contacto_celular = st.text_input("Celular", key="rep_contacto_celular")
+
         if tipo_inst_sel == "Asociación":
-            st.markdown("**Datos de la asociación** (obligatorios)")
-            ca1, ca2 = st.columns(2)
-            with ca1:
-                contacto_nombre = st.text_input(
-                    "Nombres y apellidos del contacto", key="rep_contacto_nombre")
-            with ca2:
-                contacto_celular = st.text_input("Celular", key="rep_contacto_celular")
             tipo_actividad_productiva = st.text_input(
                 "Tipo de actividad productiva", key="rep_actividad_productiva")
         else:
@@ -246,27 +241,33 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
                 placeholder="Ej.: Estudiantes, Funcionarios Públicos, docentes, etc.",
             )
 
-    # Provincia y Cantón — listas desplegables encadenadas
+    # Provincia y Cantón — desplegables encadenados con autocompletar
     cpc1, cpc2 = st.columns(2)
     with cpc1:
         provincia = st.selectbox(
             "Provincia",
-            options=[_PLACEHOLDER_INST] + sorted(PROVINCIAS_CANTONES),
+            options=sorted(PROVINCIAS_CANTONES),
+            index=None,
+            placeholder="Escribe o selecciona la provincia",
             key="rep_provincia",
         )
-    cantones_opts = (
-        [_PLACEHOLDER_INST] + sorted(PROVINCIAS_CANTONES[provincia])
-        if provincia != _PLACEHOLDER_INST else [_PLACEHOLDER_INST]
-    )
+    cantones_opts = sorted(PROVINCIAS_CANTONES[provincia]) if provincia else []
     # Si el cantón guardado ya no pertenece a la provincia elegida, se descarta
-    if st.session_state.get("rep_canton") not in cantones_opts:
-        st.session_state.pop("rep_canton", None)
+    if (st.session_state.get("rep_canton") is not None
+            and st.session_state.get("rep_canton") not in cantones_opts):
+        del st.session_state["rep_canton"]
     with cpc2:
-        canton = st.selectbox("Cantón", options=cantones_opts, key="rep_canton")
+        canton = st.selectbox(
+            "Cantón",
+            options=cantones_opts,
+            index=None,
+            placeholder="Escribe o selecciona el cantón",
+            key="rep_canton",
+        )
 
-    # Para el reporte: cadena vacía si no se seleccionó (placeholder)
-    provincia = "" if provincia == _PLACEHOLDER_INST else provincia
-    canton    = "" if canton == _PLACEHOLDER_INST else canton
+    # Para el reporte: cadena vacía si no se seleccionó
+    provincia = provincia or ""
+    canton    = canton or ""
 
     c1, c2 = st.columns(2)
     with c1:
@@ -430,7 +431,7 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
         errores = _validar_campos_reporte(
             institucion_invitada, tema, capacitadores_lista, publico_objetivo, descripcion
         )
-        if tipo_inst_sel == _PLACEHOLDER_INST:
+        if not tipo_inst_sel:
             errores.append("Selecciona el tipo de institución / asociación capacitada.")
         if tipo_evento_sel == "Otros" and not tipo_evento_otro:
             errores.append("Especifica el tipo de evento (opción 'Otros').")
@@ -438,16 +439,18 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
             errores.append("Selecciona la provincia.")
         if not canton:
             errores.append("Selecciona el cantón.")
-        if tipo_inst_sel == "Asociación":
+        if tipo_inst_sel:
+            # Contacto obligatorio para los 3 tipos
             if not contacto_nombre.strip():
-                errores.append("Ingresa los nombres y apellidos del contacto de la asociación.")
+                errores.append("Ingresa los nombres y apellidos del contacto.")
             cel = contacto_celular.strip()
             if not (cel.isdigit() and len(cel) == 10):
                 errores.append("El celular debe tener exactamente 10 dígitos numéricos.")
-            if not tipo_actividad_productiva.strip():
-                errores.append("Ingresa el tipo de actividad productiva.")
-        elif tipo_inst_sel != _PLACEHOLDER_INST and not publico_objetivo_capacitado.strip():
-            errores.append("El campo 'Público objetivo capacitado' es obligatorio.")
+            if tipo_inst_sel == "Asociación":
+                if not tipo_actividad_productiva.strip():
+                    errores.append("Ingresa el tipo de actividad productiva.")
+            elif not publico_objetivo_capacitado.strip():
+                errores.append("El campo 'Público objetivo capacitado' es obligatorio.")
         if fecha_evento > fecha_reporte:
             errores.append("La fecha del evento no puede ser posterior a la fecha del reporte.")
         if errores:
