@@ -27,6 +27,7 @@ from database.db import (
 )
 from utils.reporte_drac_pdf import generar_reporte_drac, TIPOS_EVENTO
 from utils.ubicaciones_ec import PROVINCIAS_CANTONES
+from utils.convenios import NUMEROS_CONVENIO, CONVENIO_CONTRAPARTE
 
 # Garantiza que las tablas existan aunque el caché haya bloqueado init_db() en app.py
 init_db()
@@ -299,6 +300,30 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
 
     st.divider()
 
+    # Convenio (no va al PDF; solo se guarda en BD)
+    st.markdown("#### Convenio:")
+    corresponde_convenio = st.radio(
+        "¿La capacitación corresponde a un convenio?",
+        options=["No", "Sí"],
+        horizontal=True,
+        key="rep_corresponde_convenio",
+    )
+    numero_convenio = ""
+    convenio_contraparte = ""
+    if corresponde_convenio == "Sí":
+        numero_convenio = st.selectbox(
+            "Número de convenio",
+            options=NUMEROS_CONVENIO,
+            index=None,
+            placeholder="Escribe o selecciona el número de convenio",
+            key="rep_numero_convenio",
+        ) or ""
+        if numero_convenio:
+            convenio_contraparte = CONVENIO_CONTRAPARTE.get(numero_convenio, "")
+            st.info(f"**Contraparte:** {convenio_contraparte}")
+
+    st.divider()
+
     # Nombre de los Capacitadores
     st.markdown("#### Nombre de los Capacitadores:")
     num_capacitadores = st.number_input(
@@ -445,6 +470,8 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
             errores.append("Selecciona el tipo de institución / asociación capacitada.")
         if tipo_evento_sel == "Otros" and not tipo_evento_otro:
             errores.append("Especifica el tipo de evento (opción 'Otros').")
+        if corresponde_convenio == "Sí" and not numero_convenio:
+            errores.append("Selecciona el número de convenio.")
         if not provincia:
             errores.append("Selecciona la provincia.")
         if not canton:
@@ -497,6 +524,9 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
                     "revisado_por":             revisado_por,
                     "num_personas_capacitadas": int(num_personas),
                     "encuestas_realizadas":     int(encuestas_realizadas),
+                    "corresponde_convenio":     corresponde_convenio,
+                    "numero_convenio":          numero_convenio,
+                    "convenio_contraparte":     convenio_contraparte,
                 }
                 insertar_reporte_capacitacion(con, datos_db)
 

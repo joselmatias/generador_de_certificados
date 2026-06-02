@@ -112,6 +112,9 @@ CREATE TABLE IF NOT EXISTS reportes_capacitacion (
     contacto_celular        TEXT,
     tipo_actividad_productiva TEXT,
     publico_objetivo_capacitado TEXT,
+    corresponde_convenio    TEXT,
+    numero_convenio         TEXT,
+    convenio_contraparte    TEXT,
     fecha_evento            TEXT,
     hora_inicio             TEXT,
     hora_fin                TEXT,
@@ -194,6 +197,7 @@ def init_db() -> None:
                     "tipo_institucion", "provincia", "canton",
                     "contacto_nombre", "contacto_celular",
                     "tipo_actividad_productiva", "publico_objetivo_capacitado",
+                    "corresponde_convenio", "numero_convenio", "convenio_contraparte",
                 ):
                     cur.execute(
                         f"ALTER TABLE reportes_capacitacion ADD COLUMN IF NOT EXISTS {col} TEXT"
