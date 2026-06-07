@@ -263,10 +263,15 @@ def consultar_reportes_capacitacion(
 # ---------------------------------------------------------------------------
 
 def insertar_asamblea_productiva(con: _Conn, datos: dict[str, Any]) -> int:
+    datos = {
+        "responsables": None,
+        "tematica":     None,
+        **datos,
+    }
     row = con.execute(
         """
-        INSERT INTO asamblea_productiva (oficina, fecha, num_asistentes)
-        VALUES (%(oficina)s, %(fecha)s, %(num_asistentes)s)
+        INSERT INTO asamblea_productiva (oficina, fecha, num_asistentes, responsables, tematica)
+        VALUES (%(oficina)s, %(fecha)s, %(num_asistentes)s, %(responsables)s, %(tematica)s)
         RETURNING id
         """,
         datos,

@@ -8,7 +8,7 @@ Secciones:
 
 from __future__ import annotations
 
-from datetime import date
+import json
 
 import requests
 import pandas as pd
@@ -18,17 +18,8 @@ import streamlit as st
 
 from database.db import (
     get_connection,
-    consultar_capacitaciones,
     consultar_reportes_capacitacion,
     consultar_asambleas_productivas,
-)
-from utils.charts import (
-    grafico_radar_satisfaccion,
-    grafico_histograma_satisfaccion,
-    grafico_participantes_provincia,
-    grafico_top_instituciones,
-    grafico_evolucion_mensual,
-    ETIQUETAS_SATISFACCION,
 )
 from utils.convenios import CONVENIOS_DATA
 
@@ -804,20 +795,19 @@ def _df_responsables_detalle() -> pd.DataFrame:
     return pd.DataFrame(filas)
 
 
-def _conteo_responsables() -> pd.DataFrame:
+def _conteo_responsables(df_det: pd.DataFrame) -> pd.DataFrame:
     """Total de asambleas por responsable (participaciones individuales)."""
-    df = _df_responsables_detalle()
     return (
-        df.groupby("responsable").size()
+        df_det.groupby("responsable").size()
         .reset_index(name="Asambleas")
         .sort_values("Asambleas", ascending=True)
         .rename(columns={"responsable": "Responsable"})
     )
 
 
-def _grafico_responsables_asambleas() -> go.Figure:
+def _grafico_responsables_asambleas(df_det: pd.DataFrame) -> go.Figure:
     """Barras horizontales: total de asambleas por responsable."""
-    df = _conteo_responsables()
+    df = _conteo_responsables(df_det)
     fig = go.Figure(go.Bar(
         y=df["Responsable"],
         x=df["Asambleas"],
@@ -838,9 +828,9 @@ def _grafico_responsables_asambleas() -> go.Figure:
     return fig
 
 
-def _grafico_responsables_por_oficina() -> go.Figure:
+def _grafico_responsables_por_oficina(df_det: pd.DataFrame) -> go.Figure:
     """Barras agrupadas: responsables por oficina."""
-    df = _df_responsables_detalle()
+    df = df_det
     pivot = (
         df.groupby(["oficina", "responsable"]).size()
         .reset_index(name="Asambleas")
@@ -874,9 +864,9 @@ def _grafico_responsables_por_oficina() -> go.Figure:
     return fig
 
 
-def _grafico_responsables_pie() -> go.Figure:
+def _grafico_responsables_pie(df_det: pd.DataFrame) -> go.Figure:
     """Donut: distribución con número y porcentaje por responsable."""
-    df = _conteo_responsables().sort_values("Asambleas", ascending=False)
+    df = _conteo_responsables(df_det).sort_values("Asambleas", ascending=False)
     total = df["Asambleas"].sum()
     textos = [f"{v}<br>({v/total*100:.1f}%)" for v in df["Asambleas"]]
     fig = go.Figure(go.Pie(
@@ -961,10 +951,10 @@ def _df_expositores_detalle() -> pd.DataFrame:
     return pd.DataFrame(filas)
 
 
-def _grafico_expositores_total() -> go.Figure:
+def _grafico_expositores_total(df_det: pd.DataFrame) -> go.Figure:
     """Barras horizontales: participaciones totales por expositor."""
     df = (
-        _df_expositores_detalle()
+        df_det
         .groupby("expositor").size()
         .reset_index(name="Capacitaciones")
         .sort_values("Capacitaciones", ascending=True)
@@ -984,9 +974,9 @@ def _grafico_expositores_total() -> go.Figure:
     return fig
 
 
-def _grafico_expositores_por_oficina() -> go.Figure:
+def _grafico_expositores_por_oficina(df_det: pd.DataFrame) -> go.Figure:
     """Barras agrupadas: expositores por oficina (top expositores internos)."""
-    df = _df_expositores_detalle()
+    df = df_det
     # Solo expositores con > 1 participación para no saturar el gráfico
     conteo_total = df.groupby("expositor").size()
     top_exp = conteo_total[conteo_total > 1].index
@@ -1169,9 +1159,12 @@ def _mapa_calor_capacitaciones(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def _grafico_expositores_mensual() -> go.Figure:
-    """Barras apiladas: capacitaciones por mes y oficina."""
-    df = pd.DataFrame(CAPACITACIONES_EXPOSITORES_RAW)
+def _grafico_expositores_mensual(df_eventos: pd.DataFrame) -> go.Figure:
+    """Barras apiladas: capacitaciones por mes y oficina.
+
+    df_eventos: una fila por capacitación, con columnas 'mes' y 'oficina'.
+    """
+    df = df_eventos.copy()
     df["oficina"] = df["oficina"].str.strip().str.title()
     mensual = (
         df.groupby(["mes", "oficina"]).size()
@@ -1211,29 +1204,6 @@ def _grafico_expositores_mensual() -> go.Figure:
 # Helpers — estadísticas anuales EN VIVO (Supabase: reportes_capacitacion y
 # asamblea_productiva, alimentadas por el módulo Generador de Reportes)
 # ---------------------------------------------------------------------------
-
-def _anios_disponibles() -> list[int]:
-    """Años con datos en la BD (reportes + asambleas), orden descendente.
-
-    Si no hay datos, devuelve [año actual] para que el selector no quede vacío.
-    """
-    anios: set[int] = set()
-    with get_connection() as con:
-        for row in con.execute(
-            "SELECT DISTINCT year_reporte AS anio FROM reportes_capacitacion "
-            "WHERE year_reporte IS NOT NULL"
-        ).fetchall():
-            anios.add(int(row["anio"]))
-        for row in con.execute(
-            "SELECT DISTINCT to_char(fecha::date, 'YYYY') AS anio "
-            "FROM asamblea_productiva WHERE fecha IS NOT NULL"
-        ).fetchall():
-            if row["anio"]:
-                anios.add(int(row["anio"]))
-    if not anios:
-        return [date.today().year]
-    return sorted(anios, reverse=True)
-
 
 def _df_reportes_por_oficina(anio: int) -> pd.DataFrame:
     """Agrega los reportes de capacitación del año por oficina.
@@ -1283,75 +1253,166 @@ def _df_asambleas_por_oficina(anio: int) -> pd.DataFrame:
     return base.reset_index()
 
 
+def _parse_lista(text) -> list[str]:
+    """Parsea una lista de nombres guardada como JSON (`["a","b"]`) o como texto
+    con viñetas/saltos de línea. Devuelve nombres no vacíos."""
+    if not text:
+        return []
+    try:
+        val = json.loads(text)
+        if isinstance(val, list):
+            return [str(x).strip() for x in val if str(x).strip()]
+    except (ValueError, TypeError):
+        pass
+    return [ln.lstrip("•").strip() for ln in str(text).splitlines() if ln.strip()]
+
+
+def _mes_es_de_fecha(fecha_str) -> str | None:
+    """Nombre del mes en español a partir de una fecha 'YYYY-MM-DD'."""
+    if not fecha_str:
+        return None
+    try:
+        return _MESES_ORDEN[int(str(fecha_str)[5:7]) - 1]
+    except (ValueError, IndexError):
+        return None
+
+
+def _df_expositores_detalle_vivo(anio: int) -> pd.DataFrame:
+    """Una fila por (fecha, oficina, expositor) desde reportes_capacitacion."""
+    with get_connection() as con:
+        filas = consultar_reportes_capacitacion(con, anio=anio)
+    out = []
+    for f in filas:
+        nombre = _OFICINA_ID_A_NOMBRE.get((f["oficina"] or "").lower())
+        if nombre is None:
+            continue
+        mes = _mes_es_de_fecha(f.get("fecha_evento"))
+        for exp in _parse_lista(f.get("capacitadores")):
+            out.append({
+                "mes":       mes,
+                "fecha":     f.get("fecha_evento") or "",
+                "oficina":   nombre,
+                "expositor": exp.upper(),
+            })
+    return pd.DataFrame(out, columns=["mes", "fecha", "oficina", "expositor"])
+
+
+def _df_eventos_mes_vivo(anio: int) -> pd.DataFrame:
+    """Una fila por reporte (capacitación) con columnas mes, oficina(display)."""
+    with get_connection() as con:
+        filas = consultar_reportes_capacitacion(con, anio=anio)
+    out = []
+    for f in filas:
+        nombre = _OFICINA_ID_A_NOMBRE.get((f["oficina"] or "").lower())
+        if nombre is None:
+            continue
+        out.append({"mes": _mes_es_de_fecha(f.get("fecha_evento")), "oficina": nombre})
+    return pd.DataFrame(out, columns=["mes", "oficina"])
+
+
+def _df_responsables_detalle_vivo(anio: int) -> pd.DataFrame:
+    """Una fila por (asamblea, responsable) desde asamblea_productiva."""
+    with get_connection() as con:
+        filas = consultar_asambleas_productivas(con, anio=anio)
+    out = []
+    for f in filas:
+        nombre = _OFICINA_ID_A_NOMBRE.get((f["oficina"] or "").lower())
+        if nombre is None:
+            continue
+        for resp in _parse_lista(f.get("responsables")):
+            out.append({
+                "numero":      f["id"],
+                "oficina":     nombre,
+                "responsable": resp.upper(),
+            })
+    return pd.DataFrame(out, columns=["numero", "oficina", "responsable"])
+
+
+def _df_cap_provincias_vivo(anio: int, meses: list[str] | None = None) -> pd.DataFrame:
+    """Conteo de reportes por provincia (normalizada), filtrable por mes.
+
+    Misma forma que `_df_cap_provincias`: ['provincia', 'Capacitaciones'].
+    """
+    with get_connection() as con:
+        filas = consultar_reportes_capacitacion(con, anio=anio)
+    provincias = []
+    for f in filas:
+        if meses and _mes_es_de_fecha(f.get("fecha_evento")) not in meses:
+            continue
+        prov_raw = (f.get("provincia") or "").strip()
+        if not prov_raw:
+            continue
+        provincias.append(_PROV_NORM.get(prov_raw.lower(), prov_raw.title()))
+
+    if not provincias:
+        return pd.DataFrame(columns=["provincia", "Capacitaciones"])
+
+    return (
+        pd.Series(provincias, name="provincia")
+        .value_counts()
+        .reset_index()
+        .rename(columns={"count": "Capacitaciones"})
+        .sort_values("Capacitaciones", ascending=False)
+        .reset_index(drop=True)
+    )
+
+
+def _df_congresos_vivo(anio: int) -> pd.DataFrame:
+    """Reportes con tipo_evento = 'Congresos' → oficina, tema, asistentes, fecha."""
+    with get_connection() as con:
+        filas = consultar_reportes_capacitacion(con, anio=anio)
+    out = []
+    for f in filas:
+        if (f.get("tipo_evento") or "").strip().lower() != "congresos":
+            continue
+        nombre = _OFICINA_ID_A_NOMBRE.get((f["oficina"] or "").lower(), f["oficina"])
+        out.append({
+            "oficina":    nombre,
+            "tema":       f.get("tema") or "",
+            "asistentes": int(f.get("num_personas_capacitadas") or 0),
+            "fecha":      f.get("fecha_evento") or "",
+        })
+    return pd.DataFrame(out, columns=["oficina", "tema", "asistentes", "fecha"])
+
+
 def mostrar_dashboard_drac() -> None:
     st.title("📊 Dashboard DRAC")
     st.markdown("**Dirección Regional — Acciones y estadísticas consolidadas**")
+
+    # --- Selección de vista por año (dos botones)
+    st.session_state.setdefault("drac_vista", "2026")
+    b25, b26 = st.columns(2)
+    with b25:
+        if st.button(
+            "📅 Dashboard DRAC 2025",
+            use_container_width=True,
+            type="primary" if st.session_state["drac_vista"] == "2025" else "secondary",
+        ):
+            st.session_state["drac_vista"] = "2025"
+            st.rerun()
+    with b26:
+        if st.button(
+            "📡 Dashboard DRAC 2026",
+            use_container_width=True,
+            type="primary" if st.session_state["drac_vista"] == "2026" else "secondary",
+        ):
+            st.session_state["drac_vista"] = "2026"
+            st.rerun()
+    vista = st.session_state["drac_vista"]
     st.divider()
 
-    # ======================================================================
-    # SECCIÓN 1 — Encuestas de satisfacción
-    # ======================================================================
-    st.header("1. Estadísticas de Encuestas de Satisfacción")
+    # --- Convenios (común a ambas vistas)
+    _render_convenios()
 
-    with get_connection() as con:
-        from database.db import consultar_capacitaciones
-        filas = consultar_capacitaciones(con, oficina=None)
-
-    if filas:
-        df_cap = pd.DataFrame([dict(f) for f in filas])
-        for col in ETIQUETAS_SATISFACCION.keys():
-            if col in df_cap.columns:
-                df_cap[col] = pd.to_numeric(df_cap[col], errors="coerce")
-
-        # --- Análisis por provincia e institución (al inicio)
-        st.subheader("Análisis por provincia e institución")
-        col_prov, col_inst = st.columns(2)
-        with col_prov:
-            st.plotly_chart(grafico_participantes_provincia(df_cap), use_container_width=True)
-        with col_inst:
-            st.plotly_chart(grafico_top_instituciones(df_cap), use_container_width=True)
-
-        st.plotly_chart(grafico_evolucion_mensual(df_cap), use_container_width=True)
-        st.divider()
-
-    if filas:
-        # Métricas rápidas
-        cols_sat = [c for c in ETIQUETAS_SATISFACCION.keys() if c in df_cap.columns]
-        total_respuestas = df_cap[cols_sat].dropna(how="all").shape[0] if cols_sat else 0
-        promedio_global  = (
-            df_cap[cols_sat].values.flatten()
-        )
-        promedio_global = [v for v in promedio_global if pd.notna(v)]
-        prom_val = round(sum(promedio_global) / len(promedio_global), 2) if promedio_global else None
-
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Total participantes evaluados", f"{total_respuestas:,}")
-        m2.metric("Satisfacción promedio global", f"{prom_val:.2f} / 5.00" if prom_val else "Sin datos")
-        m3.metric("Dimensiones evaluadas", len(cols_sat))
-
-        col_radar, col_hist = st.columns(2)
-        with col_radar:
-            st.plotly_chart(grafico_radar_satisfaccion(df_cap), use_container_width=True)
-        with col_hist:
-            st.plotly_chart(grafico_histograma_satisfaccion(df_cap), use_container_width=True)
-
-        # Tabla resumen por dimensión
-        if cols_sat:
-            st.markdown("**Resumen por dimensión:**")
-            resumen = pd.DataFrame({
-                "Dimensión": [ETIQUETAS_SATISFACCION[c] for c in cols_sat],
-                "Promedio":  [round(df_cap[c].dropna().astype(float).mean(), 2) for c in cols_sat],
-                "Respuestas": [int(df_cap[c].dropna().count()) for c in cols_sat],
-            })
-            st.dataframe(resumen, use_container_width=True, hide_index=True)
+    st.divider()
+    if vista == "2025":
+        _render_intendencia_2025()
     else:
-        st.info("No hay registros de capacitaciones con encuestas de satisfacción cargados.")
+        _render_intendencia_2026()
 
-    # ======================================================================
-    # SECCIÓN 2 — Estadísticas de Convenios
-    # ======================================================================
-    st.divider()
-    st.header("2. Estadísticas de Convenios Institucionales")
+
+def _render_convenios() -> None:
+    st.header("1. Estadísticas de Convenios Institucionales")
 
     df_conv = _df_convenios()
 
@@ -1418,11 +1479,8 @@ def mostrar_dashboard_drac() -> None:
         hide_index=True,
     )
 
-    # ======================================================================
-    # SECCIÓN 3 — Intendencia Regional Abogacía de la Competencia
-    # ======================================================================
-    st.divider()
-    st.header("3. Estadísticas Intendencia Regional — Abogacía de la Competencia")
+def _render_intendencia_2025() -> None:
+    st.header("2. Estadísticas Intendencia Regional — Abogacía de la Competencia · 2025")
     st.caption("Datos consolidados 2025 de las cuatro oficinas regionales.")
 
     df_cap25 = pd.DataFrame(CAPACITACIONES_2025)
@@ -1490,13 +1548,17 @@ def mostrar_dashboard_drac() -> None:
     # --- Estadísticas por expositor
     st.subheader("Estadísticas por Expositor — Capacitaciones 2025")
 
+    df_exp_det = _df_expositores_detalle()
     col_e1, col_e2 = st.columns(2)
     with col_e1:
-        st.plotly_chart(_grafico_expositores_total(), use_container_width=True)
+        st.plotly_chart(_grafico_expositores_total(df_exp_det), use_container_width=True)
     with col_e2:
-        st.plotly_chart(_grafico_expositores_por_oficina(), use_container_width=True)
+        st.plotly_chart(_grafico_expositores_por_oficina(df_exp_det), use_container_width=True)
 
-    st.plotly_chart(_grafico_expositores_mensual(), use_container_width=True)
+    st.plotly_chart(
+        _grafico_expositores_mensual(pd.DataFrame(CAPACITACIONES_EXPOSITORES_RAW)),
+        use_container_width=True,
+    )
 
     st.markdown("**Detalle — expositor por capacitación:**")
     df_exp_tabla = pd.DataFrame([
@@ -1612,15 +1674,16 @@ def mostrar_dashboard_drac() -> None:
     # --- Estadísticas por responsable
     st.subheader("Estadísticas por responsable")
 
+    df_resp_det = _df_responsables_detalle()
     # Fila 1: total nacional | donut
     col_r1, col_r2 = st.columns(2)
     with col_r1:
-        st.plotly_chart(_grafico_responsables_asambleas(), use_container_width=True)
+        st.plotly_chart(_grafico_responsables_asambleas(df_resp_det), use_container_width=True)
     with col_r2:
-        st.plotly_chart(_grafico_responsables_pie(), use_container_width=True)
+        st.plotly_chart(_grafico_responsables_pie(df_resp_det), use_container_width=True)
 
     # Fila 2: responsables por oficina (ancho completo)
-    st.plotly_chart(_grafico_responsables_por_oficina(), use_container_width=True)
+    st.plotly_chart(_grafico_responsables_por_oficina(df_resp_det), use_container_width=True)
 
     # Tabla detalle con oficina
     st.markdown("**Detalle — responsable y oficina por asamblea:**")
@@ -1644,66 +1707,218 @@ def mostrar_dashboard_drac() -> None:
         use_container_width=True, hide_index=True,
     )
 
-    # ======================================================================
-    # SECCIÓN 4 — Estadísticas del año (datos en vivo desde Supabase)
-    # ======================================================================
-    st.divider()
-    st.header("4. Estadísticas del año — Datos en vivo (Supabase)")
+def _render_intendencia_2026() -> None:
+    anio = 2026
+    st.header(f"2. Estadísticas Intendencia Regional — Abogacía de la Competencia · {anio}")
     st.caption(
-        "Se alimenta automáticamente con los reportes de capacitación y las "
-        "asambleas productivas registrados en el módulo Generador de Reportes."
+        "Datos en vivo desde Supabase, alimentados por el módulo Generador de Reportes "
+        "(reportes de capacitación y asambleas productivas)."
     )
 
-    anios = _anios_disponibles()
-    anio_def = date.today().year if date.today().year in anios else anios[0]
-    anio_sel = st.selectbox(
-        "Año",
-        anios,
-        index=anios.index(anio_def),
-        key="drac_anio_vivo",
-    )
+    df_rep  = _df_reportes_por_oficina(anio)
+    df_asm  = _df_asambleas_por_oficina(anio)
+    df_cong = _df_congresos_vivo(anio)
 
-    df_rep = _df_reportes_por_oficina(anio_sel)
-    df_asm = _df_asambleas_por_oficina(anio_sel)
-
-    hay_datos = bool(df_rep["numero"].sum() or df_asm["numero"].sum())
-    if not hay_datos:
-        st.info(f"Aún no hay reportes ni asambleas registrados para el año {anio_sel}.")
+    if not (df_rep["numero"].sum() or df_asm["numero"].sum() or len(df_cong)):
+        st.info(f"Aún no hay reportes ni asambleas registrados para el año {anio}.")
         return
 
-    # --- KPIs
-    k1, k2, k3, k4, k5 = st.columns(5)
-    k1.metric("Capacitaciones",        f"{int(df_rep['numero'].sum()):,}")
-    k2.metric("Personas capacitadas",  f"{int(df_rep['asistentes'].sum()):,}")
-    k3.metric("Encuestas realizadas",  f"{int(df_rep['encuestados'].sum()):,}")
-    k4.metric("Asambleas productivas", f"{int(df_asm['numero'].sum()):,}")
-    k5.metric("Asistentes asambleas",  f"{int(df_asm['asistentes'].sum()):,}")
+    # --- KPIs globales
+    total_cap      = int(df_rep["numero"].sum())
+    total_asi      = int(df_rep["asistentes"].sum())
+    total_enc      = int(df_rep["encuestados"].sum())
+    total_asm      = int(df_asm["numero"].sum())
+    total_asi_asm  = int(df_asm["asistentes"].sum())
+    total_cong     = int(len(df_cong))
+    total_asi_cong = int(df_cong["asistentes"].sum()) if not df_cong.empty else 0
 
-    # --- Capacitaciones por oficina
-    st.subheader("Capacitaciones por oficina")
-    col_num, col_pie = st.columns(2)
-    with col_num:
-        st.plotly_chart(_grafico_num_capacitaciones(df_rep), use_container_width=True)
-    with col_pie:
-        if df_rep["asistentes"].sum() > 0:
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Capacitaciones ejecutadas", f"{total_cap:,}")
+    k2.metric("Asistentes a capacitaciones", f"{total_asi:,}")
+    k3.metric("Encuestados", f"{total_enc:,}")
+    k4.metric("Tasa de encuestados", f"{total_enc/total_asi*100:.1f}%" if total_asi else "—")
+
+    k5, k6, k7, k8 = st.columns(4)
+    k5.metric("Asambleas Productivas", f"{total_asm:,}")
+    k6.metric("Asistentes a asambleas", f"{total_asi_asm:,}")
+    k7.metric("Congresos Internacionales", f"{total_cong:,}")
+    k8.metric("Asistentes a congresos", f"{total_asi_cong:,}")
+
+    # --- Capacitaciones ejecutadas
+    st.subheader("Capacitaciones Ejecutadas")
+    if total_cap:
+        col_c1, col_c2 = st.columns(2)
+        with col_c1:
+            st.plotly_chart(_grafico_num_capacitaciones(df_rep), use_container_width=True)
+        with col_c2:
+            st.plotly_chart(_grafico_asistentes_encuestados_barras(df_rep), use_container_width=True)
+
+        col_c3, col_c4 = st.columns(2)
+        with col_c3:
+            if total_enc:
+                st.plotly_chart(
+                    _grafico_distribucion_pie(df_rep, "encuestados", "Distribución de encuestados por oficina"),
+                    use_container_width=True,
+                )
+        with col_c4:
+            if total_asi:
+                st.plotly_chart(
+                    _grafico_distribucion_pie(df_rep, "asistentes", "Distribución de asistentes por oficina"),
+                    use_container_width=True,
+                )
+
+        df_cap_tabla = df_rep.copy()
+        df_cap_tabla.loc[len(df_cap_tabla)] = {
+            "oficina": "TOTAL", "numero": total_cap,
+            "asistentes": total_asi, "encuestados": total_enc,
+        }
+        st.dataframe(
+            df_cap_tabla.rename(columns={
+                "oficina": "Oficina", "numero": "N° Capacitaciones",
+                "asistentes": "Asistentes", "encuestados": "Encuestados",
+            }),
+            use_container_width=True, hide_index=True,
+        )
+    else:
+        st.info("No hay capacitaciones registradas para el año.")
+
+    # --- Estadísticas por expositor
+    st.subheader("Estadísticas por Expositor — Capacitaciones")
+    df_exp_det = _df_expositores_detalle_vivo(anio)
+    if not df_exp_det.empty:
+        col_e1, col_e2 = st.columns(2)
+        with col_e1:
+            st.plotly_chart(_grafico_expositores_total(df_exp_det), use_container_width=True)
+        with col_e2:
+            st.plotly_chart(_grafico_expositores_por_oficina(df_exp_det), use_container_width=True)
+        st.plotly_chart(
+            _grafico_expositores_mensual(_df_eventos_mes_vivo(anio)), use_container_width=True
+        )
+        st.markdown("**Detalle — expositor por capacitación:**")
+        st.dataframe(
+            df_exp_det.rename(columns={
+                "mes": "Mes", "fecha": "Fecha", "oficina": "Oficina", "expositor": "Expositor",
+            }),
+            use_container_width=True, hide_index=True,
+        )
+    else:
+        st.info("No hay expositores registrados en los reportes del año.")
+
+    # --- Mapa de calor — distribución geográfica
+    st.subheader("Mapa interactivo — Distribución geográfica de capacitaciones")
+    st.caption("Incidencia de capacitaciones por provincia según los reportes del año.")
+    meses_filter = st.multiselect(
+        "Filtrar por mes",
+        options=_MESES_ORDEN,
+        default=[],
+        placeholder="Todos los meses",
+        key="drac_cap_meses_2026",
+    )
+    df_prov = _df_cap_provincias_vivo(anio, meses=(meses_filter or None))
+    if not df_prov.empty:
+        prov_top = df_prov.iloc[0]
+        km1, km2, km3 = st.columns(3)
+        km1.metric("Total capacitaciones (período)", int(df_prov["Capacitaciones"].sum()))
+        km2.metric("Provincias con actividad", len(df_prov))
+        km3.metric(
+            "Provincia con mayor incidencia",
+            prov_top["provincia"],
+            delta=f"{int(prov_top['Capacitaciones'])} capacitaciones",
+        )
+        st.plotly_chart(_mapa_calor_capacitaciones(df_prov), use_container_width=True)
+
+        col_rank, _ = st.columns([1, 1])
+        with col_rank:
+            fig_rank = go.Figure(go.Bar(
+                y=df_prov["provincia"][::-1],
+                x=df_prov["Capacitaciones"][::-1],
+                orientation="h",
+                marker_color=[
+                    COLOR_PRIMARIO if i > 0 else COLOR_SECUNDARIO
+                    for i in range(len(df_prov) - 1, -1, -1)
+                ],
+                text=df_prov["Capacitaciones"][::-1],
+                textposition="outside",
+            ))
+            fig_rank.update_layout(
+                title="Ranking por provincia",
+                xaxis_title="N° Capacitaciones", yaxis_title="",
+                margin=dict(l=10, r=40, t=45, b=10),
+                plot_bgcolor="white", showlegend=False,
+                height=max(280, len(df_prov) * 40),
+            )
+            st.plotly_chart(fig_rank, use_container_width=True)
+    else:
+        st.info("No hay capacitaciones con provincia registrada para el período.")
+
+    # --- Asambleas Productivas
+    st.subheader("Asambleas Productivas")
+    if total_asm:
+        col_a1, col_a2 = st.columns(2)
+        with col_a1:
+            st.plotly_chart(_grafico_num_asambleas(df_asm), use_container_width=True)
+        with col_a2:
+            st.plotly_chart(_grafico_asistentes_asambleas(df_asm), use_container_width=True)
+
+        col_a3, col_a4 = st.columns(2)
+        with col_a3:
             st.plotly_chart(
-                _grafico_distribucion_pie(
-                    df_rep, "asistentes",
-                    "Distribución de personas capacitadas por oficina",
-                ),
+                _grafico_distribucion_pie(df_asm, "numero", "Distribución de asambleas por oficina"),
                 use_container_width=True,
             )
-        else:
-            st.info("Sin personas capacitadas registradas en el año.")
+        with col_a4:
+            if total_asi_asm:
+                st.plotly_chart(
+                    _grafico_distribucion_pie(df_asm, "asistentes", "Distribución de asistentes — Asambleas"),
+                    use_container_width=True,
+                )
 
-    st.plotly_chart(
-        _grafico_asistentes_encuestados_barras(df_rep), use_container_width=True
-    )
+        df_asm_tabla = df_asm.copy()
+        df_asm_tabla.loc[len(df_asm_tabla)] = {
+            "oficina": "TOTAL", "numero": total_asm, "asistentes": total_asi_asm,
+        }
+        st.dataframe(
+            df_asm_tabla.rename(columns={
+                "oficina": "Oficina", "numero": "N° Asambleas", "asistentes": "Asistentes",
+            }),
+            use_container_width=True, hide_index=True,
+        )
+    else:
+        st.info("No hay asambleas registradas para el año.")
 
-    # --- Asambleas por oficina
-    st.subheader("Asambleas productivas por oficina")
-    col_asm1, col_asm2 = st.columns(2)
-    with col_asm1:
-        st.plotly_chart(_grafico_num_asambleas(df_asm), use_container_width=True)
-    with col_asm2:
-        st.plotly_chart(_grafico_asistentes_asambleas(df_asm), use_container_width=True)
+    # --- Estadísticas por responsable
+    st.subheader("Estadísticas por responsable")
+    df_resp_det = _df_responsables_detalle_vivo(anio)
+    if not df_resp_det.empty:
+        col_r1, col_r2 = st.columns(2)
+        with col_r1:
+            st.plotly_chart(_grafico_responsables_asambleas(df_resp_det), use_container_width=True)
+        with col_r2:
+            st.plotly_chart(_grafico_responsables_pie(df_resp_det), use_container_width=True)
+        st.plotly_chart(_grafico_responsables_por_oficina(df_resp_det), use_container_width=True)
+
+        st.markdown("**Detalle — responsable y oficina por asamblea:**")
+        filas_resp = (
+            df_resp_det.groupby(["numero", "oficina"])["responsable"]
+            .apply(lambda s: " / ".join(s))
+            .reset_index()
+            .rename(columns={
+                "numero": "N° Asamblea", "oficina": "Oficina", "responsable": "Responsable(s)",
+            })
+        )
+        st.dataframe(filas_resp, use_container_width=True, hide_index=True)
+    else:
+        st.info("No hay responsables registrados en las asambleas del año.")
+
+    # --- Congresos Internacionales
+    st.subheader("Congresos Internacionales")
+    if not df_cong.empty:
+        st.dataframe(
+            df_cong.rename(columns={
+                "oficina": "Oficina", "tema": "Tema",
+                "asistentes": "Asistentes", "fecha": "Fecha",
+            }),
+            use_container_width=True, hide_index=True,
+        )
+    else:
+        st.info("No hay congresos (tipo de evento 'Congresos') registrados para el año.")

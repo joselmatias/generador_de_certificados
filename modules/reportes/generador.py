@@ -644,15 +644,41 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
             key="asm_num_asistentes",
         )
 
+    tematica = st.text_input("Temática", key="asm_tematica")
+
+    # Responsables — mismo patrón que los capacitadores del reporte
+    st.markdown("**Responsables de la asamblea**")
+    num_responsables = st.number_input(
+        "¿Cuántos responsables participaron?",
+        min_value=1, max_value=10, value=1, step=1, key="asm_num_resp",
+    )
+    responsables_lista: list[str] = []
+    cols_resp = st.columns(min(int(num_responsables), 3))
+    for i in range(int(num_responsables)):
+        with cols_resp[i % 3]:
+            nombre_resp = st.text_input(
+                f"Responsable {i + 1}",
+                key=f"asm_resp_{i}",
+                placeholder="Nombre completo",
+            )
+            responsables_lista.append(nombre_resp)
+
+    responsables_lista = [r.strip() for r in responsables_lista if r.strip()]
+    responsables_str = json.dumps(responsables_lista, ensure_ascii=False) if responsables_lista else None
+
     if st.button("✅ Registrar Asamblea Productiva", type="primary", use_container_width=True):
         if num_asistentes <= 0:
             st.error("Ingresa un número de asistentes mayor a 0.")
+        elif not responsables_lista:
+            st.error("Ingresa al menos un responsable.")
         else:
             with get_connection() as con:
                 insertar_asamblea_productiva(con, {
                     "oficina":        oficina_id,
                     "fecha":          str(fecha_asamblea),
                     "num_asistentes": int(num_asistentes),
+                    "responsables":   responsables_str,
+                    "tematica":       tematica.strip() or None,
                 })
             st.success(f"✅ Asamblea registrada: **{int(num_asistentes)} personas** el {fecha_asamblea}.")
             st.rerun()
@@ -665,10 +691,22 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
     if asambleas:
         import pandas as pd
         df = pd.DataFrame([dict(a) for a in asambleas])
-        cols_ex = [c for c in ["fecha", "num_asistentes", "fecha_registro"] if c in df.columns]
+        if "responsables" in df.columns:
+            def _fmt_resp(v):
+                if not v:
+                    return ""
+                try:
+                    return " / ".join(json.loads(v))
+                except (ValueError, TypeError):
+                    return str(v)
+            df["responsables"] = df["responsables"].map(_fmt_resp)
+        cols_ex = [c for c in ["fecha", "tematica", "responsables", "num_asistentes", "fecha_registro"]
+                   if c in df.columns]
         st.dataframe(
             df[cols_ex].rename(columns={
                 "fecha": "Fecha",
+                "tematica": "Temática",
+                "responsables": "Responsables",
                 "num_asistentes": "Personas Asistentes",
                 "fecha_registro": "Registrado",
             }),

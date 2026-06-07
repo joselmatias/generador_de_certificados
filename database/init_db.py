@@ -139,6 +139,8 @@ CREATE TABLE IF NOT EXISTS asamblea_productiva (
     oficina             TEXT NOT NULL,
     fecha               TEXT NOT NULL,
     num_asistentes      INTEGER NOT NULL DEFAULT 0,
+    responsables        TEXT,
+    tematica            TEXT,
     fecha_registro      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 """
@@ -206,6 +208,11 @@ def init_db() -> None:
                     "ALTER TABLE reportes_capacitacion "
                     "ADD COLUMN IF NOT EXISTS encuestas_realizadas INTEGER DEFAULT 0"
                 )
+                # Migración idempotente: responsables y temática en asambleas productivas
+                for col in ("responsables", "tematica"):
+                    cur.execute(
+                        f"ALTER TABLE asamblea_productiva ADD COLUMN IF NOT EXISTS {col} TEXT"
+                    )
                 for idx in _INDICES:
                     cur.execute(idx)
         finally:
