@@ -46,7 +46,7 @@ def mostrar_certificados() -> None:
     if es_master:
         sel_oficina = st.selectbox(
             "Oficina",
-            options=["Todas", "Guayaquil", "Manabí", "Loja", "Cuenca"],
+            options=["Todas", "Guayaquil", "Portoviejo", "Loja", "Cuenca"],
             key="cert_oficina",
         )
         oficina_filtro = None if sel_oficina == "Todas" else sel_oficina

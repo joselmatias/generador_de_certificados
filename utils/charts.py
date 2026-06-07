@@ -16,7 +16,7 @@ COLOR_PRIMARIO   = "#1A3A5C"
 COLOR_SECUNDARIO = "#C8A951"
 COLORES_OFICINAS = {
     "Guayaquil": "#1A3A5C",
-    "Manabí":    "#2E86AB",
+    "Portoviejo": "#2E86AB",
     "Loja":      "#A23B72",
     "Cuenca":    "#C8A951",
 }

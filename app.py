@@ -41,11 +41,11 @@ OFICINAS = [
     },
     {
         "id":      "manabi",
-        "nombre":  "Manabí",
+        "nombre":  "Portoviejo",
         "rol":     "regional",
         "icono":   "🌊",
         "region":  "Costa — Zona 4",
-        "detalle": "Oficina técnica regional de Manabí.",
+        "detalle": "Oficina técnica regional de Portoviejo.",
     },
     {
         "id":      "loja",

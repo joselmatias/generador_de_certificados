@@ -15,7 +15,7 @@ import getpass
 
 USUARIOS = [
     ("admin_guayaquil", "Guayaquil — master"),
-    ("user_manabi",     "Manabí — regional"),
+    ("user_manabi",     "Portoviejo — regional"),
     ("user_loja",       "Loja — regional"),
     ("user_cuenca",     "Cuenca — regional"),
 ]

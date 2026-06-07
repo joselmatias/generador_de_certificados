@@ -8,13 +8,20 @@ Secciones:
 
 from __future__ import annotations
 
+from datetime import date
+
 import requests
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from database.db import get_connection, consultar_capacitaciones
+from database.db import (
+    get_connection,
+    consultar_capacitaciones,
+    consultar_reportes_capacitacion,
+    consultar_asambleas_productivas,
+)
 from utils.charts import (
     grafico_radar_satisfaccion,
     grafico_histograma_satisfaccion,
@@ -482,6 +489,16 @@ COLORES_OFICINAS_DRAC = {
     "Cuenca":     "#C8A951",
     "Guayaquil":  "#1A3A5C",
 }
+
+# Mapeo id de oficina en BD → nombre para mostrar (la oficina de Manabí opera en
+# Portoviejo). El orden define cómo aparecen las oficinas en los gráficos en vivo.
+_OFICINA_ID_A_NOMBRE = {
+    "guayaquil": "Guayaquil",
+    "manabi":    "Portoviejo",
+    "loja":      "Loja",
+    "cuenca":    "Cuenca",
+}
+_ORDEN_OFICINAS = ["Guayaquil", "Portoviejo", "Loja", "Cuenca"]
 
 # ---------------------------------------------------------------------------
 # Datos estáticos — Incidencia geográfica de capacitaciones 2025 (por provincia)
@@ -1190,6 +1207,82 @@ def _grafico_expositores_mensual() -> go.Figure:
 # Punto de entrada
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Helpers — estadísticas anuales EN VIVO (Supabase: reportes_capacitacion y
+# asamblea_productiva, alimentadas por el módulo Generador de Reportes)
+# ---------------------------------------------------------------------------
+
+def _anios_disponibles() -> list[int]:
+    """Años con datos en la BD (reportes + asambleas), orden descendente.
+
+    Si no hay datos, devuelve [año actual] para que el selector no quede vacío.
+    """
+    anios: set[int] = set()
+    with get_connection() as con:
+        for row in con.execute(
+            "SELECT DISTINCT year_reporte AS anio FROM reportes_capacitacion "
+            "WHERE year_reporte IS NOT NULL"
+        ).fetchall():
+            anios.add(int(row["anio"]))
+        for row in con.execute(
+            "SELECT DISTINCT to_char(fecha::date, 'YYYY') AS anio "
+            "FROM asamblea_productiva WHERE fecha IS NOT NULL"
+        ).fetchall():
+            if row["anio"]:
+                anios.add(int(row["anio"]))
+    if not anios:
+        return [date.today().year]
+    return sorted(anios, reverse=True)
+
+
+def _df_reportes_por_oficina(anio: int) -> pd.DataFrame:
+    """Agrega los reportes de capacitación del año por oficina.
+
+    Columnas: oficina (nombre display), numero (conteo), asistentes
+    (personas capacitadas), encuestados (encuestas realizadas).
+    Incluye las 4 oficinas aunque tengan 0.
+    """
+    with get_connection() as con:
+        filas = consultar_reportes_capacitacion(con, anio=anio)
+
+    base = pd.DataFrame(
+        {"oficina": _ORDEN_OFICINAS, "numero": 0, "asistentes": 0, "encuestados": 0}
+    ).set_index("oficina")
+
+    for f in filas:
+        nombre = _OFICINA_ID_A_NOMBRE.get((f["oficina"] or "").lower())
+        if nombre is None or nombre not in base.index:
+            continue
+        base.at[nombre, "numero"]      += 1
+        base.at[nombre, "asistentes"]  += int(f["num_personas_capacitadas"] or 0)
+        base.at[nombre, "encuestados"] += int(f["encuestas_realizadas"] or 0)
+
+    return base.reset_index()
+
+
+def _df_asambleas_por_oficina(anio: int) -> pd.DataFrame:
+    """Agrega las asambleas productivas del año por oficina.
+
+    Columnas: oficina (nombre display), numero (conteo), asistentes.
+    Incluye las 4 oficinas aunque tengan 0.
+    """
+    with get_connection() as con:
+        filas = consultar_asambleas_productivas(con, anio=anio)
+
+    base = pd.DataFrame(
+        {"oficina": _ORDEN_OFICINAS, "numero": 0, "asistentes": 0}
+    ).set_index("oficina")
+
+    for f in filas:
+        nombre = _OFICINA_ID_A_NOMBRE.get((f["oficina"] or "").lower())
+        if nombre is None or nombre not in base.index:
+            continue
+        base.at[nombre, "numero"]     += 1
+        base.at[nombre, "asistentes"] += int(f["num_asistentes"] or 0)
+
+    return base.reset_index()
+
+
 def mostrar_dashboard_drac() -> None:
     st.title("📊 Dashboard DRAC")
     st.markdown("**Dirección Regional — Acciones y estadísticas consolidadas**")
@@ -1550,3 +1643,67 @@ def mostrar_dashboard_drac() -> None:
         }),
         use_container_width=True, hide_index=True,
     )
+
+    # ======================================================================
+    # SECCIÓN 4 — Estadísticas del año (datos en vivo desde Supabase)
+    # ======================================================================
+    st.divider()
+    st.header("4. Estadísticas del año — Datos en vivo (Supabase)")
+    st.caption(
+        "Se alimenta automáticamente con los reportes de capacitación y las "
+        "asambleas productivas registrados en el módulo Generador de Reportes."
+    )
+
+    anios = _anios_disponibles()
+    anio_def = date.today().year if date.today().year in anios else anios[0]
+    anio_sel = st.selectbox(
+        "Año",
+        anios,
+        index=anios.index(anio_def),
+        key="drac_anio_vivo",
+    )
+
+    df_rep = _df_reportes_por_oficina(anio_sel)
+    df_asm = _df_asambleas_por_oficina(anio_sel)
+
+    hay_datos = bool(df_rep["numero"].sum() or df_asm["numero"].sum())
+    if not hay_datos:
+        st.info(f"Aún no hay reportes ni asambleas registrados para el año {anio_sel}.")
+        return
+
+    # --- KPIs
+    k1, k2, k3, k4, k5 = st.columns(5)
+    k1.metric("Capacitaciones",        f"{int(df_rep['numero'].sum()):,}")
+    k2.metric("Personas capacitadas",  f"{int(df_rep['asistentes'].sum()):,}")
+    k3.metric("Encuestas realizadas",  f"{int(df_rep['encuestados'].sum()):,}")
+    k4.metric("Asambleas productivas", f"{int(df_asm['numero'].sum()):,}")
+    k5.metric("Asistentes asambleas",  f"{int(df_asm['asistentes'].sum()):,}")
+
+    # --- Capacitaciones por oficina
+    st.subheader("Capacitaciones por oficina")
+    col_num, col_pie = st.columns(2)
+    with col_num:
+        st.plotly_chart(_grafico_num_capacitaciones(df_rep), use_container_width=True)
+    with col_pie:
+        if df_rep["asistentes"].sum() > 0:
+            st.plotly_chart(
+                _grafico_distribucion_pie(
+                    df_rep, "asistentes",
+                    "Distribución de personas capacitadas por oficina",
+                ),
+                use_container_width=True,
+            )
+        else:
+            st.info("Sin personas capacitadas registradas en el año.")
+
+    st.plotly_chart(
+        _grafico_asistentes_encuestados_barras(df_rep), use_container_width=True
+    )
+
+    # --- Asambleas por oficina
+    st.subheader("Asambleas productivas por oficina")
+    col_asm1, col_asm2 = st.columns(2)
+    with col_asm1:
+        st.plotly_chart(_grafico_num_asambleas(df_asm), use_container_width=True)
+    with col_asm2:
+        st.plotly_chart(_grafico_asistentes_asambleas(df_asm), use_container_width=True)

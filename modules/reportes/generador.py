@@ -696,7 +696,7 @@ def _tab_estadisticas(oficina_id: str, oficina_nombre: str) -> None:
         _OPCIONES_OFICINA = {
             "todas":      "Todas las oficinas",
             "guayaquil":  "Guayaquil",
-            "manabi":     "Manabí",
+            "manabi":     "Portoviejo",
             "loja":       "Loja",
             "cuenca":     "Cuenca",
         }

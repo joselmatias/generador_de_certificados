@@ -50,7 +50,7 @@ def mostrar_dashboard_global() -> None:
     with col3:
         sel_oficina = st.selectbox(
             "Filtrar por oficina",
-            options=["Todas", "Guayaquil", "Manabí", "Loja", "Cuenca"],
+            options=["Todas", "Guayaquil", "Portoviejo", "Loja", "Cuenca"],
             key="global_oficina",
         )
 
