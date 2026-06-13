@@ -135,13 +135,21 @@ CREATE TABLE IF NOT EXISTS reportes_capacitacion (
 
 _DDL_ASAMBLEA_PRODUCTIVA = """
 CREATE TABLE IF NOT EXISTS asamblea_productiva (
-    id                  SERIAL PRIMARY KEY,
-    oficina             TEXT NOT NULL,
-    fecha               TEXT NOT NULL,
-    num_asistentes      INTEGER NOT NULL DEFAULT 0,
-    responsables        TEXT,
-    tematica            TEXT,
-    fecha_registro      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    id                      SERIAL PRIMARY KEY,
+    numero_reporte          INTEGER,
+    oficina                 TEXT NOT NULL,
+    fecha                   TEXT NOT NULL,
+    num_asistentes          INTEGER NOT NULL DEFAULT 0,
+    responsables            TEXT,
+    tematica                TEXT,
+    asociacion_agrupacion   TEXT,
+    lugar_realizacion       TEXT,
+    instituciones_invitadas TEXT,
+    acuerdos_compromisos    TEXT,
+    responsable_seguimiento TEXT,
+    estado_compromisos      TEXT DEFAULT 'Pendiente',
+    observaciones           TEXT,
+    fecha_registro          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 """
 
@@ -149,6 +157,13 @@ _DDL_CONTADOR_REPORTE = """
 CREATE TABLE IF NOT EXISTS contador_reporte (
     id              INTEGER PRIMARY KEY CHECK (id = 1),
     ultimo_numero   INTEGER NOT NULL DEFAULT 83
+);
+"""
+
+_DDL_CONTADOR_ASAMBLEA = """
+CREATE TABLE IF NOT EXISTS contador_asamblea (
+    id              INTEGER PRIMARY KEY CHECK (id = 1),
+    ultimo_numero   INTEGER NOT NULL DEFAULT 0
 );
 """
 
@@ -184,8 +199,13 @@ def init_db() -> None:
                 cur.execute(_DDL_REPORTES_CAPACITACION)
                 cur.execute(_DDL_ASAMBLEA_PRODUCTIVA)
                 cur.execute(_DDL_CONTADOR_REPORTE)
+                cur.execute(_DDL_CONTADOR_ASAMBLEA)
                 cur.execute(
                     "INSERT INTO contador_reporte (id, ultimo_numero) VALUES (1, 83) "
+                    "ON CONFLICT (id) DO NOTHING"
+                )
+                cur.execute(
+                    "INSERT INTO contador_asamblea (id, ultimo_numero) VALUES (1, 0) "
                     "ON CONFLICT (id) DO NOTHING"
                 )
                 # Migración: los reportes 1-83 son históricos; el sistema comienza desde el 84
@@ -208,11 +228,23 @@ def init_db() -> None:
                     "ALTER TABLE reportes_capacitacion "
                     "ADD COLUMN IF NOT EXISTS encuestas_realizadas INTEGER DEFAULT 0"
                 )
-                # Migración idempotente: responsables y temática en asambleas productivas
-                for col in ("responsables", "tematica"):
+                # Migración idempotente: columnas del acta completa en asambleas productivas
+                for col in (
+                    "responsables", "tematica",
+                    "asociacion_agrupacion", "lugar_realizacion", "instituciones_invitadas",
+                    "acuerdos_compromisos", "responsable_seguimiento", "observaciones",
+                ):
                     cur.execute(
                         f"ALTER TABLE asamblea_productiva ADD COLUMN IF NOT EXISTS {col} TEXT"
                     )
+                cur.execute(
+                    "ALTER TABLE asamblea_productiva "
+                    "ADD COLUMN IF NOT EXISTS numero_reporte INTEGER"
+                )
+                cur.execute(
+                    "ALTER TABLE asamblea_productiva "
+                    "ADD COLUMN IF NOT EXISTS estado_compromisos TEXT DEFAULT 'Pendiente'"
+                )
                 for idx in _INDICES:
                     cur.execute(idx)
         finally:

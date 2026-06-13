@@ -262,21 +262,56 @@ def consultar_reportes_capacitacion(
 # Asambleas Productivas
 # ---------------------------------------------------------------------------
 
+def obtener_siguiente_numero_asamblea(con: _Conn) -> int:
+    """
+    Incrementa de forma atómica el contador global de asambleas productivas
+    y devuelve el nuevo número. La secuencia comienza en 001.
+    """
+    row = con.execute(
+        "UPDATE contador_asamblea SET ultimo_numero = ultimo_numero + 1 "
+        "WHERE id = 1 RETURNING ultimo_numero"
+    ).fetchone()
+    return row["ultimo_numero"]
+
+
 def insertar_asamblea_productiva(con: _Conn, datos: dict[str, Any]) -> int:
     datos = {
-        "responsables": None,
-        "tematica":     None,
+        "numero_reporte":          None,
+        "responsables":            None,
+        "tematica":                None,
+        "asociacion_agrupacion":   None,
+        "lugar_realizacion":       None,
+        "instituciones_invitadas": None,
+        "acuerdos_compromisos":    None,
+        "responsable_seguimiento": None,
+        "estado_compromisos":      "Pendiente",
+        "observaciones":           None,
         **datos,
     }
     row = con.execute(
         """
-        INSERT INTO asamblea_productiva (oficina, fecha, num_asistentes, responsables, tematica)
-        VALUES (%(oficina)s, %(fecha)s, %(num_asistentes)s, %(responsables)s, %(tematica)s)
+        INSERT INTO asamblea_productiva (
+            numero_reporte, oficina, fecha, num_asistentes, responsables, tematica,
+            asociacion_agrupacion, lugar_realizacion, instituciones_invitadas,
+            acuerdos_compromisos, responsable_seguimiento, estado_compromisos, observaciones
+        ) VALUES (
+            %(numero_reporte)s, %(oficina)s, %(fecha)s, %(num_asistentes)s, %(responsables)s, %(tematica)s,
+            %(asociacion_agrupacion)s, %(lugar_realizacion)s, %(instituciones_invitadas)s,
+            %(acuerdos_compromisos)s, %(responsable_seguimiento)s, %(estado_compromisos)s, %(observaciones)s
+        )
         RETURNING id
         """,
         datos,
     ).fetchone()
     return row["id"]
+
+
+def actualizar_estado_compromiso(con: _Conn, asamblea_id: int, estado: str) -> None:
+    """Actualiza el estado de los compromisos de una asamblea (Pendiente/Cumplido)."""
+    con.execute(
+        "UPDATE asamblea_productiva SET estado_compromisos = %s WHERE id = %s",
+        (estado, asamblea_id),
+    )
 
 
 def consultar_asambleas_productivas(

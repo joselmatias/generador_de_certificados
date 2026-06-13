@@ -1319,9 +1319,10 @@ def _df_responsables_detalle_vivo(anio: int) -> pd.DataFrame:
         nombre = _OFICINA_ID_A_NOMBRE.get((f["oficina"] or "").lower())
         if nombre is None:
             continue
+        numero = f.get("numero_reporte") or f["id"]
         for resp in _parse_lista(f.get("responsables")):
             out.append({
-                "numero":      f["id"],
+                "numero":      numero,
                 "oficina":     nombre,
                 "responsable": resp.upper(),
             })

@@ -21,8 +21,10 @@ from database.db import (
     obtener_siguiente_numero_reporte,
     insertar_reporte_capacitacion,
     consultar_reportes_capacitacion,
+    obtener_siguiente_numero_asamblea,
     insertar_asamblea_productiva,
     consultar_asambleas_productivas,
+    actualizar_estado_compromiso,
     estadisticas_mensuales,
 )
 from utils.reporte_drac_pdf import generar_reporte_drac, TIPOS_EVENTO
@@ -625,10 +627,38 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
 # TAB 2 — Actas de Asambleas Productivas
 # ---------------------------------------------------------------------------
 
+def _codigo_asamblea(numero) -> str:
+    """Formatea el código de acta a partir del número secuencial."""
+    try:
+        return f"Asamblea Productiva {int(numero):03d}"
+    except (TypeError, ValueError):
+        return "Asamblea Productiva —"
+
+
+def _fmt_responsables(v) -> str:
+    """Convierte el JSON de responsables guardado en 'a / b'."""
+    if not v:
+        return ""
+    try:
+        return " / ".join(json.loads(v))
+    except (ValueError, TypeError):
+        return str(v)
+
+
 def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
+    import pandas as pd
+
     st.subheader("Actas de Asambleas Productivas")
-    st.markdown("Registra el número de personas que asistieron a cada asamblea productiva.")
+    st.markdown("Registra el acta completa de cada asamblea productiva.")
     st.divider()
+
+    # Preview del número secuencial (global, por orden de ingreso)
+    with get_connection() as _con:
+        ultimo = _con.execute(
+            "SELECT ultimo_numero FROM contador_asamblea WHERE id = 1"
+        ).fetchone()
+    proximo = (ultimo["ultimo_numero"] if ultimo else 0) + 1
+    st.info(f"Se registrará: **{_codigo_asamblea(proximo)}**")
 
     col_fecha, col_personas = st.columns(2)
     with col_fecha:
@@ -639,15 +669,22 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
         )
     with col_personas:
         num_asistentes = st.number_input(
-            "Número de personas que asistieron",
+            "N.° de participantes",
             min_value=0, value=0, step=1,
             key="asm_num_asistentes",
         )
 
-    tematica = st.text_input("Temática", key="asm_tematica")
+    ca1, ca2 = st.columns(2)
+    with ca1:
+        asociacion = st.text_input("Asociación / Agrupación", key="asm_asociacion")
+    with ca2:
+        lugar = st.text_input("Lugar de realización", key="asm_lugar")
+
+    tematica = st.text_input("Tema tratado", key="asm_tematica")
+    instituciones = st.text_area("Instituciones invitadas", key="asm_instituciones")
 
     # Responsables — mismo patrón que los capacitadores del reporte
-    st.markdown("**Responsables de la asamblea**")
+    st.markdown("**Responsable(s) de la asamblea**")
     num_responsables = st.number_input(
         "¿Cuántos responsables participaron?",
         min_value=1, max_value=10, value=1, step=1, key="asm_num_resp",
@@ -666,21 +703,44 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
     responsables_lista = [r.strip() for r in responsables_lista if r.strip()]
     responsables_str = json.dumps(responsables_lista, ensure_ascii=False) if responsables_lista else None
 
+    st.markdown("**Seguimiento de compromisos**")
+    acuerdos = st.text_area("Acuerdos y compromisos principales", key="asm_acuerdos")
+    cs1, cs2 = st.columns(2)
+    with cs1:
+        responsable_seguimiento = st.text_input(
+            "Responsable del seguimiento", key="asm_resp_seg")
+    with cs2:
+        estado_compromisos = st.selectbox(
+            "Estado de los compromisos",
+            options=["Pendiente", "Cumplido"],
+            key="asm_estado",
+        )
+    observaciones = st.text_area("Observaciones", key="asm_observaciones")
+
     if st.button("✅ Registrar Asamblea Productiva", type="primary", use_container_width=True):
         if num_asistentes <= 0:
-            st.error("Ingresa un número de asistentes mayor a 0.")
+            st.error("Ingresa un número de participantes mayor a 0.")
         elif not responsables_lista:
             st.error("Ingresa al menos un responsable.")
         else:
             with get_connection() as con:
+                numero = obtener_siguiente_numero_asamblea(con)
                 insertar_asamblea_productiva(con, {
-                    "oficina":        oficina_id,
-                    "fecha":          str(fecha_asamblea),
-                    "num_asistentes": int(num_asistentes),
-                    "responsables":   responsables_str,
-                    "tematica":       tematica.strip() or None,
+                    "numero_reporte":          numero,
+                    "oficina":                 oficina_id,
+                    "fecha":                   str(fecha_asamblea),
+                    "num_asistentes":          int(num_asistentes),
+                    "responsables":            responsables_str,
+                    "tematica":                tematica.strip() or None,
+                    "asociacion_agrupacion":   asociacion.strip() or None,
+                    "lugar_realizacion":       lugar.strip() or None,
+                    "instituciones_invitadas": instituciones.strip() or None,
+                    "acuerdos_compromisos":    acuerdos.strip() or None,
+                    "responsable_seguimiento": responsable_seguimiento.strip() or None,
+                    "estado_compromisos":      estado_compromisos,
+                    "observaciones":           observaciones.strip() or None,
                 })
-            st.success(f"✅ Asamblea registrada: **{int(num_asistentes)} personas** el {fecha_asamblea}.")
+            st.success(f"✅ {_codigo_asamblea(numero)} registrada: **{int(num_asistentes)} participantes** el {fecha_asamblea}.")
             st.rerun()
 
     st.divider()
@@ -689,31 +749,67 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
         asambleas = consultar_asambleas_productivas(con, oficina=oficina_id)
 
     if asambleas:
-        import pandas as pd
         df = pd.DataFrame([dict(a) for a in asambleas])
         if "responsables" in df.columns:
-            def _fmt_resp(v):
-                if not v:
-                    return ""
-                try:
-                    return " / ".join(json.loads(v))
-                except (ValueError, TypeError):
-                    return str(v)
-            df["responsables"] = df["responsables"].map(_fmt_resp)
-        cols_ex = [c for c in ["fecha", "tematica", "responsables", "num_asistentes", "fecha_registro"]
-                   if c in df.columns]
+            df["responsables"] = df["responsables"].map(_fmt_responsables)
+        if "numero_reporte" in df.columns:
+            df["numero_reporte"] = df["numero_reporte"].map(_codigo_asamblea)
+        cols_ex = [c for c in [
+            "numero_reporte", "fecha", "asociacion_agrupacion", "tematica", "responsables",
+            "num_asistentes", "lugar_realizacion", "instituciones_invitadas",
+            "acuerdos_compromisos", "responsable_seguimiento", "estado_compromisos",
+            "observaciones", "fecha_registro",
+        ] if c in df.columns]
         st.dataframe(
             df[cols_ex].rename(columns={
-                "fecha": "Fecha",
-                "tematica": "Temática",
-                "responsables": "Responsables",
-                "num_asistentes": "Personas Asistentes",
+                "numero_reporte": "N° Reporte",
+                "fecha": "Fecha Asamblea",
+                "asociacion_agrupacion": "Asociación/Agrupación",
+                "tematica": "Tema Tratado",
+                "responsables": "Responsable",
+                "num_asistentes": "# Participantes",
+                "lugar_realizacion": "Lugar de Realización",
+                "instituciones_invitadas": "Instituciones Invitadas",
+                "acuerdos_compromisos": "Acuerdos y Compromisos",
+                "responsable_seguimiento": "Responsable del Seguimiento",
+                "estado_compromisos": "Estado de los Compromisos",
+                "observaciones": "Observaciones",
                 "fecha_registro": "Registrado",
             }),
             use_container_width=True, hide_index=True,
         )
     else:
         st.info("Aún no hay asambleas registradas para esta oficina.")
+
+    # --- Compromisos pendientes (seguimiento) ---------------------------------
+    st.divider()
+    st.subheader("Compromisos pendientes")
+    pendientes = [
+        a for a in (asambleas or [])
+        if (dict(a).get("estado_compromisos") or "Pendiente") == "Pendiente"
+    ]
+    if pendientes:
+        opciones = {
+            f"{_codigo_asamblea(a['numero_reporte'])} — {a.get('tematica') or 's/tema'}": a
+            for a in pendientes
+        }
+        sel = st.selectbox(
+            "Selecciona el acta con compromisos pendientes",
+            options=list(opciones.keys()),
+            key="asm_pendiente_sel",
+        )
+        acta = opciones[sel]
+        if acta.get("acuerdos_compromisos"):
+            st.markdown(f"**Acuerdos y compromisos:** {acta['acuerdos_compromisos']}")
+        if acta.get("responsable_seguimiento"):
+            st.markdown(f"**Responsable del seguimiento:** {acta['responsable_seguimiento']}")
+        if st.button("✅ Marcar como Cumplido", type="primary", key="asm_marcar_cumplido"):
+            with get_connection() as con:
+                actualizar_estado_compromiso(con, acta["id"], "Cumplido")
+            st.success(f"{_codigo_asamblea(acta['numero_reporte'])}: compromisos marcados como **Cumplido**.")
+            st.rerun()
+    else:
+        st.info("No hay compromisos pendientes en esta oficina.")
 
 
 # ---------------------------------------------------------------------------
