@@ -306,11 +306,14 @@ def insertar_asamblea_productiva(con: _Conn, datos: dict[str, Any]) -> int:
     return row["id"]
 
 
-def actualizar_estado_compromiso(con: _Conn, asamblea_id: int, estado: str) -> None:
-    """Actualiza el estado de los compromisos de una asamblea (Pendiente/Cumplido)."""
+def actualizar_compromisos(
+    con: _Conn, asamblea_id: int, acuerdos_json: str | None, estado_overall: str
+) -> None:
+    """Actualiza la lista de compromisos (JSON) y el estado global de una asamblea."""
     con.execute(
-        "UPDATE asamblea_productiva SET estado_compromisos = %s WHERE id = %s",
-        (estado, asamblea_id),
+        "UPDATE asamblea_productiva "
+        "SET acuerdos_compromisos = %s, estado_compromisos = %s WHERE id = %s",
+        (acuerdos_json, estado_overall, asamblea_id),
     )
 
 

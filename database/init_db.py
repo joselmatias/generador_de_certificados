@@ -163,7 +163,7 @@ CREATE TABLE IF NOT EXISTS contador_reporte (
 _DDL_CONTADOR_ASAMBLEA = """
 CREATE TABLE IF NOT EXISTS contador_asamblea (
     id              INTEGER PRIMARY KEY CHECK (id = 1),
-    ultimo_numero   INTEGER NOT NULL DEFAULT 0
+    ultimo_numero   INTEGER NOT NULL DEFAULT 17
 );
 """
 
@@ -205,8 +205,13 @@ def init_db() -> None:
                     "ON CONFLICT (id) DO NOTHING"
                 )
                 cur.execute(
-                    "INSERT INTO contador_asamblea (id, ultimo_numero) VALUES (1, 0) "
+                    "INSERT INTO contador_asamblea (id, ultimo_numero) VALUES (1, 17) "
                     "ON CONFLICT (id) DO NOTHING"
+                )
+                # La numeración de asambleas comienza en 018 (17 actas históricas previas)
+                cur.execute(
+                    "UPDATE contador_asamblea SET ultimo_numero = 17 "
+                    "WHERE id = 1 AND ultimo_numero < 17"
                 )
                 # Migración: los reportes 1-83 son históricos; el sistema comienza desde el 84
                 cur.execute(

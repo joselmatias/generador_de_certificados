@@ -24,7 +24,7 @@ from database.db import (
     obtener_siguiente_numero_asamblea,
     insertar_asamblea_productiva,
     consultar_asambleas_productivas,
-    actualizar_estado_compromiso,
+    actualizar_compromisos,
     estadisticas_mensuales,
 )
 from utils.reporte_drac_pdf import generar_reporte_drac, TIPOS_EVENTO
@@ -636,13 +636,52 @@ def _codigo_asamblea(numero) -> str:
 
 
 def _fmt_responsables(v) -> str:
-    """Convierte el JSON de responsables guardado en 'a / b'."""
+    """Convierte el JSON de responsables guardado en 'a / b' (tolera texto plano)."""
     if not v:
         return ""
     try:
-        return " / ".join(json.loads(v))
+        val = json.loads(v)
+        if isinstance(val, list):
+            return " / ".join(str(x) for x in val)
     except (ValueError, TypeError):
-        return str(v)
+        pass
+    return str(v)
+
+
+def _parse_compromisos(v) -> list[dict]:
+    """Devuelve la lista de compromisos [{'texto','estado'}] tolerando texto plano viejo."""
+    if not v:
+        return []
+    try:
+        val = json.loads(v)
+        if isinstance(val, list):
+            out = []
+            for c in val:
+                if isinstance(c, dict) and c.get("texto"):
+                    out.append({
+                        "texto":  str(c["texto"]),
+                        "estado": c.get("estado") or "Pendiente",
+                    })
+                elif isinstance(c, str) and c.strip():
+                    out.append({"texto": c.strip(), "estado": "Pendiente"})
+            return out
+    except (ValueError, TypeError):
+        pass
+    # Texto plano (acta vieja): un único compromiso
+    return [{"texto": str(v).strip(), "estado": "Pendiente"}]
+
+
+def _fmt_compromisos(v) -> str:
+    """Resume los compromisos como 'texto1 (Pendiente); texto2 (Cumplido)'."""
+    comps = _parse_compromisos(v)
+    return "; ".join(f"{c['texto']} ({c['estado']})" for c in comps)
+
+
+def _estado_global_compromisos(comps: list[dict]) -> str:
+    """'Pendiente' si algún compromiso está pendiente; si no, 'Cumplido'."""
+    if not comps:
+        return "Cumplido"
+    return "Pendiente" if any(c.get("estado") != "Cumplido" for c in comps) else "Cumplido"
 
 
 def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
@@ -704,18 +743,67 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
     responsables_str = json.dumps(responsables_lista, ensure_ascii=False) if responsables_lista else None
 
     st.markdown("**Seguimiento de compromisos**")
-    acuerdos = st.text_area("Acuerdos y compromisos principales", key="asm_acuerdos")
-    cs1, cs2 = st.columns(2)
-    with cs1:
-        responsable_seguimiento = st.text_input(
-            "Responsable del seguimiento", key="asm_resp_seg")
-    with cs2:
-        estado_compromisos = st.selectbox(
-            "Estado de los compromisos",
-            options=["Pendiente", "Cumplido"],
-            key="asm_estado",
+
+    # Acuerdos y compromisos — 2 o más, cada uno con su estado
+    num_compromisos = st.number_input(
+        "¿Cuántos compromisos / acuerdos?",
+        min_value=1, max_value=15, value=1, step=1, key="asm_num_comp",
+    )
+    compromisos_lista: list[dict] = []
+    for i in range(int(num_compromisos)):
+        cc1, cc2 = st.columns([3, 1])
+        with cc1:
+            texto_comp = st.text_input(
+                f"Compromiso {i + 1}", key=f"asm_comp_txt_{i}",
+                placeholder="Describe el acuerdo / compromiso",
+            )
+        with cc2:
+            estado_comp = st.selectbox(
+                "Estado", options=["Pendiente", "Cumplido"],
+                key=f"asm_comp_est_{i}",
+            )
+        if texto_comp.strip():
+            compromisos_lista.append({"texto": texto_comp.strip(), "estado": estado_comp})
+
+    acuerdos_str = json.dumps(compromisos_lista, ensure_ascii=False) if compromisos_lista else None
+    estado_global = _estado_global_compromisos(compromisos_lista)
+
+    # Responsable(s) del seguimiento — desplegable con los responsables + "Otros", multi
+    num_resp_seg = st.number_input(
+        "¿Cuántos responsables del seguimiento?",
+        min_value=1, max_value=10, value=1, step=1, key="asm_num_resp_seg",
+    )
+    opciones_seg = (responsables_lista or []) + ["Otros"]
+    resp_seg_lista: list[str] = []
+    for i in range(int(num_resp_seg)):
+        sel = st.selectbox(
+            f"Responsable del seguimiento {i + 1}",
+            options=opciones_seg,
+            key=f"asm_resp_seg_sel_{i}",
         )
-    observaciones = st.text_area("Observaciones", key="asm_observaciones")
+        if sel == "Otros":
+            otro = st.text_input(
+                f"Nombre del responsable del seguimiento {i + 1}",
+                key=f"asm_resp_seg_otro_{i}",
+                placeholder="Nombre completo",
+            )
+            if otro.strip():
+                resp_seg_lista.append(otro.strip())
+        elif sel:
+            resp_seg_lista.append(sel)
+
+    # Quitar duplicados conservando el orden
+    resp_seg_lista = list(dict.fromkeys(resp_seg_lista))
+    resp_seg_str = json.dumps(resp_seg_lista, ensure_ascii=False) if resp_seg_lista else None
+
+    # Observaciones — "Ninguna" o texto libre ("Otros")
+    obs_opcion = st.selectbox(
+        "Observaciones", options=["Ninguna", "Otros"], key="asm_obs_opcion",
+    )
+    if obs_opcion == "Otros":
+        observaciones = st.text_area("Detalle de la observación", key="asm_observaciones").strip() or "Ninguna"
+    else:
+        observaciones = "Ninguna"
 
     if st.button("✅ Registrar Asamblea Productiva", type="primary", use_container_width=True):
         if num_asistentes <= 0:
@@ -735,10 +823,10 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
                     "asociacion_agrupacion":   asociacion.strip() or None,
                     "lugar_realizacion":       lugar.strip() or None,
                     "instituciones_invitadas": instituciones.strip() or None,
-                    "acuerdos_compromisos":    acuerdos.strip() or None,
-                    "responsable_seguimiento": responsable_seguimiento.strip() or None,
-                    "estado_compromisos":      estado_compromisos,
-                    "observaciones":           observaciones.strip() or None,
+                    "acuerdos_compromisos":    acuerdos_str,
+                    "responsable_seguimiento": resp_seg_str,
+                    "estado_compromisos":      estado_global,
+                    "observaciones":           observaciones,
                 })
             st.success(f"✅ {_codigo_asamblea(numero)} registrada: **{int(num_asistentes)} participantes** el {fecha_asamblea}.")
             st.rerun()
@@ -752,6 +840,10 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
         df = pd.DataFrame([dict(a) for a in asambleas])
         if "responsables" in df.columns:
             df["responsables"] = df["responsables"].map(_fmt_responsables)
+        if "responsable_seguimiento" in df.columns:
+            df["responsable_seguimiento"] = df["responsable_seguimiento"].map(_fmt_responsables)
+        if "acuerdos_compromisos" in df.columns:
+            df["acuerdos_compromisos"] = df["acuerdos_compromisos"].map(_fmt_compromisos)
         if "numero_reporte" in df.columns:
             df["numero_reporte"] = df["numero_reporte"].map(_codigo_asamblea)
         cols_ex = [c for c in [
@@ -785,7 +877,7 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
     st.divider()
     st.subheader("Compromisos pendientes")
     pendientes = [
-        a for a in (asambleas or [])
+        dict(a) for a in (asambleas or [])
         if (dict(a).get("estado_compromisos") or "Pendiente") == "Pendiente"
     ]
     if pendientes:
@@ -799,14 +891,33 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
             key="asm_pendiente_sel",
         )
         acta = opciones[sel]
-        if acta.get("acuerdos_compromisos"):
-            st.markdown(f"**Acuerdos y compromisos:** {acta['acuerdos_compromisos']}")
+        comps = _parse_compromisos(acta.get("acuerdos_compromisos"))
         if acta.get("responsable_seguimiento"):
-            st.markdown(f"**Responsable del seguimiento:** {acta['responsable_seguimiento']}")
-        if st.button("✅ Marcar como Cumplido", type="primary", key="asm_marcar_cumplido"):
+            st.markdown(f"**Responsable del seguimiento:** {_fmt_responsables(acta['responsable_seguimiento'])}")
+
+        st.markdown("**Marca los compromisos cumplidos:**")
+        nuevos_estados: list[str] = []
+        for j, c in enumerate(comps):
+            cumplido = st.checkbox(
+                c["texto"],
+                value=(c["estado"] == "Cumplido"),
+                key=f"asm_comp_chk_{acta['id']}_{j}",
+            )
+            nuevos_estados.append("Cumplido" if cumplido else "Pendiente")
+
+        if st.button("💾 Guardar estado de compromisos", type="primary", key="asm_guardar_comp"):
+            comps_actualizados = [
+                {"texto": c["texto"], "estado": nuevos_estados[j]}
+                for j, c in enumerate(comps)
+            ]
+            estado_overall = _estado_global_compromisos(comps_actualizados)
             with get_connection() as con:
-                actualizar_estado_compromiso(con, acta["id"], "Cumplido")
-            st.success(f"{_codigo_asamblea(acta['numero_reporte'])}: compromisos marcados como **Cumplido**.")
+                actualizar_compromisos(
+                    con, acta["id"],
+                    json.dumps(comps_actualizados, ensure_ascii=False),
+                    estado_overall,
+                )
+            st.success(f"{_codigo_asamblea(acta['numero_reporte'])}: estado de compromisos actualizado.")
             st.rerun()
     else:
         st.info("No hay compromisos pendientes en esta oficina.")
