@@ -143,27 +143,27 @@ def _construir_tabla_compromisos(compromisos: list[dict], st: dict) -> Table:
         Paragraph("Institución /<br/>responsable(s)", st["hdr_w"]),
         Paragraph("Funcionario responsable<br/>seguimiento - SCE", st["hdr_w"]),
         Paragraph("Fecha tentativa<br/>de ejecución", st["hdr_w"]),
-        Paragraph("Estado", st["hdr_w"]),
     ]
     data = [headers]
     for i, c in enumerate(compromisos, 1):
+        fecha_t = c.get("fecha_tentativa", "")
+        if fecha_t and len(fecha_t) >= 10:
+            fecha_t = _fecha_esp(fecha_t)
         data.append([
             Paragraph(str(i), st["td"]),
             Paragraph(c.get("texto", ""), st["td_l"]),
             Paragraph(c.get("institucion", ""), st["td"]),
             Paragraph(c.get("funcionario_seguimiento", ""), st["td"]),
-            Paragraph(c.get("fecha_tentativa", ""), st["td"]),
-            Paragraph(c.get("estado", "Pendiente"), st["td"]),
+            Paragraph(fecha_t, st["td"]),
         ])
 
     ancho_total = PAGE_W - MARGIN_L - MARGIN_R
     col_widths = [
         ancho_total * 0.05,
-        ancho_total * 0.30,
+        ancho_total * 0.35,
         ancho_total * 0.18,
+        ancho_total * 0.22,
         ancho_total * 0.20,
-        ancho_total * 0.14,
-        ancho_total * 0.13,
     ]
     tabla = Table(data, colWidths=col_widths, repeatRows=1)
 
@@ -239,63 +239,51 @@ def generar_acta_asamblea_pdf(
     elems.append(Paragraph("ACTA DE COMPROMISO", st["titulo"]))
     elems.append(sp)
 
-    # Datos generales
+    # Datos generales (como en el Word: Fecha, Lugar, Hora inicio, Hora cierre, Instituciones)
     datos_gen = (
         f"<b>Fecha:</b> {fecha_txt}<br/>"
         f"<b>Lugar:</b> {lugar_realizacion or '—'}<br/>"
-        f"<b>Hora de inicio:</b> {hora_inicio or '—'} &nbsp;&nbsp; "
+        f"<b>Hora de inicio:</b> {hora_inicio or '—'}<br/>"
         f"<b>Hora de cierre:</b> {hora_cierre or '—'}<br/>"
-        f"<b>Asociación / Agrupación:</b> {asociacion_agrupacion or '—'}<br/>"
-        f"<b>Tema tratado:</b> {tematica or '—'}<br/>"
-        f"<b>N.° de participantes:</b> {num_asistentes}<br/>"
-        f"<b>Responsable(s):</b> {', '.join(responsables) if responsables else '—'}<br/>"
         f"<b>Institución(es) participante(s):</b> {instituciones_invitadas or '—'}"
     )
     elems.append(Paragraph(datos_gen, st["dato"]))
     elems.append(sp)
 
-    # Antecedentes
+    # Antecedentes (sin número, como en el Word)
     if antecedentes:
         elems.append(Paragraph("Antecedentes:", st["sec"]))
         elems.append(Paragraph(antecedentes.replace("\n", "<br/>"), st["cuerpo"]))
         elems.append(sp)
 
-    # Objetivo
+    # Objetivo de la Asamblea (sin número)
     if objetivo:
         elems.append(Paragraph("Objetivo de la Asamblea:", st["sec"]))
         elems.append(Paragraph(objetivo.replace("\n", "<br/>"), st["cuerpo"]))
         elems.append(sp)
 
-    # Temas abordados
+    # Temas abordados (sin número)
     if temas_abordados:
-        elems.append(Paragraph("Temas abordados:", st["sec"]))
+        elems.append(Paragraph("Temas abordados", st["sec"]))
         elems.append(Paragraph(temas_abordados.replace("\n", "<br/>"), st["cuerpo"]))
         elems.append(sp)
 
-    # Compromisos generados
+    # 4. Compromisos Generados
     if compromisos:
-        elems.append(Paragraph("Compromisos Generados:", st["sec"]))
+        elems.append(Paragraph("4.\tCompromisos Generados", st["sec"]))
         elems.append(Spacer(1, 4))
         elems.append(_construir_tabla_compromisos(compromisos, st))
         elems.append(sp)
 
-    # Observaciones
-    elems.append(Paragraph("Observaciones Relevantes:", st["sec"]))
+    # 5. Observaciones Relevantes
+    elems.append(Paragraph("5. Observaciones Relevantes", st["sec"]))
     elems.append(Paragraph(observaciones or "Ninguna.", st["cuerpo"]))
     elems.append(sp)
 
-    # Cierre y seguimiento
-    elems.append(Paragraph("Cierre y Seguimiento:", st["sec"]))
+    # 6. Cierre y Seguimiento (fin del acta)
+    elems.append(Paragraph("6. Cierre y Seguimiento", st["sec"]))
     elems.append(Paragraph(
         (cierre_seguimiento or "").replace("\n", "<br/>") or "—", st["cuerpo"]))
-    elems.append(sp)
-
-    # Responsable(s) del seguimiento
-    if responsable_seguimiento:
-        elems.append(Paragraph(
-            f"<b>Responsable(s) del seguimiento:</b> {', '.join(responsable_seguimiento)}",
-            st["dato"],
-        ))
 
     doc.build(elems)
     return buf.getvalue()
