@@ -894,6 +894,8 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
             st.error("Ingresa un número de participantes mayor a 0.")
         elif not responsables_lista:
             st.error("Ingresa al menos un responsable.")
+        elif not (contacto_celular.strip().isdigit() and len(contacto_celular.strip()) == 10):
+            st.error("El celular debe tener exactamente 10 dígitos numéricos.")
         else:
             with get_connection() as con:
                 numero = obtener_siguiente_numero_asamblea(con)
