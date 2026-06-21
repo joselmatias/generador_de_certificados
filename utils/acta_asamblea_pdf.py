@@ -250,21 +250,21 @@ def generar_acta_asamblea_pdf(
     elems.append(Paragraph(datos_gen, st["dato"]))
     elems.append(sp)
 
-    # Antecedentes (sin número, como en el Word)
+    # 1. Antecedentes
     if antecedentes:
-        elems.append(Paragraph("Antecedentes:", st["sec"]))
+        elems.append(Paragraph("1.\tAntecedentes:", st["sec"]))
         elems.append(Paragraph(antecedentes.replace("\n", "<br/>"), st["cuerpo"]))
         elems.append(sp)
 
-    # Objetivo de la Asamblea (sin número)
+    # 2. Objetivo de la Asamblea
     if objetivo:
-        elems.append(Paragraph("Objetivo de la Asamblea:", st["sec"]))
+        elems.append(Paragraph("2.\tObjetivo de la Asamblea:", st["sec"]))
         elems.append(Paragraph(objetivo.replace("\n", "<br/>"), st["cuerpo"]))
         elems.append(sp)
 
-    # Temas abordados (sin número)
+    # 3. Temas abordados
     if temas_abordados:
-        elems.append(Paragraph("Temas abordados", st["sec"]))
+        elems.append(Paragraph("3.\tTemas abordados", st["sec"]))
         elems.append(Paragraph(temas_abordados.replace("\n", "<br/>"), st["cuerpo"]))
         elems.append(sp)
 
