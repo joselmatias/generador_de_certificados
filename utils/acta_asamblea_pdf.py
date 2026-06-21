@@ -141,7 +141,7 @@ def _construir_tabla_compromisos(compromisos: list[dict], st: dict) -> Table:
         Paragraph("#", st["hdr_w"]),
         Paragraph("Compromiso", st["hdr_w"]),
         Paragraph("Institución /<br/>responsable(s)", st["hdr_w"]),
-        Paragraph("Funcionario responsable<br/>seguimiento - SCE", st["hdr_w"]),
+        Paragraph("Funcionario responsable<br/>seguimiento", st["hdr_w"]),
         Paragraph("Fecha tentativa<br/>de ejecución", st["hdr_w"]),
     ]
     data = [headers]

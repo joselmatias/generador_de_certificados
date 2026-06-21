@@ -723,7 +723,22 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
         lugar = st.text_input("Lugar de realización", key="asm_lugar")
 
     tematica = st.text_input("Tema tratado", key="asm_tematica")
-    instituciones = st.text_area("Instituciones invitadas", key="asm_instituciones")
+
+    # Instituciones invitadas — campos separados
+    st.markdown("**Instituciones invitadas**")
+    num_inst = st.number_input(
+        "¿Cuántas instituciones invitadas?",
+        min_value=1, max_value=15, value=1, step=1, key="asm_num_inst",
+    )
+    instituciones_lista: list[str] = []
+    for i in range(int(num_inst)):
+        inst = st.text_input(
+            f"Institución {i + 1}", key=f"asm_inst_{i}",
+            placeholder="Nombre de la institución",
+        )
+        if inst.strip():
+            instituciones_lista.append(inst.strip())
+    instituciones_str = json.dumps(instituciones_lista, ensure_ascii=False) if instituciones_lista else None
 
     # --- Responsable(s) de la asamblea ---
     st.markdown("**Responsable(s) de la asamblea**")
@@ -769,11 +784,18 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
                 "Estado", options=["Pendiente", "Cumplido"], key=f"asm_comp_est_{i}")
         cd1, cd2, cd3 = st.columns(3)
         with cd1:
-            inst_comp = st.text_input(
-                "Institución responsable", key=f"asm_comp_inst_{i}", placeholder="Ej: SCE, GAD...")
+            opciones_inst = (instituciones_lista or []) + ["Otro"]
+            inst_sel = st.selectbox(
+                "Institución responsable", options=opciones_inst, key=f"asm_comp_inst_sel_{i}")
+            if inst_sel == "Otro":
+                inst_comp = st.text_input(
+                    "Nombre de la institución", key=f"asm_comp_inst_otro_{i}",
+                    placeholder="Ej: SCE, GAD...").strip()
+            else:
+                inst_comp = inst_sel
         with cd2:
             func_comp = st.text_input(
-                "Funcionario seguimiento SCE", key=f"asm_comp_func_{i}", placeholder="Nombre completo")
+                "Funcionario seguimiento", key=f"asm_comp_func_{i}", placeholder="Nombre completo")
         with cd3:
             fecha_tent = st.date_input(
                 "Fecha tentativa", key=f"asm_comp_fecha_{i}", value=None)
@@ -840,7 +862,24 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
 
     st.divider()
 
-    if st.button("✅ Registrar Asamblea Productiva", type="primary", use_container_width=True):
+    # --- Flujo post-registro: tras registrar, solo se muestra el botón de descarga ---
+    if st.session_state.get("asm_registrado"):
+        pdf_bytes = st.session_state.get("asm_pdf_bytes", b"")
+        num_reg = st.session_state.get("asm_num_registrado", 0)
+        st.success(f"✅ {_codigo_asamblea(num_reg)} registrada exitosamente.")
+        if pdf_bytes:
+            st.download_button(
+                "📄 Descargar Acta en PDF",
+                pdf_bytes,
+                file_name=f"Acta_Asamblea_Productiva_{num_reg:03d}.pdf",
+                mime="application/pdf",
+            )
+        if st.button("📝 Registrar otra asamblea", type="secondary", use_container_width=True):
+            st.session_state.pop("asm_registrado", None)
+            st.session_state.pop("asm_pdf_bytes", None)
+            st.session_state.pop("asm_num_registrado", None)
+            st.rerun()
+    elif st.button("✅ Registrar Asamblea Productiva", type="primary", use_container_width=True):
         if num_asistentes <= 0:
             st.error("Ingresa un número de participantes mayor a 0.")
         elif not responsables_lista:
@@ -857,7 +896,7 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
                     "tematica":                tematica.strip() or None,
                     "asociacion_agrupacion":   asociacion.strip() or None,
                     "lugar_realizacion":       lugar.strip() or None,
-                    "instituciones_invitadas": instituciones.strip() or None,
+                    "instituciones_invitadas": instituciones_str,
                     "acuerdos_compromisos":    acuerdos_str,
                     "responsable_seguimiento": resp_seg_str,
                     "estado_compromisos":      estado_global,
@@ -878,7 +917,7 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
                 hora_inicio=hora_inicio_val.strftime("%H:%M"),
                 hora_cierre=hora_cierre_val.strftime("%H:%M"),
                 lugar_realizacion=lugar.strip(),
-                instituciones_invitadas=instituciones.strip(),
+                instituciones_invitadas="; ".join(instituciones_lista) if instituciones_lista else "",
                 asociacion_agrupacion=asociacion.strip(),
                 tematica=tematica.strip(),
                 antecedentes=antecedentes.strip(),
@@ -893,13 +932,10 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
                 lineas_institucion=cfg["lineas_institucion"],
                 area_elaborado=cfg["area_elaborado"],
             )
-            st.success(f"✅ {_codigo_asamblea(numero)} registrada: **{int(num_asistentes)} participantes** el {fecha_asamblea}.")
-            st.download_button(
-                "📄 Descargar Acta en PDF",
-                pdf_bytes,
-                file_name=f"Acta_Asamblea_Productiva_{numero:03d}.pdf",
-                mime="application/pdf",
-            )
+            st.session_state["asm_registrado"] = True
+            st.session_state["asm_pdf_bytes"] = pdf_bytes
+            st.session_state["asm_num_registrado"] = numero
+            st.rerun()
 
     st.divider()
     st.subheader("Asambleas registradas en esta oficina")
@@ -912,6 +948,8 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
             df["responsables"] = df["responsables"].map(_fmt_responsables)
         if "responsable_seguimiento" in df.columns:
             df["responsable_seguimiento"] = df["responsable_seguimiento"].map(_fmt_responsables)
+        if "instituciones_invitadas" in df.columns:
+            df["instituciones_invitadas"] = df["instituciones_invitadas"].map(_fmt_responsables)
         if "acuerdos_compromisos" in df.columns:
             df["acuerdos_compromisos"] = df["acuerdos_compromisos"].map(_fmt_compromisos)
         if "numero_reporte" in df.columns:
