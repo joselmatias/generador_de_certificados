@@ -722,6 +722,25 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
     with ca2:
         lugar = st.text_input("Lugar de realización", key="asm_lugar")
 
+    # Provincia, Cantón y Parroquia/Recinto — desplegables encadenados
+    ub1, ub2, ub3 = st.columns(3)
+    with ub1:
+        asm_provincia = st.selectbox(
+            "Provincia", options=sorted(PROVINCIAS_CANTONES),
+            index=None, placeholder="Selecciona la provincia", key="asm_provincia",
+        )
+    asm_cantones_opts = sorted(PROVINCIAS_CANTONES[asm_provincia]) if asm_provincia else []
+    if (st.session_state.get("asm_canton") is not None
+            and st.session_state.get("asm_canton") not in asm_cantones_opts):
+        del st.session_state["asm_canton"]
+    with ub2:
+        asm_canton = st.selectbox(
+            "Cantón", options=asm_cantones_opts,
+            index=None, placeholder="Selecciona el cantón", key="asm_canton",
+        )
+    with ub3:
+        asm_parroquia = st.text_input("Parroquia / Recinto", key="asm_parroquia")
+
     tematica = st.text_input("Tema tratado", key="asm_tematica")
 
     # Datos de contacto (obligatorios)
@@ -922,6 +941,9 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
                     "contacto_nombre":         contacto_nombre.strip() or None,
                     "contacto_celular":        contacto_celular.strip() or None,
                     "contacto_institucion":    contacto_institucion.strip() or None,
+                    "provincia":               asm_provincia or None,
+                    "canton":                  asm_canton or None,
+                    "parroquia_recinto":       asm_parroquia.strip() or None,
                 })
 
             from utils.acta_asamblea_pdf import generar_acta_asamblea_pdf
