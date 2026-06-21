@@ -149,6 +149,12 @@ CREATE TABLE IF NOT EXISTS asamblea_productiva (
     responsable_seguimiento TEXT,
     estado_compromisos      TEXT DEFAULT 'Pendiente',
     observaciones           TEXT,
+    hora_inicio             TEXT,
+    hora_cierre             TEXT,
+    antecedentes            TEXT,
+    objetivo                TEXT,
+    temas_abordados         TEXT,
+    cierre_seguimiento      TEXT,
     fecha_registro          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 """
@@ -238,6 +244,8 @@ def init_db() -> None:
                     "responsables", "tematica",
                     "asociacion_agrupacion", "lugar_realizacion", "instituciones_invitadas",
                     "acuerdos_compromisos", "responsable_seguimiento", "observaciones",
+                    "hora_inicio", "hora_cierre", "antecedentes", "objetivo",
+                    "temas_abordados", "cierre_seguimiento",
                 ):
                     cur.execute(
                         f"ALTER TABLE asamblea_productiva ADD COLUMN IF NOT EXISTS {col} TEXT"

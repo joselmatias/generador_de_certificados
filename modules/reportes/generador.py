@@ -691,27 +691,30 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
     st.markdown("Registra el acta completa de cada asamblea productiva.")
     st.divider()
 
+    cfg = _cfg_oficina(oficina_id)
+
     # Preview del número secuencial (global, por orden de ingreso)
     with get_connection() as _con:
         ultimo = _con.execute(
             "SELECT ultimo_numero FROM contador_asamblea WHERE id = 1"
         ).fetchone()
-    proximo = (ultimo["ultimo_numero"] if ultimo else 0) + 1
+    proximo = (ultimo["ultimo_numero"] if ultimo else 17) + 1
     st.info(f"Se registrará: **{_codigo_asamblea(proximo)}**")
 
+    # --- Datos generales del acta ---
     col_fecha, col_personas = st.columns(2)
     with col_fecha:
         fecha_asamblea = st.date_input(
-            "Fecha de la Asamblea",
-            value=date.today(),
-            key="asm_fecha",
-        )
+            "Fecha de la Asamblea", value=date.today(), key="asm_fecha")
     with col_personas:
         num_asistentes = st.number_input(
-            "N.° de participantes",
-            min_value=0, value=0, step=1,
-            key="asm_num_asistentes",
-        )
+            "N.° de participantes", min_value=0, value=0, step=1, key="asm_num_asistentes")
+
+    ch1, ch2 = st.columns(2)
+    with ch1:
+        hora_inicio_val = st.time_input("Hora de inicio", value=time(9, 0), key="asm_hora_ini")
+    with ch2:
+        hora_cierre_val = st.time_input("Hora de cierre", value=time(12, 0), key="asm_hora_fin")
 
     ca1, ca2 = st.columns(2)
     with ca1:
@@ -722,7 +725,7 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
     tematica = st.text_input("Tema tratado", key="asm_tematica")
     instituciones = st.text_area("Instituciones invitadas", key="asm_instituciones")
 
-    # Responsables — mismo patrón que los capacitadores del reporte
+    # --- Responsable(s) de la asamblea ---
     st.markdown("**Responsable(s) de la asamblea**")
     num_responsables = st.number_input(
         "¿Cuántos responsables participaron?",
@@ -733,42 +736,63 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
     for i in range(int(num_responsables)):
         with cols_resp[i % 3]:
             nombre_resp = st.text_input(
-                f"Responsable {i + 1}",
-                key=f"asm_resp_{i}",
-                placeholder="Nombre completo",
-            )
+                f"Responsable {i + 1}", key=f"asm_resp_{i}", placeholder="Nombre completo")
             responsables_lista.append(nombre_resp)
-
     responsables_lista = [r.strip() for r in responsables_lista if r.strip()]
     responsables_str = json.dumps(responsables_lista, ensure_ascii=False) if responsables_lista else None
 
-    st.markdown("**Seguimiento de compromisos**")
+    st.divider()
 
-    # Acuerdos y compromisos — 2 o más, cada uno con su estado
+    # --- Secciones narrativas del acta ---
+    antecedentes = st.text_area("Antecedentes", key="asm_antecedentes")
+    objetivo = st.text_area("Objetivo de la Asamblea", key="asm_objetivo")
+    temas_abordados = st.text_area("Temas abordados", key="asm_temas_abordados")
+
+    st.divider()
+
+    # --- Compromisos (multi, con institución, funcionario, fecha tentativa y estado) ---
+    st.markdown("**Compromisos generados**")
     num_compromisos = st.number_input(
         "¿Cuántos compromisos / acuerdos?",
         min_value=1, max_value=15, value=1, step=1, key="asm_num_comp",
     )
     compromisos_lista: list[dict] = []
     for i in range(int(num_compromisos)):
+        st.markdown(f"**Compromiso {i + 1}**")
         cc1, cc2 = st.columns([3, 1])
         with cc1:
             texto_comp = st.text_input(
-                f"Compromiso {i + 1}", key=f"asm_comp_txt_{i}",
-                placeholder="Describe el acuerdo / compromiso",
-            )
+                f"Descripción del compromiso {i + 1}", key=f"asm_comp_txt_{i}",
+                placeholder="Describe el acuerdo / compromiso", label_visibility="collapsed")
         with cc2:
             estado_comp = st.selectbox(
-                "Estado", options=["Pendiente", "Cumplido"],
-                key=f"asm_comp_est_{i}",
-            )
+                "Estado", options=["Pendiente", "Cumplido"], key=f"asm_comp_est_{i}")
+        cd1, cd2, cd3 = st.columns(3)
+        with cd1:
+            inst_comp = st.text_input(
+                "Institución responsable", key=f"asm_comp_inst_{i}", placeholder="Ej: SCE, GAD...")
+        with cd2:
+            func_comp = st.text_input(
+                "Funcionario seguimiento SCE", key=f"asm_comp_func_{i}", placeholder="Nombre completo")
+        with cd3:
+            fecha_tent = st.date_input(
+                "Fecha tentativa", key=f"asm_comp_fecha_{i}", value=None)
         if texto_comp.strip():
-            compromisos_lista.append({"texto": texto_comp.strip(), "estado": estado_comp})
+            compromisos_lista.append({
+                "texto": texto_comp.strip(),
+                "estado": estado_comp,
+                "institucion": inst_comp.strip() or "",
+                "funcionario_seguimiento": func_comp.strip() or "",
+                "fecha_tentativa": str(fecha_tent) if fecha_tent else "",
+            })
 
     acuerdos_str = json.dumps(compromisos_lista, ensure_ascii=False) if compromisos_lista else None
     estado_global = _estado_global_compromisos(compromisos_lista)
 
-    # Responsable(s) del seguimiento — desplegable con los responsables + "Otros", multi
+    st.divider()
+
+    # --- Responsable(s) del seguimiento (dropdown + Otros, multi) ---
+    st.markdown("**Responsable(s) del seguimiento**")
     num_resp_seg = st.number_input(
         "¿Cuántos responsables del seguimiento?",
         min_value=1, max_value=10, value=1, step=1, key="asm_num_resp_seg",
@@ -777,33 +801,44 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
     resp_seg_lista: list[str] = []
     for i in range(int(num_resp_seg)):
         sel = st.selectbox(
-            f"Responsable del seguimiento {i + 1}",
-            options=opciones_seg,
-            key=f"asm_resp_seg_sel_{i}",
-        )
+            f"Responsable del seguimiento {i + 1}", options=opciones_seg,
+            key=f"asm_resp_seg_sel_{i}")
         if sel == "Otros":
             otro = st.text_input(
                 f"Nombre del responsable del seguimiento {i + 1}",
-                key=f"asm_resp_seg_otro_{i}",
-                placeholder="Nombre completo",
-            )
+                key=f"asm_resp_seg_otro_{i}", placeholder="Nombre completo")
             if otro.strip():
                 resp_seg_lista.append(otro.strip())
         elif sel:
             resp_seg_lista.append(sel)
-
-    # Quitar duplicados conservando el orden
     resp_seg_lista = list(dict.fromkeys(resp_seg_lista))
     resp_seg_str = json.dumps(resp_seg_lista, ensure_ascii=False) if resp_seg_lista else None
 
-    # Observaciones — "Ninguna" o texto libre ("Otros")
-    obs_opcion = st.selectbox(
-        "Observaciones", options=["Ninguna", "Otros"], key="asm_obs_opcion",
-    )
-    if obs_opcion == "Otros":
+    # --- Observaciones (Ninguna / Otro) ---
+    obs_opcion = st.selectbox("Observaciones", options=["Ninguna", "Otro"], key="asm_obs_opcion")
+    if obs_opcion == "Otro":
         observaciones = st.text_area("Detalle de la observación", key="asm_observaciones").strip() or "Ninguna"
     else:
         observaciones = "Ninguna"
+
+    # --- Cierre y seguimiento (default / Otro) ---
+    _CIERRE_DEFAULT = (
+        "Los asistentes expresan su conformidad con los compromisos señalados. "
+        "La Superintendencia de Competencia Económica realizará el seguimiento "
+        "técnico de los compromisos previamente establecidos."
+    )
+    cierre_opcion = st.selectbox(
+        "Cierre y seguimiento",
+        options=[_CIERRE_DEFAULT, "Otro"],
+        key="asm_cierre_opcion",
+    )
+    if cierre_opcion == "Otro":
+        cierre_seguimiento = st.text_area(
+            "Texto de cierre y seguimiento", key="asm_cierre_texto").strip() or _CIERRE_DEFAULT
+    else:
+        cierre_seguimiento = _CIERRE_DEFAULT
+
+    st.divider()
 
     if st.button("✅ Registrar Asamblea Productiva", type="primary", use_container_width=True):
         if num_asistentes <= 0:
@@ -827,9 +862,44 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
                     "responsable_seguimiento": resp_seg_str,
                     "estado_compromisos":      estado_global,
                     "observaciones":           observaciones,
+                    "hora_inicio":             hora_inicio_val.strftime("%H:%M"),
+                    "hora_cierre":             hora_cierre_val.strftime("%H:%M"),
+                    "antecedentes":            antecedentes.strip() or None,
+                    "objetivo":                objetivo.strip() or None,
+                    "temas_abordados":         temas_abordados.strip() or None,
+                    "cierre_seguimiento":      cierre_seguimiento,
                 })
+
+            from utils.acta_asamblea_pdf import generar_acta_asamblea_pdf
+            pdf_bytes = generar_acta_asamblea_pdf(
+                numero_reporte=numero,
+                year_reporte=date.today().year,
+                fecha=str(fecha_asamblea),
+                hora_inicio=hora_inicio_val.strftime("%H:%M"),
+                hora_cierre=hora_cierre_val.strftime("%H:%M"),
+                lugar_realizacion=lugar.strip(),
+                instituciones_invitadas=instituciones.strip(),
+                asociacion_agrupacion=asociacion.strip(),
+                tematica=tematica.strip(),
+                antecedentes=antecedentes.strip(),
+                objetivo=objetivo.strip(),
+                temas_abordados=temas_abordados.strip(),
+                compromisos=compromisos_lista,
+                observaciones=observaciones,
+                cierre_seguimiento=cierre_seguimiento,
+                responsables=responsables_lista,
+                responsable_seguimiento=resp_seg_lista,
+                num_asistentes=int(num_asistentes),
+                lineas_institucion=cfg["lineas_institucion"],
+                area_elaborado=cfg["area_elaborado"],
+            )
             st.success(f"✅ {_codigo_asamblea(numero)} registrada: **{int(num_asistentes)} participantes** el {fecha_asamblea}.")
-            st.rerun()
+            st.download_button(
+                "📄 Descargar Acta en PDF",
+                pdf_bytes,
+                file_name=f"Acta_Asamblea_Productiva_{numero:03d}.pdf",
+                mime="application/pdf",
+            )
 
     st.divider()
     st.subheader("Asambleas registradas en esta oficina")

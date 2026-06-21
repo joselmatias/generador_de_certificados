@@ -286,6 +286,12 @@ def insertar_asamblea_productiva(con: _Conn, datos: dict[str, Any]) -> int:
         "responsable_seguimiento": None,
         "estado_compromisos":      "Pendiente",
         "observaciones":           None,
+        "hora_inicio":             None,
+        "hora_cierre":             None,
+        "antecedentes":            None,
+        "objetivo":                None,
+        "temas_abordados":         None,
+        "cierre_seguimiento":      None,
         **datos,
     }
     row = con.execute(
@@ -293,11 +299,13 @@ def insertar_asamblea_productiva(con: _Conn, datos: dict[str, Any]) -> int:
         INSERT INTO asamblea_productiva (
             numero_reporte, oficina, fecha, num_asistentes, responsables, tematica,
             asociacion_agrupacion, lugar_realizacion, instituciones_invitadas,
-            acuerdos_compromisos, responsable_seguimiento, estado_compromisos, observaciones
+            acuerdos_compromisos, responsable_seguimiento, estado_compromisos, observaciones,
+            hora_inicio, hora_cierre, antecedentes, objetivo, temas_abordados, cierre_seguimiento
         ) VALUES (
             %(numero_reporte)s, %(oficina)s, %(fecha)s, %(num_asistentes)s, %(responsables)s, %(tematica)s,
             %(asociacion_agrupacion)s, %(lugar_realizacion)s, %(instituciones_invitadas)s,
-            %(acuerdos_compromisos)s, %(responsable_seguimiento)s, %(estado_compromisos)s, %(observaciones)s
+            %(acuerdos_compromisos)s, %(responsable_seguimiento)s, %(estado_compromisos)s, %(observaciones)s,
+            %(hora_inicio)s, %(hora_cierre)s, %(antecedentes)s, %(objetivo)s, %(temas_abordados)s, %(cierre_seguimiento)s
         )
         RETURNING id
         """,
