@@ -292,6 +292,9 @@ def insertar_asamblea_productiva(con: _Conn, datos: dict[str, Any]) -> int:
         "objetivo":                None,
         "temas_abordados":         None,
         "cierre_seguimiento":      None,
+        "contacto_nombre":         None,
+        "contacto_celular":        None,
+        "contacto_institucion":    None,
         **datos,
     }
     row = con.execute(
@@ -300,12 +303,14 @@ def insertar_asamblea_productiva(con: _Conn, datos: dict[str, Any]) -> int:
             numero_reporte, oficina, fecha, num_asistentes, responsables, tematica,
             asociacion_agrupacion, lugar_realizacion, instituciones_invitadas,
             acuerdos_compromisos, responsable_seguimiento, estado_compromisos, observaciones,
-            hora_inicio, hora_cierre, antecedentes, objetivo, temas_abordados, cierre_seguimiento
+            hora_inicio, hora_cierre, antecedentes, objetivo, temas_abordados, cierre_seguimiento,
+            contacto_nombre, contacto_celular, contacto_institucion
         ) VALUES (
             %(numero_reporte)s, %(oficina)s, %(fecha)s, %(num_asistentes)s, %(responsables)s, %(tematica)s,
             %(asociacion_agrupacion)s, %(lugar_realizacion)s, %(instituciones_invitadas)s,
             %(acuerdos_compromisos)s, %(responsable_seguimiento)s, %(estado_compromisos)s, %(observaciones)s,
-            %(hora_inicio)s, %(hora_cierre)s, %(antecedentes)s, %(objetivo)s, %(temas_abordados)s, %(cierre_seguimiento)s
+            %(hora_inicio)s, %(hora_cierre)s, %(antecedentes)s, %(objetivo)s, %(temas_abordados)s, %(cierre_seguimiento)s,
+            %(contacto_nombre)s, %(contacto_celular)s, %(contacto_institucion)s
         )
         RETURNING id
         """,

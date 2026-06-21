@@ -724,6 +724,16 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
 
     tematica = st.text_input("Tema tratado", key="asm_tematica")
 
+    # Datos de contacto (obligatorios)
+    st.markdown("**Datos de contacto** (obligatorios)")
+    dc1, dc2 = st.columns(2)
+    with dc1:
+        contacto_nombre = st.text_input("Nombres y apellidos del contacto", key="asm_contacto_nombre")
+    with dc2:
+        contacto_celular = st.text_input("Celular", key="asm_contacto_celular")
+    contacto_institucion = st.text_input(
+        "Nombre de la institución a la que pertenece", key="asm_contacto_inst")
+
     # Instituciones invitadas — campos separados
     st.markdown("**Instituciones invitadas**")
     num_inst = st.number_input(
@@ -907,6 +917,9 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
                     "objetivo":                objetivo.strip() or None,
                     "temas_abordados":         temas_abordados.strip() or None,
                     "cierre_seguimiento":      cierre_seguimiento,
+                    "contacto_nombre":         contacto_nombre.strip() or None,
+                    "contacto_celular":        contacto_celular.strip() or None,
+                    "contacto_institucion":    contacto_institucion.strip() or None,
                 })
 
             from utils.acta_asamblea_pdf import generar_acta_asamblea_pdf
