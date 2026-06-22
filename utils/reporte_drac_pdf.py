@@ -74,6 +74,19 @@ def _fecha_esp(fecha_iso: str) -> str:
         return fecha_iso
 
 
+def _es_rango_fecha(fecha_texto: str) -> bool:
+    return " al " in fecha_texto
+
+
+def _fecha_evento_esp(fecha_texto: str) -> str:
+    if not fecha_texto:
+        return ""
+    if _es_rango_fecha(fecha_texto):
+        inicio, fin = fecha_texto.split(" al ", 1)
+        return f"{_fecha_esp(inicio.strip())} al {_fecha_esp(fin.strip())}"
+    return _fecha_esp(fecha_texto)
+
+
 def _p(text: str, style: ParagraphStyle) -> Paragraph:
     return Paragraph(text, style)
 
@@ -319,9 +332,10 @@ def generar_reporte_drac(
             _filas_inst.append(("Provincia:", provincia))
         if canton:
             _filas_inst.append(("Cantón:", canton))
-        _filas_inst.append(
-            ("Fecha del evento:", _fecha_esp(fecha_evento) if fecha_evento else "")
-        )
+        _filas_inst.append((
+            "Fechas del evento:" if _es_rango_fecha(fecha_evento) else "Fecha del evento:",
+            _fecha_evento_esp(fecha_evento),
+        ))
         if hora_inicio or hora_fin:
             _filas_inst.append(("Horario:", f"{hora_inicio} a {hora_fin}".strip()))
         _filas_inst += [

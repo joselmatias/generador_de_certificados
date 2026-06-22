@@ -11,7 +11,7 @@ Estadísticas mensuales al pie de la página.
 from __future__ import annotations
 
 import json
-from datetime import date, time
+from datetime import date, time, timedelta
 
 import streamlit as st
 
@@ -193,19 +193,30 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
     else:
         tipo_evento_otro = ""
         tipo_evento = tipo_evento_sel
+    es_congreso = tipo_evento == "Congresos"
 
     st.divider()
 
     # Institución /asociación capacitada — tipo + nombre + condicionales
     st.markdown("#### Institución /asociación capacitada - Fecha - Modalidad - Tema:")
 
-    tipo_inst_sel = st.selectbox(
-        "Tipo de institución / asociación capacitada",
-        options=["Institución pública", "Institución Privada", "Asociación"],
-        index=None,
-        placeholder="Selecciona el tipo",
-        key="rep_tipo_institucion",
-    )
+    tipos_institucion_opts = ["Institución pública", "Institución Privada", "Asociación"]
+    if es_congreso:
+        tipos_inst_sel = st.multiselect(
+            "Tipo de institución / asociación capacitada",
+            options=tipos_institucion_opts,
+            placeholder="Selecciona uno o más tipos",
+            key="rep_tipo_institucion_multi",
+        )
+    else:
+        tipo_inst_unico = st.selectbox(
+            "Tipo de institución / asociación capacitada",
+            options=tipos_institucion_opts,
+            index=None,
+            placeholder="Selecciona el tipo",
+            key="rep_tipo_institucion",
+        )
+        tipos_inst_sel = [tipo_inst_unico] if tipo_inst_unico else []
 
     # Valores condicionales (se rellenan según el tipo elegido)
     institucion_invitada = ""
@@ -215,8 +226,10 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
     tipo_actividad_productiva = ""
     publico_objetivo_capacitado = ""
 
-    if tipo_inst_sel:
-        tipo_institucion = tipo_inst_sel
+    if tipos_inst_sel:
+        tipo_institucion = ", ".join(tipos_inst_sel)
+        incluye_asociacion = "Asociación" in tipos_inst_sel
+        incluye_no_asociacion = any(t != "Asociación" for t in tipos_inst_sel)
 
         # Nombre de la institución (siempre que haya un tipo elegido)
         institucion_invitada = st.text_input(
@@ -234,10 +247,10 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
         with ca2:
             contacto_celular = st.text_input("Celular", key="rep_contacto_celular")
 
-        if tipo_inst_sel == "Asociación":
+        if incluye_asociacion:
             tipo_actividad_productiva = st.text_input(
                 "Tipo de actividad productiva", key="rep_actividad_productiva")
-        else:
+        if incluye_no_asociacion:
             publico_objetivo_capacitado = st.text_input(
                 "Tipo de personal capacitado",
                 key="rep_publico_capacitado",
@@ -280,11 +293,24 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
             key="rep_modalidad",
         )
     with c2:
-        fecha_evento = st.date_input(
-            "Fecha del Evento",
-            value=date.today(),
-            key="rep_fecha_evento",
-            max_value=fecha_reporte,   # no puede ser posterior a la fecha del reporte
+        if es_congreso:
+            fecha_evento_val = st.date_input(
+                "Fechas del Evento",
+                value=(fecha_reporte - timedelta(days=1), fecha_reporte),
+                key="rep_fechas_evento",
+                max_value=fecha_reporte,   # no puede ser posterior a la fecha del reporte
+            )
+            fecha_evento_inicio, fecha_evento_fin = _normalizar_rango_fechas(fecha_evento_val)
+        else:
+            fecha_evento = st.date_input(
+                "Fecha del Evento",
+                value=date.today(),
+                key="rep_fecha_evento",
+                max_value=fecha_reporte,   # no puede ser posterior a la fecha del reporte
+            )
+            fecha_evento_inicio, fecha_evento_fin = fecha_evento, fecha_evento
+        fecha_evento_texto = _formatear_fecha_evento_para_guardar(
+            fecha_evento_inicio, fecha_evento_fin
         )
     tema = st.text_input("Tema", key="rep_tema")
 
@@ -297,7 +323,11 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
     hora_inicio_str = hora_inicio_val.strftime("%H:%M") if hora_inicio_val else ""
     hora_fin_str    = hora_fin_val.strftime("%H:%M") if hora_fin_val else ""
 
-    if fecha_evento > fecha_reporte:
+    if es_congreso and (not fecha_evento_inicio or not fecha_evento_fin):
+        st.warning("⚠️ Selecciona la fecha de inicio y fin del congreso.")
+    elif es_congreso and fecha_evento_inicio == fecha_evento_fin:
+        st.warning("⚠️ Para congresos, selecciona un rango de dos o más días.")
+    elif fecha_evento_fin and fecha_evento_fin > fecha_reporte:
         st.warning("⚠️ La fecha del evento no puede ser posterior a la fecha del reporte.")
 
     st.divider()
@@ -478,7 +508,7 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
         errores = _validar_campos_reporte(
             institucion_invitada, tema, capacitadores_lista, publico_objetivo, descripcion
         )
-        if not tipo_inst_sel:
+        if not tipos_inst_sel:
             errores.append("Selecciona el tipo de institución / asociación capacitada.")
         if tipo_evento_sel == "Otros" and not tipo_evento_otro:
             errores.append("Especifica el tipo de evento (opción 'Otros').")
@@ -491,19 +521,24 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
             errores.append("Selecciona la provincia.")
         if not canton:
             errores.append("Selecciona el cantón.")
-        if tipo_inst_sel:
+        if tipos_inst_sel:
             # Contacto obligatorio para los 3 tipos
             if not contacto_nombre.strip():
                 errores.append("Ingresa los nombres y apellidos del contacto.")
             cel = contacto_celular.strip()
             if not (cel.isdigit() and len(cel) == 10):
                 errores.append("El celular debe tener exactamente 10 dígitos numéricos.")
-            if tipo_inst_sel == "Asociación":
+            if "Asociación" in tipos_inst_sel:
                 if not tipo_actividad_productiva.strip():
                     errores.append("Ingresa el tipo de actividad productiva.")
-            elif not publico_objetivo_capacitado.strip():
+            if any(t != "Asociación" for t in tipos_inst_sel) and not publico_objetivo_capacitado.strip():
                 errores.append("El campo 'Tipo de personal capacitado' es obligatorio.")
-        if fecha_evento > fecha_reporte:
+        if es_congreso:
+            if not fecha_evento_inicio or not fecha_evento_fin:
+                errores.append("Selecciona la fecha de inicio y fin del congreso.")
+            elif fecha_evento_inicio == fecha_evento_fin:
+                errores.append("Para congresos, selecciona un rango de dos o más días.")
+        if fecha_evento_fin and fecha_evento_fin > fecha_reporte:
             errores.append("La fecha del evento no puede ser posterior a la fecha del reporte.")
         if errores:
             for e in errores:
@@ -525,7 +560,7 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
                     "contacto_celular":         contacto_celular,
                     "tipo_actividad_productiva": tipo_actividad_productiva,
                     "publico_objetivo_capacitado": publico_objetivo_capacitado,
-                    "fecha_evento":             str(fecha_evento),
+                    "fecha_evento":             fecha_evento_texto,
                     "hora_inicio":              hora_inicio_str,
                     "hora_fin":                 hora_fin_str,
                     "modalidad":                modalidad,
@@ -551,7 +586,7 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
                 fecha_reporte=str(fecha_reporte),
                 tipo_evento=tipo_evento,
                 institucion_invitada=institucion_invitada,
-                fecha_evento=str(fecha_evento),
+                fecha_evento=fecha_evento_texto,
                 hora_inicio=hora_inicio_str,
                 hora_fin=hora_fin_str,
                 modalidad=modalidad,
@@ -1197,6 +1232,31 @@ def _tab_estadisticas(oficina_id: str, oficina_nombre: str) -> None:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _normalizar_rango_fechas(valor) -> tuple[date | None, date | None]:
+    if isinstance(valor, (list, tuple)):
+        if not valor:
+            return None, None
+        inicio = valor[0]
+        fin = valor[1] if len(valor) > 1 else None
+        if inicio and fin and fin < inicio:
+            inicio, fin = fin, inicio
+        return inicio, fin
+    if isinstance(valor, date):
+        return valor, valor
+    return None, None
+
+
+def _formatear_fecha_evento_para_guardar(
+    inicio: date | None,
+    fin: date | None,
+) -> str:
+    if not inicio:
+        return ""
+    if fin and fin != inicio:
+        return f"{inicio.isoformat()} al {fin.isoformat()}"
+    return inicio.isoformat()
+
 
 def _validar_campos_reporte(
     institucion: str,
