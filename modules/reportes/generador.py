@@ -340,7 +340,7 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
     st.markdown("#### Nombre de los Capacitadores:")
     num_capacitadores = st.number_input(
         "¿Cuántos capacitadores participaron?",
-        min_value=1, max_value=10, value=1, step=1, key="rep_num_cap",
+        min_value=1, value=1, step=1, key="rep_num_cap",
     )
     capacitadores_lista: list[str] = []
     cols_cap = st.columns(min(int(num_capacitadores), 3))
