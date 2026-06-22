@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
+from xml.sax.saxutils import escape as _xml_esc
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -237,13 +238,6 @@ def generar_reporte_drac(
             leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
         )
 
-    def _nuevo_frame_reducido() -> Frame:
-        """Frame reducido: reserva espacio para firmas en última página."""
-        return Frame(
-            MARGIN_L, frame_bottom_last, ancho_util,
-            PAGE_H - frame_bottom_last - top_margin,
-            leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
-        )
 
     def _nueva_resp_table() -> Table:
         est  = _estilos()
@@ -368,33 +362,29 @@ def generar_reporte_drac(
         return elems
 
     # ------------------------------------------------------------------
-    # Medición de páginas — se cuenta el contenido con DOS frames:
-    #   - frame completo  → el contenido usa toda la altura (llena las hojas)
-    #   - frame reducido  → reserva el espacio de firmas al pie
-    # Comparando ambos conteos decidimos si las firmas caben al pie de la
-    # última hoja de contenido (comparten hoja, sin invadirse) o si necesitan
-    # una hoja propia al final.
+    # Medición: ¿las firmas caben al pie de la última hoja de contenido?
     # ------------------------------------------------------------------
-    def _contar_paginas(frame_factory) -> int:
+    def _contar_paginas(frame_factory, extra_elems=None) -> int:
         _pg = [0]
         def _on_pg(c, d): _pg[0] += 1
         buf = io.BytesIO()
         tmpl = PageTemplate(id="cnt", frames=[frame_factory()], onPage=_on_pg)
         doc  = BaseDocTemplate(buf, pagesize=A4, pageTemplates=[tmpl])
-        doc.build(_nuevos_elementos())
+        elems = _nuevos_elementos()
+        if extra_elems:
+            elems.extend(extra_elems)
+        doc.build(elems)
         return _pg[0]
 
-    n_full = _contar_paginas(_nuevo_frame)            # contenido a página completa
-    n_red  = _contar_paginas(_nuevo_frame_reducido)   # contenido reservando firmas
+    n_full = _contar_paginas(_nuevo_frame)
+    sig_reserve = frame_bottom_last - MARGIN_B
+    n_with_sig = _contar_paginas(_nuevo_frame, [Spacer(1, sig_reserve)])
 
-    # Si reservar el espacio de firmas NO añade páginas y ya hay ≥2 hojas, las
-    # firmas caben al pie de la última hoja de contenido (la comparten).
-    # En cualquier otro caso, las firmas van en una hoja dedicada al final.
-    if n_red == n_full and n_full >= 2:
+    if n_with_sig == n_full:
         total_pages = n_full
         dedicar_pagina = False
     else:
-        total_pages = n_full + 1          # ≥2 siempre (n_full ≥ 1)
+        total_pages = n_full + 1
         dedicar_pagina = True
 
     # ------------------------------------------------------------------
@@ -436,7 +426,7 @@ def _seccion_tabla(titulo: str, filas: list[tuple[str, str]],
     bloque = [_p(titulo, estilos["sec"])]
     tdata = [
         [_p(f"<b>{etq}</b>", estilos["etiq"]),
-         _p(val or "—",      estilos["valor"])]
+         _p(_xml_esc(val) if val else "—", estilos["valor"])]
         for etq, val in filas
     ]
     t = Table(tdata, colWidths=[3.8 * cm, ancho - 3.8 * cm])
@@ -471,6 +461,6 @@ def _seccion_parrafo(titulo: str, texto: str,
         leftIndent=2,
         rightIndent=2,
     )
-    texto_html = (texto or "—").replace("\n", "<br/>")
+    texto_html = _xml_esc(texto or "—").replace("\n", "<br/>")
     contenido_p = _p(texto_html, estilo_caja)
     return [titulo_p, contenido_p, Spacer(1, 0.25 * cm)]
