@@ -52,6 +52,14 @@ def get_connection() -> Generator[_Conn, None, None]:
         raw.close()
 
 
+_FECHA_EVENTO_INICIAL_SQL = (
+    "CASE "
+    "WHEN fecha_evento ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' "
+    "THEN substring(fecha_evento FROM 1 FOR 10)::date "
+    "END"
+)
+
+
 # ---------------------------------------------------------------------------
 # Capacitaciones
 # ---------------------------------------------------------------------------
@@ -245,10 +253,10 @@ def consultar_reportes_capacitacion(
         condiciones.append("oficina = %s")
         params.append(oficina)
     if anio:
-        condiciones.append("year_reporte = %s")
-        params.append(anio)
+        condiciones.append(f"to_char({_FECHA_EVENTO_INICIAL_SQL}, 'YYYY') = %s")
+        params.append(str(anio))
     if mes:
-        condiciones.append("to_char(fecha_reporte::date, 'MM') = %s")
+        condiciones.append(f"to_char({_FECHA_EVENTO_INICIAL_SQL}, 'MM') = %s")
         params.append(f"{mes:02d}")
 
     where = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
@@ -379,12 +387,12 @@ def estadisticas_mensuales(
         params_rep.append(oficina)
         params_asm.append(oficina)
     if anio:
-        condiciones_rep.append("year_reporte = %s")
+        condiciones_rep.append(f"to_char({_FECHA_EVENTO_INICIAL_SQL}, 'YYYY') = %s")
         condiciones_asm.append("to_char(fecha::date, 'YYYY') = %s")
-        params_rep.append(anio)
+        params_rep.append(str(anio))
         params_asm.append(str(anio))
     if mes:
-        condiciones_rep.append("to_char(fecha_reporte::date, 'MM') = %s")
+        condiciones_rep.append(f"to_char({_FECHA_EVENTO_INICIAL_SQL}, 'MM') = %s")
         condiciones_asm.append("to_char(fecha::date, 'MM') = %s")
         params_rep.append(f"{mes:02d}")
         params_asm.append(f"{mes:02d}")
@@ -404,9 +412,16 @@ def estadisticas_mensuales(
         params_asm,
     ).fetchone()
 
+    num_capacitaciones = r["cnt"] if r else 0
+    personas_capacitadas = r["personas"] if r else 0
+    num_asambleas = a["cnt"] if a else 0
+    personas_asambleas = a["personas"] if a else 0
+
     return {
-        "num_capacitaciones":        r["cnt"] if r else 0,
-        "personas_capacitadas":      r["personas"] if r else 0,
-        "num_asambleas":             a["cnt"] if a else 0,
-        "personas_asambleas":        a["personas"] if a else 0,
+        "num_capacitaciones":                 num_capacitaciones,
+        "personas_capacitadas":               personas_capacitadas,
+        "num_asambleas":                      num_asambleas,
+        "personas_asambleas":                 personas_asambleas,
+        "total_capacitados_incluye_asamblea": personas_capacitadas + personas_asambleas,
+        "num_capacitaciones_incluye_asamblea": num_capacitaciones + num_asambleas,
     }

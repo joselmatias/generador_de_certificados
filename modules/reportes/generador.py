@@ -1167,6 +1167,16 @@ def _tab_estadisticas(oficina_id: str, oficina_nombre: str) -> None:
     mes_label = f"{_MESES_ESP[int(mes_sel)]} {int(anio_sel)}"
     st.markdown(f"### Resultados — {label_oficina} · {mes_label}")
 
+    t1, t2 = st.columns(2)
+    t1.metric(
+        "Total de Capacitados (incluye asamblea)",
+        stats["total_capacitados_incluye_asamblea"],
+    )
+    t2.metric(
+        "Número de capacitaciones (incluye asamblea)",
+        stats["num_capacitaciones_incluye_asamblea"],
+    )
+
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Capacitaciones realizadas",     stats["num_capacitaciones"])
     c2.metric("Personas capacitadas",          stats["personas_capacitadas"])
@@ -1184,7 +1194,7 @@ def _tab_estadisticas(oficina_id: str, oficina_nombre: str) -> None:
         import pandas as pd
         df_r = pd.DataFrame([dict(r) for r in reportes])
         # Cuando se muestran todas las oficinas, incluir columna "oficina"
-        cols_base = ["numero_reporte", "fecha_reporte", "tipo_evento",
+        cols_base = ["numero_reporte", "fecha_evento", "tipo_evento",
                      "tema", "elaborado_por", "num_personas_capacitadas"]
         if es_master and oficina_filtro is None:
             cols_base = ["oficina"] + cols_base
@@ -1193,7 +1203,7 @@ def _tab_estadisticas(oficina_id: str, oficina_nombre: str) -> None:
             df_r[cols].rename(columns={
                 "oficina":                  "Oficina",
                 "numero_reporte":           "N.° Reporte",
-                "fecha_reporte":            "Fecha",
+                "fecha_evento":             "Fecha Evento",
                 "tipo_evento":              "Tipo",
                 "tema":                     "Tema",
                 "elaborado_por":            "Elaborado por",
