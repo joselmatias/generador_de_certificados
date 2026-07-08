@@ -1396,11 +1396,16 @@ def _tab_estadisticas(oficina_id: str, oficina_nombre: str) -> None:
             df_r[cols].rename(columns=_col_names),
             use_container_width=True, hide_index=True,
         )
-        if st.toggle("📋 Actividades por convenio", key="stats_filtro_convenio"):
-            df_conv = df_r[
-                df_r["corresponde_convenio"].notna() &
-                (df_r["corresponde_convenio"].astype(str).str.strip() != "")
-            ]
+        df_conv = df_r[
+            df_r["numero_convenio"].notna() &
+            (df_r["numero_convenio"].astype(str).str.strip() != "")
+        ]
+        _col_tog, _col_cnt = st.columns([4, 1])
+        with _col_tog:
+            _mostrar_conv = st.toggle("📋 Actividades por convenio", key="stats_filtro_convenio")
+        with _col_cnt:
+            st.metric("Por convenio", len(df_conv))
+        if _mostrar_conv:
             if not df_conv.empty:
                 st.markdown("**Capacitaciones vinculadas a convenio:**")
                 cols_conv = [c for c in cols if c in df_conv.columns]
