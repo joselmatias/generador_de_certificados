@@ -119,6 +119,7 @@ with st.sidebar:
     MODULOS_REGIONAL = {
         "📋 Capacitaciones — Carga":                    "cap_carga",
         "🎓 Capacitaciones — Certificados":             "cap_certificados",
+        "📜 Certificado Individual":                    "cert_individual",
         "🖥️ Capacitación Virtual":                      "cap_virtual",
         "📝 Generador de Reportes":                     "generador_reportes",
     }
@@ -157,6 +158,10 @@ if modulo_id == "cap_carga":
 elif modulo_id == "cap_certificados":
     from modules.capacitaciones.certificados import mostrar_certificados
     mostrar_certificados()
+
+elif modulo_id == "cert_individual":
+    from modules.capacitaciones.certificado_individual import mostrar_certificado_individual
+    mostrar_certificado_individual()
 
 elif modulo_id == "cap_virtual":
     from modules.capacitaciones.capacitacion_virtual import mostrar_capacitacion_virtual

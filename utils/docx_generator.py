@@ -47,6 +47,9 @@ def generar_certificado_docx(
     nombre_curso: str,
     fecha_capacitacion: str,
     codigo_certificado: str,
+    ciudad: str = "",
+    duracion: str = "",
+    texto_participacion: str = "",
 ) -> bytes:
     """
     Genera un certificado .docx rellenando la plantilla Word con los datos
@@ -71,6 +74,9 @@ def generar_certificado_docx(
         "xxxxxx":                               xml_escape(dia_mes),
         "de 2025":                              xml_escape(f"de {anio}"),
         _CURSO_PLANTILLA:                       xml_escape(nombre_curso),
+        "«ciudad»":                             xml_escape(ciudad),
+        "«duracion»":                           xml_escape(duracion),
+        "«texto_participacion»":                xml_escape(texto_participacion),
     }
 
     with open(_TEMPLATE, "rb") as f:
@@ -98,6 +104,9 @@ def generar_certificado_pdf(
     nombre_curso: str,
     fecha_capacitacion: str,
     codigo_certificado: str,
+    ciudad: str = "",
+    duracion: str = "",
+    texto_participacion: str = "",
 ) -> bytes:
     """
     Genera un certificado PDF convirtiendo la plantilla Word rellenada.
@@ -113,6 +122,9 @@ def generar_certificado_pdf(
         nombre_curso=nombre_curso,
         fecha_capacitacion=fecha_capacitacion,
         codigo_certificado=codigo_certificado,
+        ciudad=ciudad,
+        duracion=duracion,
+        texto_participacion=texto_participacion,
     )
 
     with tempfile.TemporaryDirectory() as tmpdir:

@@ -6,11 +6,15 @@ Flujo:
 2. forms_parser mapea y valida cada registro.
 3. Se muestra resumen de válidos vs. errores.
 4. Usuario ingresa el nombre del curso (aplica a todo el lote).
-5. Se detectan duplicados antes de insertar (advertencia, no bloqueo).
-6. Botón confirmar → insertar registros válidos en SQLite.
+5. Usuario selecciona la(s) fecha(s) del evento (reemplaza fecha del CSV).
+6. Se detectan duplicados antes de insertar (advertencia, no bloqueo).
+7. Botón confirmar → insertar registros válidos en la BD.
+8. Batch guardado en session state para transferir a Certificados.
 """
 
 import io
+from datetime import date
+
 import streamlit as st
 import pandas as pd
 
@@ -21,6 +25,13 @@ from utils.forms_parser import parsear_forms, registros_a_dataframe, RegistroPro
 
 _KEY_RESULTADO = "cap_upload_resultado"
 _KEY_CURSO     = "cap_upload_curso"
+_KEY_BATCH     = "cap_batch_listo"
+
+_MESES_ES = {
+    1: "enero", 2: "febrero", 3: "marzo", 4: "abril",
+    5: "mayo", 6: "junio", 7: "julio", 8: "agosto",
+    9: "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre",
+}
 
 
 def mostrar_carga() -> None:
@@ -55,17 +66,45 @@ def mostrar_carga() -> None:
     )
 
     # ------------------------------------------------------------------
-    # PASO 3: Parsear y validar
+    # PASO 3: Fecha(s) del evento
+    # ------------------------------------------------------------------
+    st.subheader("3. Fecha(s) del evento")
+    fechas_sel = st.date_input(
+        "Selecciona el día o rango de días del evento",
+        value=(),
+        min_value=date(2024, 1, 1),
+        max_value=date(2030, 12, 31),
+        key="cap_upload_fecha",
+    )
+    fecha_inicio: date | None = fechas_sel[0] if fechas_sel else None
+    fecha_fin:   date | None = fechas_sel[-1] if fechas_sel else None
+
+    if fecha_inicio and fecha_fin and fecha_inicio != fecha_fin:
+        fecha_evento_str = (
+            f"{fecha_inicio.day} al {fecha_fin.day} de "
+            f"{_MESES_ES[fecha_fin.month]} de {fecha_fin.year}"
+        )
+        fecha_capacitacion_iso = fecha_inicio.isoformat()
+    elif fecha_inicio:
+        fecha_evento_str = (
+            f"{fecha_inicio.day} de {_MESES_ES[fecha_inicio.month]} de {fecha_inicio.year}"
+        )
+        fecha_capacitacion_iso = fecha_inicio.isoformat()
+    else:
+        fecha_evento_str = fecha_capacitacion_iso = None
+
+    # ------------------------------------------------------------------
+    # PASO 4: Parsear y validar
     # ------------------------------------------------------------------
     col_parsear, _ = st.columns([1, 3])
     with col_parsear:
         boton_parsear = st.button(
             "Validar archivo",
-            disabled=(archivo is None or not nombre_curso.strip()),
+            disabled=(archivo is None or not nombre_curso.strip() or fecha_inicio is None),
             use_container_width=True,
         )
 
-    if boton_parsear and archivo and nombre_curso.strip():
+    if boton_parsear and archivo and nombre_curso.strip() and fecha_inicio:
         with st.spinner("Procesando archivo..."):
             try:
                 resultado = parsear_forms(
@@ -80,14 +119,20 @@ def mostrar_carga() -> None:
                 return
 
     # ------------------------------------------------------------------
-    # PASO 4: Mostrar resultado de validación
+    # PASO 5: Mostrar resultado de validación
     # ------------------------------------------------------------------
     resultado = st.session_state.get(_KEY_RESULTADO)
     if resultado is None:
         return
 
+    # Inyectar fechas del evento seleccionadas en cada registro (cada render)
+    if fecha_capacitacion_iso:
+        for reg in resultado.validos:
+            reg.datos["fecha_capacitacion"] = fecha_capacitacion_iso
+            reg.datos["fecha_evento"]       = fecha_evento_str
+
     st.divider()
-    st.subheader("3. Resultado de validación")
+    st.subheader("4. Resultado de validación")
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Total de filas", resultado.total_filas)
@@ -133,11 +178,11 @@ def mostrar_carga() -> None:
             )
 
     # ------------------------------------------------------------------
-    # PASO 5: Detectar duplicados
+    # PASO 6: Detectar duplicados
     # ------------------------------------------------------------------
     if resultado.validos:
         st.divider()
-        st.subheader("4. Verificación de duplicados")
+        st.subheader("5. Verificación de duplicados")
 
         duplicados: list[RegistroProcesado] = []
         nuevos: list[RegistroProcesado] = []
@@ -174,17 +219,17 @@ def mostrar_carga() -> None:
         st.info(f"**{len(nuevos)} registros nuevos** listos para insertar.")
 
         # ------------------------------------------------------------------
-        # PASO 6: Confirmar inserción
+        # PASO 7: Confirmar inserción
         # ------------------------------------------------------------------
         if nuevos:
             st.divider()
-            st.subheader("5. Confirmar carga")
+            st.subheader("6. Confirmar carga")
 
             if st.button(
                 f"✅ Insertar {len(nuevos)} registros en la base de datos",
                 type="primary",
             ):
-                insertados, errores_insercion = _insertar_lote(nuevos)
+                insertados, insertados_dicts, errores_insercion = _insertar_lote(nuevos)
 
                 if errores_insercion:
                     st.warning(f"Se insertaron {insertados} registros. {len(errores_insercion)} fallaron.")
@@ -196,30 +241,42 @@ def mostrar_carga() -> None:
                         f"✅ {insertados} registros insertados correctamente en la oficina **{oficina}**."
                     )
 
+                if insertados > 0:
+                    st.session_state[_KEY_BATCH] = {
+                        "records":        insertados_dicts,
+                        "nombre_evento":  nombre_curso.strip(),
+                        "fecha_evento":   fecha_evento_str or "",
+                        "fecha_inicio":   fecha_capacitacion_iso or "",
+                        "oficina":        oficina,
+                        "oficina_nombre": st.session_state.get("oficina_nombre", oficina),
+                    }
+
                 del st.session_state[_KEY_RESULTADO]
                 st.balloons()
         else:
             st.info("No hay registros nuevos para insertar (todos son duplicados).")
 
 
-def _insertar_lote(registros: list[RegistroProcesado]) -> tuple[int, list[str]]:
+def _insertar_lote(registros: list[RegistroProcesado]) -> tuple[int, list[dict], list[str]]:
     """
     Inserta un lote de registros válidos. Continúa si uno falla.
 
     Returns:
-        Tupla (cantidad_insertados, lista_de_errores).
+        Tupla (cantidad_insertados, registros_con_codigo_asignado, lista_de_errores).
     """
-    insertados = 0
+    insertados_count = 0
+    insertados_dicts: list[dict] = []
     errores: list[str] = []
 
     with get_connection() as con:
         for reg in registros:
             try:
-                insertar_capacitacion(con, reg.datos.copy())
-                insertados += 1
+                insertar_capacitacion(con, reg.datos)
+                insertados_count += 1
+                insertados_dicts.append(reg.datos.copy())
             except Exception as e:
                 nombre = reg.datos.get("nombre", "?")
                 cedula = reg.datos.get("cedula", "?")
                 errores.append(f"Fila {reg.fila_original} ({nombre} / {cedula}): {e}")
 
-    return insertados, errores
+    return insertados_count, insertados_dicts, errores

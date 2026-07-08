@@ -66,10 +66,11 @@ _FECHA_EVENTO_INICIAL_SQL = (
 
 def obtener_siguiente_codigo_certificado(con: _Conn, year: int) -> str:
     """
-    Genera el siguiente código de certificado con formato AGM-CAP-YYYY-NNNN.
+    Genera el siguiente código de certificado con formato DRAC-YYYY-NNNN.
     La secuencia es global (no por oficina) y atómica dentro de la transacción.
+    La numeración parte de 1676 (histórico).
     """
-    prefix = f"AGM-CAP-{year}-"
+    prefix = f"DRAC-{year}-"
     row = con.execute(
         """
         SELECT COUNT(*) AS total
@@ -78,8 +79,8 @@ def obtener_siguiente_codigo_certificado(con: _Conn, year: int) -> str:
         """,
         (f"{prefix}%",),
     ).fetchone()
-    siguiente = (row["total"] if row else 0) + 1
-    return f"{prefix}{siguiente:04d}"
+    siguiente = (row["total"] if row else 0) + 1676
+    return f"{prefix}{siguiente}"
 
 
 def insertar_capacitacion(con: _Conn, registro: dict[str, Any]) -> int:
@@ -93,6 +94,8 @@ def insertar_capacitacion(con: _Conn, registro: dict[str, Any]) -> int:
     from datetime import date
     year = date.today().year
 
+    registro.setdefault("fecha_evento", None)
+
     if not registro.get("codigo_certificado"):
         registro["codigo_certificado"] = obtener_siguiente_codigo_certificado(con, year)
 
@@ -100,14 +103,14 @@ def insertar_capacitacion(con: _Conn, registro: dict[str, Any]) -> int:
         """
         INSERT INTO capacitaciones (
             oficina, timestamp_forms, nombre, email, cedula,
-            fecha_capacitacion, institucion, provincia, nombre_curso,
+            fecha_capacitacion, fecha_evento, institucion, provincia, nombre_curso,
             codigo_certificado, p1_conocimiento, p2_inquietudes,
             p3_contenido, p4_presencialidad, p5_puntualidad,
             p6_logistica, p7_duracion, temas_adicionales, sugerencias,
             registrado_por
         ) VALUES (
             %(oficina)s, %(timestamp_forms)s, %(nombre)s, %(email)s, %(cedula)s,
-            %(fecha_capacitacion)s, %(institucion)s, %(provincia)s, %(nombre_curso)s,
+            %(fecha_capacitacion)s, %(fecha_evento)s, %(institucion)s, %(provincia)s, %(nombre_curso)s,
             %(codigo_certificado)s, %(p1_conocimiento)s, %(p2_inquietudes)s,
             %(p3_contenido)s, %(p4_presencialidad)s, %(p5_puntualidad)s,
             %(p6_logistica)s, %(p7_duracion)s, %(temas_adicionales)s, %(sugerencias)s,
@@ -191,6 +194,23 @@ def listar_cursos(con: _Conn, oficina: str | None = None) -> list[str]:
             "SELECT DISTINCT nombre_curso FROM capacitaciones ORDER BY nombre_curso"
         ).fetchall()
     return [f["nombre_curso"] for f in filas]
+
+
+def insertar_lote_certificado(con: _Conn, datos: dict[str, Any]) -> int:
+    """Registra un lote de generación de certificados. Devuelve el id insertado."""
+    row = con.execute(
+        """
+        INSERT INTO lotes_certificados
+            (oficina, nombre_evento, fecha_evento, num_participantes,
+             codigo_inicio, codigo_fin, generado_por, numero_reporte_vinculado)
+        VALUES (%(oficina)s, %(nombre_evento)s, %(fecha_evento)s,
+                %(num_participantes)s, %(codigo_inicio)s, %(codigo_fin)s,
+                %(generado_por)s, %(numero_reporte_vinculado)s)
+        RETURNING id
+        """,
+        datos,
+    ).fetchone()
+    return row["id"] if row else -1
 
 
 # ---------------------------------------------------------------------------

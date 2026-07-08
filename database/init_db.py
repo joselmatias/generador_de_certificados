@@ -179,6 +179,21 @@ CREATE TABLE IF NOT EXISTS contador_asamblea (
 );
 """
 
+_DDL_LOTES_CERTIFICADOS = """
+CREATE TABLE IF NOT EXISTS lotes_certificados (
+    id                        SERIAL PRIMARY KEY,
+    oficina                   TEXT NOT NULL,
+    nombre_evento             TEXT NOT NULL,
+    fecha_evento              TEXT NOT NULL,
+    num_participantes         INTEGER NOT NULL DEFAULT 0,
+    codigo_inicio             TEXT,
+    codigo_fin                TEXT,
+    generado_por              TEXT,
+    numero_reporte_vinculado  INTEGER,
+    fecha_generacion          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
 # Índices para mejorar rendimiento de consultas frecuentes
 _INDICES = [
     "CREATE INDEX IF NOT EXISTS idx_cap_oficina ON capacitaciones(oficina);",
@@ -212,6 +227,7 @@ def init_db() -> None:
                 cur.execute(_DDL_ASAMBLEA_PRODUCTIVA)
                 cur.execute(_DDL_CONTADOR_REPORTE)
                 cur.execute(_DDL_CONTADOR_ASAMBLEA)
+                cur.execute(_DDL_LOTES_CERTIFICADOS)
                 cur.execute(
                     "INSERT INTO contador_reporte (id, ultimo_numero) VALUES (1, 83) "
                     "ON CONFLICT (id) DO NOTHING"
@@ -265,6 +281,10 @@ def init_db() -> None:
                 cur.execute(
                     "ALTER TABLE asamblea_productiva "
                     "ADD COLUMN IF NOT EXISTS estado_compromisos TEXT DEFAULT 'Pendiente'"
+                )
+                # Migración: nueva columna en capacitaciones para fecha textual del evento
+                cur.execute(
+                    "ALTER TABLE capacitaciones ADD COLUMN IF NOT EXISTS fecha_evento TEXT"
                 )
                 for idx in _INDICES:
                     cur.execute(idx)
