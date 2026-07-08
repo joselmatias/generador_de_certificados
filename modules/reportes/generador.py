@@ -445,13 +445,15 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
         key="rep_obs_sel",
         label_visibility="collapsed",
     )
+    obs_otro_texto = ""
     if obs_sel == "Otros":
-        observaciones = st.text_area(
+        obs_otro_texto = st.text_area(
             "Detalle la observación",
             key="rep_obs_otro",
             height=80,
             placeholder="Escribe la observación...",
-        ).strip() or "Ninguna"
+        ).strip()
+        observaciones = obs_otro_texto or "Ninguna"
     else:
         observaciones = "Ninguna"
 
@@ -465,6 +467,7 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
         label_visibility="collapsed",
     )
     items_adj = [m for m in adj_sel if m != "Otros"]
+    extra_adj = ""
     if "Otros" in adj_sel:
         extra_adj = st.text_area(
             "Otros medios (uno por línea)",
@@ -506,7 +509,8 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
     if st.button("📄 Generar Reporte de Capacitaciones", type="primary",
                  use_container_width=True, disabled=ya_generado):
         errores = _validar_campos_reporte(
-            institucion_invitada, tema, capacitadores_lista, publico_objetivo, descripcion
+            institucion_invitada if tipos_inst_sel else "omitido",
+            tema, capacitadores_lista, publico_objetivo, descripcion
         )
         if not tipos_inst_sel:
             errores.append("Selecciona el tipo de institución / asociación capacitada.")
@@ -540,6 +544,23 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
                 errores.append("Para congresos, selecciona un rango de dos o más días.")
         if fecha_evento_fin and fecha_evento_fin > fecha_reporte:
             errores.append("La fecha del evento no puede ser posterior a la fecha del reporte.")
+        errores.extend(_validar_campos_reporte_adicionales({
+            "capacitadores": capacitadores_lista,
+            "num_capacitadores": int(num_capacitadores),
+            "fecha_reporte": fecha_reporte,
+            "modalidad": modalidad,
+            "hora_inicio": hora_inicio_str,
+            "hora_fin": hora_fin_str,
+            "elaborado_por": elaborado_por,
+            "elaborado_sel": elaborado_sel,
+            "obs_sel": obs_sel,
+            "obs_otro_texto": obs_otro_texto,
+            "adj_sel": adj_sel,
+            "extra_adj": extra_adj,
+            "items_adj": items_adj,
+            "num_personas": int(num_personas),
+            "encuestas_realizadas": int(encuestas_realizadas),
+        }))
         if errores:
             for e in errores:
                 st.error(e)
@@ -683,6 +704,31 @@ def _fmt_responsables(v) -> str:
     return str(v)
 
 
+def _lista_desde_json_texto(v) -> list[str]:
+    """Lee listas guardadas como JSON y tolera texto plano historico."""
+    if not v:
+        return []
+    try:
+        val = json.loads(v)
+        if isinstance(val, list):
+            return [str(x).strip() for x in val if str(x).strip()]
+    except (ValueError, TypeError):
+        pass
+
+    texto = str(v).strip()
+    if not texto:
+        return []
+    for sep in (";", " / "):
+        if sep in texto:
+            return [p.strip() for p in texto.split(sep) if p.strip()]
+    return [texto]
+
+
+def _join_lista_guardada(v, sep: str = "; ") -> str:
+    """Devuelve una lista JSON/texto como cadena lista para imprimir en PDF."""
+    return sep.join(_lista_desde_json_texto(v))
+
+
 def _parse_compromisos(v) -> list[dict]:
     """Devuelve la lista de compromisos [{'texto','estado'}] tolerando texto plano viejo."""
     if not v:
@@ -693,10 +739,15 @@ def _parse_compromisos(v) -> list[dict]:
             out = []
             for c in val:
                 if isinstance(c, dict) and c.get("texto"):
-                    out.append({
-                        "texto":  str(c["texto"]),
-                        "estado": c.get("estado") or "Pendiente",
-                    })
+                    item = dict(c)
+                    item["texto"] = str(c["texto"])
+                    item["estado"] = str(c.get("estado") or "Pendiente")
+                    item["institucion"] = str(c.get("institucion") or "")
+                    item["funcionario_seguimiento"] = str(
+                        c.get("funcionario_seguimiento") or ""
+                    )
+                    item["fecha_tentativa"] = str(c.get("fecha_tentativa") or "")
+                    out.append(item)
                 elif isinstance(c, str) and c.strip():
                     out.append({"texto": c.strip(), "estado": "Pendiente"})
             return out
@@ -717,6 +768,49 @@ def _estado_global_compromisos(comps: list[dict]) -> str:
     if not comps:
         return "Cumplido"
     return "Pendiente" if any(c.get("estado") != "Cumplido" for c in comps) else "Cumplido"
+
+
+def _year_asamblea(acta: dict) -> int:
+    """Infiere el anio del acta desde la fecha guardada."""
+    for campo in ("fecha", "fecha_registro"):
+        valor = str(acta.get(campo) or "")
+        if len(valor) >= 4 and valor[:4].isdigit():
+            return int(valor[:4])
+    return date.today().year
+
+
+def _generar_pdf_asamblea_desde_registro(acta: dict, cfg: dict) -> bytes:
+    """Reconstruye el PDF de un acta productiva guardada en la base."""
+    from utils.acta_asamblea_pdf import generar_acta_asamblea_pdf
+
+    numero = acta.get("numero_reporte")
+    if numero is None:
+        raise ValueError("el acta no tiene numero de reporte guardado")
+
+    return generar_acta_asamblea_pdf(
+        numero_reporte=int(numero),
+        year_reporte=_year_asamblea(acta),
+        fecha=str(acta.get("fecha") or ""),
+        hora_inicio=str(acta.get("hora_inicio") or ""),
+        hora_cierre=str(acta.get("hora_cierre") or ""),
+        lugar_realizacion=str(acta.get("lugar_realizacion") or ""),
+        instituciones_invitadas=_join_lista_guardada(acta.get("instituciones_invitadas")),
+        asociacion_agrupacion=str(acta.get("asociacion_agrupacion") or ""),
+        tematica=str(acta.get("tematica") or ""),
+        antecedentes=str(acta.get("antecedentes") or ""),
+        objetivo=str(acta.get("objetivo") or ""),
+        temas_abordados=str(acta.get("temas_abordados") or ""),
+        compromisos=_parse_compromisos(acta.get("acuerdos_compromisos")),
+        observaciones=str(acta.get("observaciones") or "Ninguna."),
+        cierre_seguimiento=str(acta.get("cierre_seguimiento") or ""),
+        responsables=_lista_desde_json_texto(acta.get("responsables")),
+        responsable_seguimiento=_lista_desde_json_texto(
+            acta.get("responsable_seguimiento")
+        ),
+        num_asistentes=int(acta.get("num_asistentes") or 0),
+        lineas_institucion=cfg["lineas_institucion"],
+        area_elaborado=cfg["area_elaborado"],
+    )
 
 
 def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
@@ -836,6 +930,7 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
         min_value=1, max_value=15, value=1, step=1, key="asm_num_comp",
     )
     compromisos_lista: list[dict] = []
+    compromisos_campos: list[dict] = []
     for i in range(int(num_compromisos)):
         st.markdown(f"**Compromiso {i + 1}**")
         cc1, cc2 = st.columns([3, 1])
@@ -863,6 +958,14 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
         with cd3:
             fecha_tent = st.date_input(
                 "Fecha tentativa", key=f"asm_comp_fecha_{i}", value=None)
+        compromisos_campos.append({
+            "texto": texto_comp,
+            "estado": estado_comp,
+            "institucion": inst_comp,
+            "institucion_sel": inst_sel,
+            "funcionario_seguimiento": func_comp,
+            "fecha_tentativa": fecha_tent,
+        })
         if texto_comp.strip():
             compromisos_lista.append({
                 "texto": texto_comp.strip(),
@@ -885,10 +988,12 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
     )
     opciones_seg = (responsables_lista or []) + ["Otros"]
     resp_seg_lista: list[str] = []
+    resp_seg_campos: list[dict] = []
     for i in range(int(num_resp_seg)):
         sel = st.selectbox(
             f"Responsable del seguimiento {i + 1}", options=opciones_seg,
             key=f"asm_resp_seg_sel_{i}")
+        otro = ""
         if sel == "Otros":
             otro = st.text_input(
                 f"Nombre del responsable del seguimiento {i + 1}",
@@ -897,6 +1002,7 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
                 resp_seg_lista.append(otro.strip())
         elif sel:
             resp_seg_lista.append(sel)
+        resp_seg_campos.append({"seleccion": sel, "otro": otro})
     resp_seg_lista = list(dict.fromkeys(resp_seg_lista))
     resp_seg_str = json.dumps(resp_seg_lista, ensure_ascii=False) if resp_seg_lista else None
 
@@ -944,7 +1050,40 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
             st.session_state.pop("asm_num_registrado", None)
             st.rerun()
     elif st.button("✅ Registrar Asamblea Productiva", type="primary", use_container_width=True):
-        if num_asistentes <= 0:
+        errores_asamblea = _validar_campos_asamblea({
+            "fecha_asamblea": fecha_asamblea,
+            "num_asistentes": int(num_asistentes),
+            "hora_inicio": hora_inicio_val,
+            "hora_cierre": hora_cierre_val,
+            "asociacion": asociacion,
+            "lugar": lugar,
+            "provincia": asm_provincia,
+            "canton": asm_canton,
+            "parroquia": asm_parroquia,
+            "tematica": tematica,
+            "contacto_nombre": contacto_nombre,
+            "contacto_celular": contacto_celular,
+            "contacto_institucion": contacto_institucion,
+            "num_inst": int(num_inst),
+            "instituciones": instituciones_lista,
+            "num_responsables": int(num_responsables),
+            "responsables": responsables_lista,
+            "antecedentes": antecedentes,
+            "objetivo": objetivo,
+            "temas_abordados": temas_abordados,
+            "num_compromisos": int(num_compromisos),
+            "compromisos_campos": compromisos_campos,
+            "num_resp_seg": int(num_resp_seg),
+            "resp_seg_campos": resp_seg_campos,
+            "obs_opcion": obs_opcion,
+            "observaciones_detalle": st.session_state.get("asm_observaciones", ""),
+            "cierre_opcion": cierre_opcion,
+            "cierre_texto": st.session_state.get("asm_cierre_texto", ""),
+        })
+        if errores_asamblea:
+            for e in errores_asamblea:
+                st.error(e)
+        elif num_asistentes <= 0:
             st.error("Ingresa un número de participantes mayor a 0.")
         elif not responsables_lista:
             st.error("Ingresa al menos un responsable.")
@@ -1050,6 +1189,45 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
             }),
             use_container_width=True, hide_index=True,
         )
+
+        descargables = [
+            dict(a) for a in asambleas
+            if dict(a).get("numero_reporte") is not None
+        ]
+        if descargables:
+            st.markdown("**Descargar PDF de un acta registrada**")
+            opciones_pdf = {}
+            for a in descargables:
+                etiqueta = (
+                    f"{_codigo_asamblea(a.get('numero_reporte'))} - "
+                    f"{a.get('fecha') or 'sin fecha'} - "
+                    f"{a.get('tematica') or 'sin tema'}"
+                )
+                if etiqueta in opciones_pdf:
+                    etiqueta = f"{etiqueta} (ID {a.get('id')})"
+                opciones_pdf[etiqueta] = a
+
+            sel_pdf = st.selectbox(
+                "Acta registrada",
+                options=list(opciones_pdf.keys()),
+                key="asm_pdf_hist_sel",
+            )
+            acta_pdf = opciones_pdf[sel_pdf]
+            try:
+                pdf_hist = _generar_pdf_asamblea_desde_registro(acta_pdf, cfg)
+                numero_pdf = int(acta_pdf["numero_reporte"])
+                st.download_button(
+                    "Descargar PDF",
+                    pdf_hist,
+                    file_name=f"Acta_Asamblea_Productiva_{numero_pdf:03d}.pdf",
+                    mime="application/pdf",
+                    key=f"asm_pdf_hist_dl_{acta_pdf.get('id')}",
+                )
+            except Exception as exc:
+                st.error(
+                    f"No se pudo generar el PDF de "
+                    f"{_codigo_asamblea(acta_pdf.get('numero_reporte'))}: {exc}"
+                )
     else:
         st.info("Aún no hay asambleas registradas para esta oficina.")
 
@@ -1087,7 +1265,7 @@ def _tab_asamblea_productiva(oficina_id: str, oficina_nombre: str) -> None:
 
         if st.button("💾 Guardar estado de compromisos", type="primary", key="asm_guardar_comp"):
             comps_actualizados = [
-                {"texto": c["texto"], "estado": nuevos_estados[j]}
+                {**c, "estado": nuevos_estados[j]}
                 for j, c in enumerate(comps)
             ]
             estado_overall = _estado_global_compromisos(comps_actualizados)
@@ -1194,23 +1372,44 @@ def _tab_estadisticas(oficina_id: str, oficina_nombre: str) -> None:
         import pandas as pd
         df_r = pd.DataFrame([dict(r) for r in reportes])
         # Cuando se muestran todas las oficinas, incluir columna "oficina"
-        cols_base = ["numero_reporte", "fecha_evento", "tipo_evento",
-                     "tema", "elaborado_por", "num_personas_capacitadas"]
+        cols_base = [
+            "numero_reporte", "fecha_evento", "tipo_evento",
+            "tema", "elaborado_por", "num_personas_capacitadas",
+            "institucion_invitada", "numero_convenio", "convenio_contraparte",
+        ]
         if es_master and oficina_filtro is None:
             cols_base = ["oficina"] + cols_base
         cols = [c for c in cols_base if c in df_r.columns]
+        _col_names = {
+            "oficina":                  "Oficina",
+            "numero_reporte":           "N.° Reporte",
+            "fecha_evento":             "Fecha Evento",
+            "tipo_evento":              "Tipo",
+            "tema":                     "Tema",
+            "elaborado_por":            "Elaborado por",
+            "num_personas_capacitadas": "Personas",
+            "institucion_invitada":     "Institución",
+            "numero_convenio":          "N.° Convenio",
+            "convenio_contraparte":     "Contraparte",
+        }
         st.dataframe(
-            df_r[cols].rename(columns={
-                "oficina":                  "Oficina",
-                "numero_reporte":           "N.° Reporte",
-                "fecha_evento":             "Fecha Evento",
-                "tipo_evento":              "Tipo",
-                "tema":                     "Tema",
-                "elaborado_por":            "Elaborado por",
-                "num_personas_capacitadas": "Personas",
-            }),
+            df_r[cols].rename(columns=_col_names),
             use_container_width=True, hide_index=True,
         )
+        if st.toggle("📋 Actividades por convenio", key="stats_filtro_convenio"):
+            df_conv = df_r[
+                df_r["corresponde_convenio"].notna() &
+                (df_r["corresponde_convenio"].astype(str).str.strip() != "")
+            ]
+            if not df_conv.empty:
+                st.markdown("**Capacitaciones vinculadas a convenio:**")
+                cols_conv = [c for c in cols if c in df_conv.columns]
+                st.dataframe(
+                    df_conv[cols_conv].rename(columns=_col_names),
+                    use_container_width=True, hide_index=True,
+                )
+            else:
+                st.info("No hay capacitaciones por convenio en el período seleccionado.")
     else:
         st.info("No hay capacitaciones en el período seleccionado.")
 
@@ -1266,6 +1465,133 @@ def _formatear_fecha_evento_para_guardar(
     if fin and fin != inicio:
         return f"{inicio.isoformat()} al {fin.isoformat()}"
     return inicio.isoformat()
+
+
+def _texto_vacio(valor) -> bool:
+    return not str(valor or "").strip()
+
+
+def _lineas_no_vacias(valor: str) -> list[str]:
+    return [ln.strip() for ln in str(valor or "").splitlines() if ln.strip()]
+
+
+def _validar_campos_reporte_adicionales(ctx: dict) -> list[str]:
+    errores = []
+
+    if not ctx.get("fecha_reporte"):
+        errores.append("Selecciona la fecha del reporte.")
+    if _texto_vacio(ctx.get("modalidad")):
+        errores.append("Selecciona la modalidad.")
+    if _texto_vacio(ctx.get("hora_inicio")):
+        errores.append("Selecciona la hora de inicio.")
+    if _texto_vacio(ctx.get("hora_fin")):
+        errores.append("Selecciona la hora de fin.")
+
+    capacitadores = ctx.get("capacitadores") or []
+    num_capacitadores = int(ctx.get("num_capacitadores") or 0)
+    if capacitadores and len(capacitadores) < num_capacitadores:
+        errores.append("Completa todos los campos de capacitadores declarados.")
+
+    elaborado_sel = str(ctx.get("elaborado_sel") or "")
+    elaborado_por = str(ctx.get("elaborado_por") or "")
+    if elaborado_sel == "Otro" and _texto_vacio(elaborado_por):
+        errores.append("Ingresa el nombre de quien elaboro el reporte.")
+    elif _texto_vacio(elaborado_por) or elaborado_por.startswith("("):
+        errores.append("Selecciona quien elaboro el reporte.")
+
+    if ctx.get("obs_sel") == "Otros" and _texto_vacio(ctx.get("obs_otro_texto")):
+        errores.append("Detalla la observacion seleccionada en 'Otros'.")
+
+    adj_sel = ctx.get("adj_sel") or []
+    if not adj_sel:
+        errores.append("Selecciona al menos un medio de verificacion.")
+    if "Otros" in adj_sel and not _lineas_no_vacias(ctx.get("extra_adj", "")):
+        errores.append("Detalla al menos un medio de verificacion en 'Otros'.")
+    if adj_sel and not (ctx.get("items_adj") or []):
+        errores.append("Selecciona o detalla al menos un medio de verificacion.")
+
+    if int(ctx.get("num_personas") or 0) <= 0:
+        errores.append("Ingresa un numero de personas capacitadas mayor a 0.")
+    if int(ctx.get("encuestas_realizadas") or 0) <= 0:
+        errores.append("Ingresa un numero de encuestas realizadas mayor a 0.")
+
+    return errores
+
+
+def _validar_campos_asamblea(ctx: dict) -> list[str]:
+    errores = []
+
+    if not ctx.get("fecha_asamblea"):
+        errores.append("Selecciona la fecha de la asamblea.")
+    if int(ctx.get("num_asistentes") or 0) <= 0:
+        errores.append("Ingresa un numero de participantes mayor a 0.")
+    if not ctx.get("hora_inicio"):
+        errores.append("Selecciona la hora de inicio.")
+    if not ctx.get("hora_cierre"):
+        errores.append("Selecciona la hora de cierre.")
+    if _texto_vacio(ctx.get("asociacion")):
+        errores.append("Ingresa la asociacion / agrupacion.")
+    if _texto_vacio(ctx.get("lugar")):
+        errores.append("Ingresa el lugar de realizacion.")
+    if _texto_vacio(ctx.get("provincia")):
+        errores.append("Selecciona la provincia.")
+    if _texto_vacio(ctx.get("canton")):
+        errores.append("Selecciona el canton.")
+    if _texto_vacio(ctx.get("parroquia")):
+        errores.append("Ingresa la parroquia / recinto.")
+    if _texto_vacio(ctx.get("tematica")):
+        errores.append("Ingresa el tema tratado.")
+
+    if _texto_vacio(ctx.get("contacto_nombre")):
+        errores.append("Ingresa los nombres y apellidos del contacto.")
+    cel = str(ctx.get("contacto_celular") or "").strip()
+    if not (cel.isdigit() and len(cel) == 10):
+        errores.append("El celular debe tener exactamente 10 digitos numericos.")
+    if _texto_vacio(ctx.get("contacto_institucion")):
+        errores.append("Ingresa la institucion a la que pertenece el contacto.")
+
+    instituciones = ctx.get("instituciones") or []
+    if len(instituciones) < int(ctx.get("num_inst") or 0):
+        errores.append("Completa todas las instituciones invitadas declaradas.")
+    responsables = ctx.get("responsables") or []
+    if len(responsables) < int(ctx.get("num_responsables") or 0):
+        errores.append("Completa todos los responsables de la asamblea declarados.")
+
+    if _texto_vacio(ctx.get("antecedentes")):
+        errores.append("Ingresa los antecedentes.")
+    if _texto_vacio(ctx.get("objetivo")):
+        errores.append("Ingresa el objetivo de la asamblea.")
+    if _texto_vacio(ctx.get("temas_abordados")):
+        errores.append("Ingresa los temas abordados.")
+
+    compromisos = ctx.get("compromisos_campos") or []
+    if len(compromisos) < int(ctx.get("num_compromisos") or 0):
+        errores.append("Completa todos los compromisos declarados.")
+    for i, comp in enumerate(compromisos, 1):
+        if _texto_vacio(comp.get("texto")):
+            errores.append(f"Ingresa la descripcion del compromiso {i}.")
+        if _texto_vacio(comp.get("institucion")):
+            errores.append(f"Ingresa la institucion responsable del compromiso {i}.")
+        if _texto_vacio(comp.get("funcionario_seguimiento")):
+            errores.append(f"Ingresa el funcionario de seguimiento del compromiso {i}.")
+        if not comp.get("fecha_tentativa"):
+            errores.append(f"Selecciona la fecha tentativa del compromiso {i}.")
+
+    resp_seg_campos = ctx.get("resp_seg_campos") or []
+    if len(resp_seg_campos) < int(ctx.get("num_resp_seg") or 0):
+        errores.append("Completa todos los responsables del seguimiento declarados.")
+    for i, resp in enumerate(resp_seg_campos, 1):
+        if resp.get("seleccion") == "Otros" and _texto_vacio(resp.get("otro")):
+            errores.append(f"Ingresa el responsable del seguimiento {i}.")
+        elif _texto_vacio(resp.get("seleccion")):
+            errores.append(f"Selecciona el responsable del seguimiento {i}.")
+
+    if ctx.get("obs_opcion") == "Otro" and _texto_vacio(ctx.get("observaciones_detalle")):
+        errores.append("Detalla la observacion seleccionada en 'Otro'.")
+    if ctx.get("cierre_opcion") == "Otro" and _texto_vacio(ctx.get("cierre_texto")):
+        errores.append("Ingresa el texto de cierre y seguimiento.")
+
+    return errores
 
 
 def _validar_campos_reporte(
