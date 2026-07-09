@@ -81,7 +81,7 @@ def generar_certificado_docx(
 
     try:
         _dt = datetime.strptime(fecha_capacitacion, "%Y-%m-%d")
-        mes_anio = f"{_MESES[_dt.month].capitalize()} {_dt.year}"
+        mes_anio = f"{_MESES[_dt.month].capitalize()} de {_dt.year}"
     except (ValueError, IndexError):
         mes_anio = ""
 
