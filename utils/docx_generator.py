@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import io
 import os
+import re
 import subprocess
 import tempfile
 import zipfile
@@ -27,6 +28,17 @@ _TEMPLATE = Path(__file__).parent.parent / "formato de certificado de asistencia
 
 # Texto del curso hardcodeado en la plantilla que se reemplazará
 _CURSO_PLANTILLA = "Socialización a la Ley Orgánica de Regulación y Control del Poder de Mercado"
+
+
+def _strip_merge_fields(xml: str) -> str:
+    """Removes Word MERGEFIELD markers so LibreOffice renders the result text as-is.
+
+    Without this, LibreOffice re-evaluates «MERGEFIELD X» at PDF-conversion time
+    and replaces the substituted value with an empty string (no data source).
+    """
+    xml = re.sub(r"<w:fldChar[^>]*/?>", "", xml)
+    xml = re.sub(r"<w:instrText[^>]*>.*?</w:instrText>", "", xml, flags=re.DOTALL)
+    return xml
 
 
 def _formatear_dia_mes(fecha_iso: str) -> tuple[str, str]:
@@ -90,6 +102,7 @@ def generar_certificado_docx(
                 data = zin.read(item)
                 if item == "word/document.xml":
                     xml = data.decode("utf-8")
+                    xml = _strip_merge_fields(xml)
                     for placeholder, valor in reemplazos.items():
                         xml = xml.replace(placeholder, valor)
                     data = xml.encode("utf-8")
