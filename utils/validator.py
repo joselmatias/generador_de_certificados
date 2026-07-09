@@ -34,8 +34,7 @@ def validar_cedula(cedula: str) -> tuple[bool, str]:
     Reglas aplicadas:
     1. Exactamente 10 dígitos numéricos.
     2. Código de provincia (primeros 2 dígitos) entre 01-24 o 30.
-    3. Tercer dígito entre 0 y 5 (personas naturales).
-    4. Dígito verificador correcto (posición 10).
+    3. Dígito verificador correcto (posición 10).
 
     Args:
         cedula: Cadena con la cédula a validar.
@@ -55,12 +54,7 @@ def validar_cedula(cedula: str) -> tuple[bool, str]:
     if provincia not in _PROVINCIAS_VALIDAS:
         return False, f"Código de provincia inválido: {cedula[:2]} (válido: 01-24, 30)."
 
-    # Regla 3: tercer dígito entre 0 y 5
-    tercer_digito = int(cedula[2])
-    if tercer_digito > 5:
-        return False, f"Tercer dígito inválido: {tercer_digito} (debe ser 0-5)."
-
-    # Regla 4: verificador módulo 10
+    # Regla 3: verificador módulo 10
     digitos = [int(d) for d in cedula]
     suma = 0
     for i, coef in enumerate(_COEFICIENTES):

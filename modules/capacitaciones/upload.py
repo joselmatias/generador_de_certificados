@@ -26,6 +26,7 @@ _KEY_RESULTADO     = "cap_upload_resultado"
 _KEY_CURSO         = "cap_upload_curso"
 _KEY_GENERADO_POR  = "cap_upload_generado_por"
 _KEY_BATCH         = "cap_batch_listo"
+_KEY_FORZAR_TODOS  = "cap_upload_forzar_todos"
 
 _MESES_ES = {
     1: "enero", 2: "febrero", 3: "marzo", 4: "abril",
@@ -137,7 +138,7 @@ def mostrar_carga() -> None:
 
     # Inyectar fechas del evento seleccionadas en cada registro (cada render)
     if fecha_capacitacion_iso:
-        for reg in resultado.validos:
+        for reg in resultado.validos + resultado.invalidos:
             reg.datos["fecha_capacitacion"] = fecha_capacitacion_iso
             reg.datos["fecha_evento"]       = fecha_evento_str
 
@@ -160,6 +161,7 @@ def mostrar_carga() -> None:
             "Verifique que el archivo sea el export correcto de Google Forms."
         )
 
+    forzar_todos = False
     if resultado.invalidos:
         with st.expander(f"Ver {resultado.total_invalidos} registros con errores"):
             filas_error = [
@@ -172,6 +174,21 @@ def mostrar_carga() -> None:
                 for reg in resultado.invalidos
             ]
             st.dataframe(pd.DataFrame(filas_error), use_container_width=True, hide_index=True)
+
+        st.warning(
+            "⚠️ Hay registros con errores de validación. Si confirmas que los datos son "
+            "correctos (por ejemplo, la cédula es válida pero el sistema la marcó por error), "
+            "puedes forzar su inclusión."
+        )
+        forzar_todos = st.checkbox(
+            "Rechazar la validación e incluir TODOS los registros (también los que tienen errores) "
+            "para generar sus certificados",
+            key=_KEY_FORZAR_TODOS,
+        )
+
+    registros_base = (
+        resultado.validos + resultado.invalidos if forzar_todos else resultado.validos
+    )
 
     if resultado.validos:
         with st.expander(f"Ver {resultado.total_validos} registros válidos"):
@@ -190,7 +207,7 @@ def mostrar_carga() -> None:
     # ------------------------------------------------------------------
     # PASO 6: Detectar duplicados
     # ------------------------------------------------------------------
-    if resultado.validos:
+    if registros_base:
         st.divider()
         st.subheader("5. Verificación de duplicados")
 
@@ -198,7 +215,7 @@ def mostrar_carga() -> None:
         nuevos: list[RegistroProcesado] = []
 
         with get_connection() as con:
-            for reg in resultado.validos:
+            for reg in registros_base:
                 if verificar_duplicados(
                     con,
                     cedula=reg.datos["cedula"],
