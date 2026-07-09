@@ -42,7 +42,7 @@ Schema is initialized idempotently at startup via `database/init_db.py:init_db()
 
 `get_connection()` is a context manager yielding a `_Conn` wrapper that mimics sqlite3's `.execute(sql, params).fetchone()/fetchall()` API. Rows return as `RealDictRow` (dict-like). Always use `with get_connection() as con:` — it auto-commits on success, rolls back on exception.
 
-Sequential report numbers are stored in `contador_reporte` (starts at 83, next = 84) and `contador_asamblea` (starts at 17, next = 018). These are in Supabase, not local — never reset them.
+Sequential report numbers are stored in `contador_reporte` (starts at 83, next = 84) and `contador_asamblea` (starts at 17, next = 018). Certificate codes (`DRAC-{year}-NNNN`, starting at 1676) use `contador_certificado` (keyed by `year`), incremented atomically via `INSERT ... ON CONFLICT (year) DO UPDATE SET ultimo_numero = ultimo_numero + 1` in `db.py:obtener_siguiente_codigo_certificado`. All three counters are in Supabase, not local — never reset them, and never derive the next number by counting/deleting rows in the data table (that was the original certificate design and it silently produces duplicate codes if some but not all test rows get deleted before the next one is generated).
 
 ## PDF generation
 
