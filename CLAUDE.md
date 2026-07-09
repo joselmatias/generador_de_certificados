@@ -56,6 +56,14 @@ Both share the logo at `assets/image1.png`. User text must be passed through `xm
 
 Certificate `.docx` generation uses `utils/docx_generator.py`, which fills Word template placeholders via XML manipulation and optionally converts to PDF with a LibreOffice subprocess (requires `libreoffice` from `packages.txt`).
 
+### Certificate template (`formato de certificado de asistencia.docx`)
+
+This file **is tracked in git** and must be committed/pushed like any source file — Streamlit Cloud only sees what's pushed to `main`, so a template edited locally but not committed silently keeps serving the old version (this caused a real incident: the deployed cert kept showing "Guayaquil - Ecuador" / "1 Hora" fixed text after the template had supposedly been updated).
+
+Do not hand-edit `«placeholder»` text directly in Word when adding/renaming a placeholder. Word's autocorrect/spellcheck frequently splits the `«`/`»` guillemets and the inner text into separate `<w:r>` XML runs, which breaks plain-text `str.replace()` substitution silently (the placeholder just doesn't get filled, no error). Prefer scripted XML surgery (open the docx as a zip, regex-replace in `word/document.xml`, verify with `xml.dom.minidom.parseString` + exact placeholder counts before/after, keep a `.bak`) over asking the user to retype guillemets in Word. `utils/docx_generator.py:_repair_placeholder_runs()` defragments split placeholders defensively at render time, but a clean template is still preferable.
+
+MERGEFIELD markers (`<w:instrText> MERGEFIELD X </w:instrText>`) are stripped by `_strip_merge_fields()` before substitution — LibreOffice re-evaluates real mail-merge fields at PDF-conversion time and blanks out any substituted value if one slips into the template.
+
 ## Key utilities
 
 - `utils/ubicaciones_ec.py` — `PROVINCIAS_CANTONES` dict for chained province→canton dropdowns. Uppercase values throughout.

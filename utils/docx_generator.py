@@ -136,11 +136,15 @@ def generar_certificado_docx(
 
     output_buffer = io.BytesIO()
 
+    # Los placeholders pueden vivir en el cuerpo o en encabezados/pies de página
+    # (p.ej. «mes_anio» suele escribirse en el header de Word, no en el body).
+    _partes_con_texto = re.compile(r"^word/(document|header\d+|footer\d+)\.xml$")
+
     with zipfile.ZipFile(io.BytesIO(template_bytes), "r") as zin:
         with zipfile.ZipFile(output_buffer, "w", zipfile.ZIP_DEFLATED) as zout:
             for item in zin.namelist():
                 data = zin.read(item)
-                if item == "word/document.xml":
+                if _partes_con_texto.match(item):
                     xml = data.decode("utf-8")
                     xml = _strip_merge_fields(xml)
                     xml = _repair_placeholder_runs(xml)
