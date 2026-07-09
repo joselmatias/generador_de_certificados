@@ -100,14 +100,6 @@ def mostrar_certificado_individual() -> None:
         max_chars=300,
     )
 
-    fecha_evento_d = st.date_input(
-        "Fecha del evento",
-        value=precarga_fecha,
-        min_value=date(2024, 1, 1),
-        max_value=date(2030, 12, 31),
-        key="ci_fecha_evento",
-    )
-
     col_tipo_dur, col_val_dur = st.columns([1, 1])
     with col_tipo_dur:
         tipo_duracion = st.radio("Tipo de duración", options=["Por horas", "Por días"], key="ci_tipo_dur")
@@ -123,6 +115,34 @@ def mostrar_certificado_individual() -> None:
 
     unidad       = "horas" if tipo_duracion == "Por horas" else "días"
     duracion_str = f"{valor_duracion} {unidad}"
+
+    if tipo_duracion == "Por días":
+        fechas_sel = st.date_input(
+            "Fecha del evento (selecciona el rango de días)",
+            value=(precarga_fecha, precarga_fecha),
+            min_value=date(2024, 1, 1),
+            max_value=date(2030, 12, 31),
+            key="ci_fecha_evento_rango",
+        )
+        fecha_inicio = fechas_sel[0] if fechas_sel else precarga_fecha
+        fecha_fin    = fechas_sel[-1] if fechas_sel else precarga_fecha
+        fecha_evento_d = fecha_inicio
+        if fecha_fin != fecha_inicio:
+            fecha_evento_txt_rango = (
+                f"{fecha_inicio.day} al {fecha_fin.day} de "
+                f"{_MESES_ES[fecha_fin.month]} de {fecha_fin.year}"
+            )
+        else:
+            fecha_evento_txt_rango = None
+    else:
+        fecha_evento_d = st.date_input(
+            "Fecha del evento",
+            value=precarga_fecha,
+            min_value=date(2024, 1, 1),
+            max_value=date(2030, 12, 31),
+            key="ci_fecha_evento",
+        )
+        fecha_evento_txt_rango = None
 
     texto_participacion = st.text_area(
         "Texto de participación (editable)",
@@ -157,7 +177,7 @@ def mostrar_certificado_individual() -> None:
             return
 
         fecha_iso        = str(fecha_evento_d)
-        fecha_evento_txt = _fmt_fecha(fecha_evento_d)
+        fecha_evento_txt = fecha_evento_txt_rango or _fmt_fecha(fecha_evento_d)
 
         with get_connection() as con:
             datos_cap = {
