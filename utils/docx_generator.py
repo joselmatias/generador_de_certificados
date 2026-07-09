@@ -29,6 +29,14 @@ _TEMPLATE = Path(__file__).parent.parent / "formato de certificado de asistencia
 # Texto del curso hardcodeado en la plantilla que se reemplazará
 _CURSO_PLANTILLA = "Socialización a la Ley Orgánica de Regulación y Control del Poder de Mercado"
 
+# Valores por defecto para los campos opcionales (flujo por lote no los envía);
+# reproducen el texto que la plantilla tenía fijo antes de convertirse en placeholder.
+_TEXTO_PARTICIPACION_DEFAULT = (
+    "Por su participación en la capacitación en materia de competencia sobre la"
+)
+_CIUDAD_DEFAULT   = "Guayaquil"
+_DURACION_DEFAULT = "1 Hora"
+
 
 def _strip_merge_fields(xml: str) -> str:
     """Removes Word MERGEFIELD markers so LibreOffice renders the result text as-is.
@@ -39,6 +47,25 @@ def _strip_merge_fields(xml: str) -> str:
     xml = re.sub(r"<w:fldChar[^>]*/?>", "", xml)
     xml = re.sub(r"<w:instrText[^>]*>.*?</w:instrText>", "", xml, flags=re.DOTALL)
     return xml
+
+
+def _repair_placeholder_runs(xml: str) -> str:
+    """Recompone placeholders «...» que Word haya partido en varios runs XML.
+
+    Al escribir «duracion» o «texto_participacion» a mano, Word suele separar los
+    guillemets del texto en runs distintos (por el corrector ortográfico), dejando
+    p.ej. «<run>duracion<run>» — lo que rompe el reemplazo por texto plano. Esta
+    función elimina las etiquetas XML entre « y » cuando el contenido es un único
+    token de placeholder, dejándolo contiguo. Es defensiva: si la plantilla ya está
+    limpia, no cambia nada.
+    """
+    def _clean(m: "re.Match") -> str:
+        inner = re.sub(r"<[^>]+>", "", m.group(1))
+        if re.fullmatch(r"[A-Za-zÀ-ÿ_]+", inner):
+            return "«" + inner + "»"
+        return m.group(0)
+
+    return re.sub(r"«(.{0,600}?)»", _clean, xml, flags=re.DOTALL)
 
 
 def _formatear_dia_mes(fecha_iso: str) -> tuple[str, str]:
@@ -85,6 +112,11 @@ def generar_certificado_docx(
     except (ValueError, IndexError):
         mes_anio = ""
 
+    # Valores por defecto cuando el llamador no los envía (p.ej. flujo por lote).
+    ciudad              = ciudad or _CIUDAD_DEFAULT
+    duracion            = duracion or _DURACION_DEFAULT
+    texto_participacion = texto_participacion or _TEXTO_PARTICIPACION_DEFAULT
+
     reemplazos = {
         "«apellidos_y_nombres_de_la_persona»": xml_escape(nombre.upper()),
         "«Número_de_cédula»":                  xml_escape(cedula),
@@ -92,6 +124,7 @@ def generar_certificado_docx(
         "xxxxxx":                               xml_escape(dia_mes),
         "de 2025":                              xml_escape(f"de {anio}"),
         _CURSO_PLANTILLA:                       xml_escape(nombre_curso),
+        "«nombre_curso»":                       xml_escape(nombre_curso),
         "«ciudad»":                             xml_escape(ciudad),
         "«duracion»":                           xml_escape(duracion),
         "«texto_participacion»":                xml_escape(texto_participacion),
@@ -110,6 +143,7 @@ def generar_certificado_docx(
                 if item == "word/document.xml":
                     xml = data.decode("utf-8")
                     xml = _strip_merge_fields(xml)
+                    xml = _repair_placeholder_runs(xml)
                     for placeholder, valor in reemplazos.items():
                         xml = xml.replace(placeholder, valor)
                     data = xml.encode("utf-8")
