@@ -18,7 +18,7 @@ import zipfile
 import pandas as pd
 import streamlit as st
 
-from database.db import get_connection, insertar_lote_certificado
+from database.db import get_connection, insertar_lote_certificado, consultar_lotes_certificados
 from utils.docx_generator import generar_certificado_pdf
 
 
@@ -47,6 +47,7 @@ def mostrar_certificados() -> None:
         if st.button("↩ Listo, iniciar nueva carga"):
             del st.session_state[_KEY_ZIP]
             st.rerun()
+        _mostrar_registro_emitidos()
         return
 
     # Leer lote desde session state
@@ -56,11 +57,13 @@ def mostrar_certificados() -> None:
             "No hay un lote cargado. Ve a **Capacitaciones — Carga**, "
             "sube el archivo y confirma la inserción para generar certificados."
         )
+        _mostrar_registro_emitidos()
         return
 
     records = batch.get("records", [])
     if not records:
         st.warning("El lote cargado no contiene registros.")
+        _mostrar_registro_emitidos()
         return
 
     # Encabezado del lote
@@ -108,7 +111,7 @@ def mostrar_certificados() -> None:
                         "num_participantes":        len(df),
                         "codigo_inicio":            codigos.iloc[0] if not codigos.empty else None,
                         "codigo_fin":               codigos.iloc[-1] if not codigos.empty else None,
-                        "generado_por":             batch.get("oficina_nombre", ""),
+                        "generado_por":             batch.get("generado_por", ""),
                         "numero_reporte_vinculado": None,
                     })
 
@@ -126,6 +129,46 @@ def mostrar_certificados() -> None:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
             )
+
+    _mostrar_registro_emitidos()
+
+
+def _mostrar_registro_emitidos() -> None:
+    """Muestra el historial de lotes de certificados emitidos (lotes_certificados)."""
+    oficina_id = st.session_state.get("oficina_id", "")
+    es_master  = st.session_state.get("oficina_rol") == "master"
+
+    st.divider()
+    st.subheader("📜 Registro de certificados emitidos")
+
+    with get_connection() as con:
+        lotes = consultar_lotes_certificados(con, oficina=None if es_master else oficina_id)
+
+    if not lotes:
+        st.info("Aún no se han emitido certificados.")
+        return
+
+    df_lotes = pd.DataFrame(lotes)
+    columnas = [
+        "fecha_generacion", "nombre_evento", "fecha_evento", "num_participantes",
+        "codigo_inicio", "codigo_fin", "generado_por",
+    ]
+    if es_master:
+        columnas.insert(1, "oficina")
+    cols_ex = [c for c in columnas if c in df_lotes.columns]
+    st.dataframe(
+        df_lotes[cols_ex].rename(columns={
+            "fecha_generacion":  "Fecha de emisión",
+            "oficina":           "Oficina",
+            "nombre_evento":     "Evento",
+            "fecha_evento":      "Fecha evento",
+            "num_participantes": "Participantes",
+            "codigo_inicio":     "Código inicio",
+            "codigo_fin":        "Código fin",
+            "generado_por":      "Generado por",
+        }),
+        use_container_width=True, hide_index=True,
+    )
 
 
 def _generar_zip_certificados(df: pd.DataFrame) -> tuple[bytes | None, list[str]]:

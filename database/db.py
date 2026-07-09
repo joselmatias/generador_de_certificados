@@ -213,6 +213,16 @@ def insertar_lote_certificado(con: _Conn, datos: dict[str, Any]) -> int:
     return row["id"] if row else -1
 
 
+def consultar_lotes_certificados(con: _Conn, oficina: str | None = None) -> list[Any]:
+    """Devuelve el historial de lotes de certificados emitidos, más recientes primero."""
+    where = "WHERE oficina = %s" if oficina else ""
+    params = (oficina,) if oficina else ()
+    return con.execute(
+        f"SELECT * FROM lotes_certificados {where} ORDER BY fecha_generacion DESC",
+        params,
+    ).fetchall()
+
+
 # ---------------------------------------------------------------------------
 # Reportes de Capacitación
 # ---------------------------------------------------------------------------

@@ -13,7 +13,6 @@ from datetime import date
 
 import streamlit as st
 
-from auth.login import obtener_sesion
 from database.db import (
     get_connection,
     consultar_reportes_capacitacion,
@@ -41,12 +40,11 @@ def _fmt_fecha(d: date) -> str:
 
 def mostrar_certificado_individual() -> None:
     """Renderiza el módulo de generación de certificado individual."""
-    sesion  = obtener_sesion()
-    oficina = sesion["oficina"]
-    usuario = sesion["usuario"]
+    oficina        = st.session_state.get("oficina_id", "")
+    oficina_nombre = st.session_state.get("oficina_nombre", oficina)
 
     st.title("📜 Certificado Individual")
-    st.markdown(f"**Oficina:** {oficina}")
+    st.markdown(f"**Oficina:** {oficina_nombre}")
     st.info(
         "⚠️ **Requisito:** La plantilla Word debe contener los marcadores "
         "`«ciudad»`, `«duracion»` y `«texto_participacion»` para que estos campos "
@@ -135,6 +133,12 @@ def mostrar_certificado_individual() -> None:
 
     ciudad = st.text_input("Ciudad", key="ci_ciudad", max_chars=100)
 
+    generado_por = st.text_input(
+        "Generado por (nombre de quien genera el certificado)",
+        key="ci_generado_por",
+        max_chars=200,
+    )
+
     st.divider()
 
     if st.button("🖨️ Generar certificado", type="primary"):
@@ -147,6 +151,9 @@ def mostrar_certificado_individual() -> None:
             return
         if not nombre_evento.strip():
             st.error("El nombre del evento no puede estar vacío.")
+            return
+        if not generado_por.strip():
+            st.error("Ingresa el nombre de quien genera el certificado.")
             return
 
         fecha_iso        = str(fecha_evento_d)
@@ -174,7 +181,7 @@ def mostrar_certificado_individual() -> None:
                 "p7_duracion":        None,
                 "temas_adicionales":  None,
                 "sugerencias":        None,
-                "registrado_por":     usuario,
+                "registrado_por":     generado_por.strip(),
             }
             insertar_capacitacion(con, datos_cap)
             codigo = datos_cap["codigo_certificado"]
@@ -189,7 +196,7 @@ def mostrar_certificado_individual() -> None:
                 "num_participantes":        1,
                 "codigo_inicio":            codigo,
                 "codigo_fin":               codigo,
-                "generado_por":             usuario,
+                "generado_por":             generado_por.strip(),
                 "numero_reporte_vinculado": numero_reporte_vinculado,
             })
 

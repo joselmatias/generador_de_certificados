@@ -18,14 +18,14 @@ from datetime import date
 import streamlit as st
 import pandas as pd
 
-from auth.login import obtener_sesion
 from database.db import get_connection, insertar_capacitacion, verificar_duplicados
 from utils.forms_parser import parsear_forms, registros_a_dataframe, RegistroProcesado
 
 
-_KEY_RESULTADO = "cap_upload_resultado"
-_KEY_CURSO     = "cap_upload_curso"
-_KEY_BATCH     = "cap_batch_listo"
+_KEY_RESULTADO     = "cap_upload_resultado"
+_KEY_CURSO         = "cap_upload_curso"
+_KEY_GENERADO_POR  = "cap_upload_generado_por"
+_KEY_BATCH         = "cap_batch_listo"
 
 _MESES_ES = {
     1: "enero", 2: "febrero", 3: "marzo", 4: "abril",
@@ -36,12 +36,11 @@ _MESES_ES = {
 
 def mostrar_carga() -> None:
     """Renderiza el módulo completo de carga de capacitaciones."""
-    sesion  = obtener_sesion()
-    oficina = sesion["oficina"]
-    usuario = sesion["usuario"]
+    oficina        = st.session_state.get("oficina_id", "")
+    oficina_nombre = st.session_state.get("oficina_nombre", oficina)
 
     st.title("📋 Carga de Capacitaciones — Google Forms")
-    st.markdown(f"**Oficina:** {oficina}")
+    st.markdown(f"**Oficina:** {oficina_nombre}")
     st.divider()
 
     # ------------------------------------------------------------------
@@ -55,14 +54,20 @@ def mostrar_carga() -> None:
     )
 
     # ------------------------------------------------------------------
-    # PASO 2: Nombre del curso
+    # PASO 2: Nombre del curso y generado por
     # ------------------------------------------------------------------
-    st.subheader("2. Nombre del curso")
+    st.subheader("2. Datos del lote")
     nombre_curso = st.text_input(
         "Nombre del curso (aplica a todos los registros del archivo)",
         placeholder="Ej: Gestión de Recursos Hídricos — Noviembre 2024",
         max_chars=200,
         key=_KEY_CURSO,
+    )
+    generado_por = st.text_input(
+        "Generado por (nombre de quien genera los certificados)",
+        placeholder="Nombre completo",
+        max_chars=200,
+        key=_KEY_GENERADO_POR,
     )
 
     # ------------------------------------------------------------------
@@ -100,18 +105,23 @@ def mostrar_carga() -> None:
     with col_parsear:
         boton_parsear = st.button(
             "Validar archivo",
-            disabled=(archivo is None or not nombre_curso.strip() or fecha_inicio is None),
+            disabled=(
+                archivo is None
+                or not nombre_curso.strip()
+                or not generado_por.strip()
+                or fecha_inicio is None
+            ),
             use_container_width=True,
         )
 
-    if boton_parsear and archivo and nombre_curso.strip() and fecha_inicio:
+    if boton_parsear and archivo and nombre_curso.strip() and generado_por.strip() and fecha_inicio:
         with st.spinner("Procesando archivo..."):
             try:
                 resultado = parsear_forms(
                     archivo=io.BytesIO(archivo.read()),
                     nombre_curso=nombre_curso.strip(),
                     oficina=oficina,
-                    registrado_por=usuario,
+                    registrado_por=generado_por.strip(),
                 )
                 st.session_state[_KEY_RESULTADO] = resultado
             except ValueError as e:
@@ -238,7 +248,7 @@ def mostrar_carga() -> None:
                             st.text(err)
                 else:
                     st.success(
-                        f"✅ {insertados} registros insertados correctamente en la oficina **{oficina}**."
+                        f"✅ {insertados} registros insertados correctamente en la oficina **{oficina_nombre}**."
                     )
 
                 if insertados > 0:
@@ -248,7 +258,8 @@ def mostrar_carga() -> None:
                         "fecha_evento":   fecha_evento_str or "",
                         "fecha_inicio":   fecha_capacitacion_iso or "",
                         "oficina":        oficina,
-                        "oficina_nombre": st.session_state.get("oficina_nombre", oficina),
+                        "oficina_nombre": oficina_nombre,
+                        "generado_por":   generado_por.strip(),
                     }
 
                 del st.session_state[_KEY_RESULTADO]
