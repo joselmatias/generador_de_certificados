@@ -14,11 +14,17 @@ from __future__ import annotations
 import io
 import re
 import zipfile
+from datetime import date
 
 import pandas as pd
 import streamlit as st
 
-from database.db import get_connection, insertar_lote_certificado, consultar_lotes_certificados
+from database.db import (
+    get_connection,
+    insertar_lote_certificado,
+    consultar_lotes_certificados,
+    obtener_ultimo_codigo_certificado,
+)
 from utils.docx_generator import generar_certificado_pdf
 
 
@@ -29,6 +35,7 @@ _KEY_ZIP   = "cert_zip_descarga"
 def mostrar_certificados() -> None:
     """Renderiza el módulo completo de generación de certificados."""
     st.title("🎓 Generación de Certificados")
+    _mostrar_placa_ultimo_certificado()
     st.divider()
 
     # Si hay un ZIP listo (generado en render anterior), mostrar solo descarga
@@ -131,6 +138,17 @@ def mostrar_certificados() -> None:
             )
 
     _mostrar_registro_emitidos()
+
+
+def _mostrar_placa_ultimo_certificado() -> None:
+    """Placa informativa con el último código de certificado generado este año."""
+    anio_actual = date.today().year
+    with get_connection() as con:
+        ultimo = obtener_ultimo_codigo_certificado(con, anio_actual)
+    if ultimo:
+        st.info(f"📌 **Último certificado generado ({anio_actual}):** `{ultimo}`")
+    else:
+        st.info(f"📌 Aún no se ha generado ningún certificado en {anio_actual}.")
 
 
 def _mostrar_registro_emitidos() -> None:

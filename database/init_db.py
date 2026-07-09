@@ -179,6 +179,13 @@ CREATE TABLE IF NOT EXISTS contador_asamblea (
 );
 """
 
+_DDL_CONTADOR_CERTIFICADO = """
+CREATE TABLE IF NOT EXISTS contador_certificado (
+    year            INTEGER PRIMARY KEY,
+    ultimo_numero   INTEGER NOT NULL
+);
+"""
+
 _DDL_LOTES_CERTIFICADOS = """
 CREATE TABLE IF NOT EXISTS lotes_certificados (
     id                        SERIAL PRIMARY KEY,
@@ -227,6 +234,7 @@ def init_db() -> None:
                 cur.execute(_DDL_ASAMBLEA_PRODUCTIVA)
                 cur.execute(_DDL_CONTADOR_REPORTE)
                 cur.execute(_DDL_CONTADOR_ASAMBLEA)
+                cur.execute(_DDL_CONTADOR_CERTIFICADO)
                 cur.execute(_DDL_LOTES_CERTIFICADOS)
                 cur.execute(
                     "INSERT INTO contador_reporte (id, ultimo_numero) VALUES (1, 83) "

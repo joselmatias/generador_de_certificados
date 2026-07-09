@@ -18,6 +18,7 @@ from database.db import (
     consultar_reportes_capacitacion,
     insertar_capacitacion,
     insertar_lote_certificado,
+    obtener_ultimo_codigo_certificado,
 )
 from utils.docx_generator import generar_certificado_pdf
 from utils.validator import validar_cedula
@@ -50,7 +51,6 @@ def mostrar_certificado_individual() -> None:
         "`«ciudad»`, `«duracion»` y `«texto_participacion»` para que estos campos "
         "aparezcan en el PDF generado."
     )
-    st.divider()
 
     # ------------------------------------------------------------------
     # Cargar reportes del año actual para preselección
@@ -58,6 +58,14 @@ def mostrar_certificado_individual() -> None:
     anio_actual = date.today().year
     with get_connection() as con:
         reportes = consultar_reportes_capacitacion(con, oficina=oficina, anio=anio_actual)
+        ultimo_codigo = obtener_ultimo_codigo_certificado(con, anio_actual)
+
+    if ultimo_codigo:
+        st.info(f"📌 **Último certificado generado ({anio_actual}):** `{ultimo_codigo}`")
+    else:
+        st.info(f"📌 Aún no se ha generado ningún certificado en {anio_actual}.")
+
+    st.divider()
 
     opciones = ["— Sin vincular a reporte —"] + [
         f"N.° {r['numero_reporte']} ({r.get('year_reporte', anio_actual)}) — {r.get('tema', '')}"

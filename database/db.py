@@ -67,20 +67,37 @@ _FECHA_EVENTO_INICIAL_SQL = (
 def obtener_siguiente_codigo_certificado(con: _Conn, year: int) -> str:
     """
     Genera el siguiente código de certificado con formato DRAC-YYYY-NNNN.
-    La secuencia es global (no por oficina) y atómica dentro de la transacción.
-    La numeración parte de 1676 (histórico).
+
+    Usa un contador persistente por año en `contador_certificado` (igual que
+    `contador_reporte`/`contador_asamblea`), no un conteo de filas — así que
+    borrar filas de prueba en `capacitaciones` nunca afecta la numeración
+    futura ni genera colisiones. La numeración parte de 1676 (histórico).
     """
-    prefix = f"DRAC-{year}-"
     row = con.execute(
         """
-        SELECT COUNT(*) AS total
-        FROM capacitaciones
-        WHERE codigo_certificado LIKE %s
+        INSERT INTO contador_certificado (year, ultimo_numero)
+        VALUES (%(year)s, 1676)
+        ON CONFLICT (year) DO UPDATE
+        SET ultimo_numero = contador_certificado.ultimo_numero + 1
+        RETURNING ultimo_numero
         """,
-        (f"{prefix}%",),
+        {"year": year},
     ).fetchone()
-    siguiente = (row["total"] if row else 0) + 1676
-    return f"{prefix}{siguiente}"
+    return f"DRAC-{year}-{row['ultimo_numero']}"
+
+
+def obtener_ultimo_codigo_certificado(con: _Conn, year: int) -> str | None:
+    """
+    Devuelve el último código de certificado generado este año (sin generar
+    uno nuevo), o None si aún no se ha generado ninguno.
+    """
+    row = con.execute(
+        "SELECT ultimo_numero FROM contador_certificado WHERE year = %s",
+        (year,),
+    ).fetchone()
+    if row is None:
+        return None
+    return f"DRAC-{year}-{row['ultimo_numero']}"
 
 
 def insertar_capacitacion(con: _Conn, registro: dict[str, Any]) -> int:
