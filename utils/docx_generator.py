@@ -79,6 +79,12 @@ def generar_certificado_docx(
     """
     dia_mes, anio = _formatear_dia_mes(fecha_capacitacion)
 
+    try:
+        _dt = datetime.strptime(fecha_capacitacion, "%Y-%m-%d")
+        mes_anio = f"{_MESES[_dt.month]} {_dt.year}"
+    except (ValueError, IndexError):
+        mes_anio = ""
+
     reemplazos = {
         "«apellidos_y_nombres_de_la_persona»": xml_escape(nombre.upper()),
         "«Número_de_cédula»":                  xml_escape(cedula),
@@ -89,6 +95,7 @@ def generar_certificado_docx(
         "«ciudad»":                             xml_escape(ciudad),
         "«duracion»":                           xml_escape(duracion),
         "«texto_participacion»":                xml_escape(texto_participacion),
+        "«mes_anio»":                           xml_escape(mes_anio),
     }
 
     with open(_TEMPLATE, "rb") as f:
