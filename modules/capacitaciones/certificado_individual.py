@@ -77,7 +77,6 @@ def mostrar_certificado_individual() -> None:
         "ci_ciudad":             "",
         "ci_valor_dur":          8,
         "ci_tipo_dur":           "Por horas",
-        "ci_fecha_evento":       date.today(),
         "ci_fecha_evento_rango": (date.today(), date.today()),
     }
     for _k, _v in _defaults.items():
@@ -103,8 +102,8 @@ def mostrar_certificado_individual() -> None:
             st.session_state["ci_fecha_evento_rango"] = (inicio, fin)
             st.session_state["ci_valor_dur"]          = (fin - inicio).days + 1
         else:
-            st.session_state["ci_tipo_dur"]     = "Por horas"
-            st.session_state["ci_fecha_evento"] = inicio
+            st.session_state["ci_tipo_dur"]           = "Por horas"
+            st.session_state["ci_fecha_evento_rango"] = (inicio, inicio)
             horas = calcular_horas(rep.get("hora_inicio", ""), rep.get("hora_fin", ""))
             if horas:
                 st.session_state["ci_valor_dur"] = horas
@@ -154,32 +153,25 @@ def mostrar_certificado_individual() -> None:
     unidad       = "horas" if tipo_duracion == "Por horas" else "días"
     duracion_str = f"{valor_duracion} {unidad}"
 
-    if tipo_duracion == "Por días":
-        fechas_sel = st.date_input(
-            "Fecha del evento (selecciona el rango de días)",
-            min_value=date(2024, 1, 1),
-            max_value=date(2030, 12, 31),
-            key="ci_fecha_evento_rango",
+    # La fecha del evento admite seleccionar uno o más días independientemente
+    # del "Tipo de duración" (p.ej. un evento de 2 días puede seguir midiéndose
+    # en horas totales, no solo en días).
+    fechas_sel = st.date_input(
+        "Fecha del evento (selecciona uno o más días)",
+        min_value=date(2024, 1, 1),
+        max_value=date(2030, 12, 31),
+        key="ci_fecha_evento_rango",
+    )
+    fecha_inicio = fechas_sel[0] if fechas_sel else date.today()
+    fecha_fin    = fechas_sel[-1] if fechas_sel else fecha_inicio
+    fecha_evento_d = fecha_inicio
+    if fecha_fin != fecha_inicio:
+        fecha_evento_txt_rango = (
+            f"{fecha_inicio.day} al {fecha_fin.day} de "
+            f"{_MESES_ES[fecha_fin.month]} de {fecha_fin.year}"
         )
-        fecha_inicio = fechas_sel[0] if fechas_sel else date.today()
-        fecha_fin    = fechas_sel[-1] if fechas_sel else fecha_inicio
-        fecha_evento_d = fecha_inicio
-        if fecha_fin != fecha_inicio:
-            fecha_evento_txt_rango = (
-                f"{fecha_inicio.day} al {fecha_fin.day} de "
-                f"{_MESES_ES[fecha_fin.month]} de {fecha_fin.year}"
-            )
-            fecha_evento_fin = fecha_fin
-        else:
-            fecha_evento_txt_rango = None
-            fecha_evento_fin = None
+        fecha_evento_fin = fecha_fin
     else:
-        fecha_evento_d = st.date_input(
-            "Fecha del evento",
-            min_value=date(2024, 1, 1),
-            max_value=date(2030, 12, 31),
-            key="ci_fecha_evento",
-        )
         fecha_evento_txt_rango = None
         fecha_evento_fin = None
 
