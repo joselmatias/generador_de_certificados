@@ -92,16 +92,28 @@ def _repair_placeholder_runs(xml: str) -> str:
     return re.sub(r"«(.{0,600}?)»", _clean, xml, flags=re.DOTALL)
 
 
-def _formatear_dia_mes(fecha_iso: str) -> tuple[str, str]:
+def _formatear_dia_mes(fecha_iso: str, fecha_fin_iso: str = "") -> tuple[str, str]:
     """
     Devuelve (dia_mes, año) para reemplazar los dos fragmentos de fecha.
     Ejemplo: '2024-11-19' → ('19 de noviembre', '2024')
+
+    Si fecha_fin_iso se especifica y difiere de fecha_iso, dia_mes se arma
+    como rango: 'D1 al D2 de mes' (asume mismo mes/año que fecha_iso).
     """
     try:
         dt = datetime.strptime(fecha_iso, "%Y-%m-%d")
-        return f"{dt.day} de {_MESES[dt.month]}", str(dt.year)
     except (ValueError, IndexError):
         return fecha_iso, ""
+
+    if fecha_fin_iso:
+        try:
+            dt_fin = datetime.strptime(fecha_fin_iso, "%Y-%m-%d")
+        except (ValueError, IndexError):
+            dt_fin = dt
+        if dt_fin.date() != dt.date():
+            return f"{dt.day} al {dt_fin.day} de {_MESES[dt.month]}", str(dt.year)
+
+    return f"{dt.day} de {_MESES[dt.month]}", str(dt.year)
 
 
 def generar_certificado_docx(
@@ -113,6 +125,7 @@ def generar_certificado_docx(
     ciudad: str = "",
     duracion: str = "",
     texto_participacion: str = "",
+    fecha_fin: str = "",
 ) -> bytes:
     """
     Genera un certificado .docx rellenando la plantilla Word con los datos
@@ -122,13 +135,16 @@ def generar_certificado_docx(
         nombre: Nombre completo (se muestra en mayúsculas).
         cedula: Número de cédula.
         nombre_curso: Nombre del curso o capacitación.
-        fecha_capacitacion: Fecha en formato YYYY-MM-DD.
+        fecha_capacitacion: Fecha de inicio en formato YYYY-MM-DD.
         codigo_certificado: Código único del certificado.
+        fecha_fin: Fecha de fin en formato YYYY-MM-DD (opcional). Si se
+            especifica y difiere de fecha_capacitacion, el certificado
+            muestra el rango "D1 al D2 de mes de año".
 
     Returns:
         Bytes del archivo .docx generado.
     """
-    dia_mes, anio = _formatear_dia_mes(fecha_capacitacion)
+    dia_mes, anio = _formatear_dia_mes(fecha_capacitacion, fecha_fin)
 
     try:
         _dt = datetime.strptime(fecha_capacitacion, "%Y-%m-%d")
@@ -204,11 +220,16 @@ def generar_certificado_pdf(
     ciudad: str = "",
     duracion: str = "",
     texto_participacion: str = "",
+    fecha_fin: str = "",
 ) -> bytes:
     """
     Genera un certificado PDF convirtiendo la plantilla Word rellenada.
 
     Usa LibreOffice headless para la conversión .docx → PDF.
+
+    Args:
+        fecha_fin: Fecha de fin en formato YYYY-MM-DD (opcional), para
+            eventos de varios días. Ver generar_certificado_docx.
 
     Returns:
         Bytes del archivo PDF generado.
@@ -222,6 +243,7 @@ def generar_certificado_pdf(
         ciudad=ciudad,
         duracion=duracion,
         texto_participacion=texto_participacion,
+        fecha_fin=fecha_fin,
     )
 
     with tempfile.TemporaryDirectory() as tmpdir:

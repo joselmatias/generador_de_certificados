@@ -161,12 +161,14 @@ def mostrar_carga() -> None:
     fecha_inicio: date | None = fechas_sel[0] if fechas_sel else None
     fecha_fin:   date | None = fechas_sel[-1] if fechas_sel else None
 
+    fecha_fin_iso: str | None = None
     if fecha_inicio and fecha_fin and fecha_inicio != fecha_fin:
         fecha_evento_str = (
             f"{fecha_inicio.day} al {fecha_fin.day} de "
             f"{_MESES_ES[fecha_fin.month]} de {fecha_fin.year}"
         )
         fecha_capacitacion_iso = fecha_inicio.isoformat()
+        fecha_fin_iso = fecha_fin.isoformat()
     elif fecha_inicio:
         fecha_evento_str = (
             f"{fecha_inicio.day} de {_MESES_ES[fecha_inicio.month]} de {fecha_inicio.year}"
@@ -217,6 +219,7 @@ def mostrar_carga() -> None:
         for reg in resultado.validos + resultado.invalidos:
             reg.datos["fecha_capacitacion"] = fecha_capacitacion_iso
             reg.datos["fecha_evento"]       = fecha_evento_str
+            reg.datos["fecha_fin"]          = fecha_fin_iso
 
     st.divider()
     st.subheader("6. Resultado de validación")

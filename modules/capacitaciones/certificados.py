@@ -207,6 +207,7 @@ def _generar_zip_certificados(
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         for i, (_, fila) in enumerate(df.iterrows()):
             try:
+                fecha_fin_val = fila.get("fecha_fin")
                 pdf_bytes = generar_certificado_pdf(
                     nombre=str(fila.get("nombre", "")),
                     cedula=str(fila.get("cedula", "")),
@@ -215,6 +216,7 @@ def _generar_zip_certificados(
                     codigo_certificado=str(fila.get("codigo_certificado", "")),
                     ciudad=ciudad,
                     duracion=duracion,
+                    fecha_fin=str(fecha_fin_val) if pd.notna(fecha_fin_val) else "",
                 )
                 nombre_archivo = _nombre_archivo_pdf(
                     str(fila.get("nombre", "participante")),

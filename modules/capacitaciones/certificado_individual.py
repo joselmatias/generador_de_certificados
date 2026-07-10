@@ -169,8 +169,10 @@ def mostrar_certificado_individual() -> None:
                 f"{fecha_inicio.day} al {fecha_fin.day} de "
                 f"{_MESES_ES[fecha_fin.month]} de {fecha_fin.year}"
             )
+            fecha_evento_fin = fecha_fin
         else:
             fecha_evento_txt_rango = None
+            fecha_evento_fin = None
     else:
         fecha_evento_d = st.date_input(
             "Fecha del evento",
@@ -179,6 +181,7 @@ def mostrar_certificado_individual() -> None:
             key="ci_fecha_evento",
         )
         fecha_evento_txt_rango = None
+        fecha_evento_fin = None
 
     texto_participacion = st.text_area(
         "Texto de participación (editable)",
@@ -270,6 +273,7 @@ def mostrar_certificado_individual() -> None:
                 ciudad=ciudad.strip(),
                 duracion=duracion_str,
                 texto_participacion=texto_participacion.strip(),
+                fecha_fin=str(fecha_evento_fin) if fecha_evento_fin else "",
             )
             nombre_archivo = f"{cedula.strip()}_{nombre.strip()[:30].replace(' ', '_')}.pdf"
             st.success(f"✅ Certificado generado. Código asignado: **{codigo}**")
