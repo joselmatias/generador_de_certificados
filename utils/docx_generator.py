@@ -9,6 +9,7 @@ Flujo:
 from __future__ import annotations
 
 import io
+import math
 import os
 import re
 import subprocess
@@ -36,6 +37,29 @@ _TEXTO_PARTICIPACION_DEFAULT = (
 )
 _CIUDAD_DEFAULT   = "Guayaquil"
 _DURACION_DEFAULT = "1 Hora"
+
+# Autoajuste del tamaño de fuente del párrafo del cuerpo (el que va tras la
+# cédula). El bloque de firma "Eco. Roberto Santos, Mgs." es un cuadro flotante
+# anclado en una posición fija: si el cuerpo es largo, invade su espacio. Por eso
+# se reduce la fuente ~1/sqrt(longitud) para que el cuerpo ocupe siempre una banda
+# vertical similar y la firma conserve su lugar. Tamaños en media-puntos (docx).
+_BODY_BASE_SZ    = 32    # 16 pt — tamaño normal de la plantilla
+_BODY_MIN_SZ     = 16    # 8 pt (50%) — piso para textos extremadamente largos
+_BODY_BASE_CHARS = 210   # longitud del cuerpo por defecto que se ve bien (~4 líneas)
+
+
+def _tamano_fuente_cuerpo(texto: str) -> int:
+    """Devuelve el tamaño de fuente (media-puntos) del párrafo del cuerpo.
+
+    Escala ~1/sqrt(longitud): el espacio vertical usado ≈ (líneas)×(altura de
+    línea); como una fuente menor mete más caracteres por línea y reduce la
+    altura, mantener el espacio vertical constante implica tamaño ∝ 1/√(longitud).
+    """
+    n = len(texto)
+    if n <= _BODY_BASE_CHARS:
+        return _BODY_BASE_SZ
+    sz = round(_BODY_BASE_SZ * math.sqrt(_BODY_BASE_CHARS / n))
+    return max(_BODY_MIN_SZ, sz)
 
 
 def _strip_merge_fields(xml: str) -> str:
@@ -117,6 +141,15 @@ def generar_certificado_docx(
     duracion            = duracion or _DURACION_DEFAULT
     texto_participacion = texto_participacion or _TEXTO_PARTICIPACION_DEFAULT
 
+    # Tamaño de fuente autoajustado del cuerpo según la longitud real de la frase
+    # (reproduce la del template solo para medirla), reservando espacio a la firma.
+    cuerpo_texto = (
+        f"Con C.I. {cedula} {texto_participacion} {nombre_curso}, "
+        f"realizada en la ciudad de {ciudad} - Ecuador, el {dia_mes} de {anio} "
+        f"({duracion} de duración)."
+    )
+    sz_cuerpo = _tamano_fuente_cuerpo(cuerpo_texto)
+
     reemplazos = {
         "«apellidos_y_nombres_de_la_persona»": xml_escape(nombre.upper()),
         "«Número_de_cédula»":                  xml_escape(cedula),
@@ -150,6 +183,12 @@ def generar_certificado_docx(
                     xml = _repair_placeholder_runs(xml)
                     for placeholder, valor in reemplazos.items():
                         xml = xml.replace(placeholder, valor)
+                    # El tamaño 32 se usa solo en el párrafo del cuerpo: escalarlo
+                    # ahí reduce la fuente cuando el texto es largo y evita invadir
+                    # el bloque de firma. Solo en document.xml (los headers no usan 32).
+                    if item == "word/document.xml" and sz_cuerpo != _BODY_BASE_SZ:
+                        xml = xml.replace('<w:sz w:val="32"/>',   f'<w:sz w:val="{sz_cuerpo}"/>')
+                        xml = xml.replace('<w:szCs w:val="32"/>', f'<w:szCs w:val="{sz_cuerpo}"/>')
                     data = xml.encode("utf-8")
                 zout.writestr(item, data)
 
