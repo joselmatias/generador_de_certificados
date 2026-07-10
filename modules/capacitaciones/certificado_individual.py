@@ -9,7 +9,7 @@ Flujo:
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 import streamlit as st
 
@@ -37,6 +37,17 @@ _TEXTO_PARTICIPACION_DEFAULT = (
 
 def _fmt_fecha(d: date) -> str:
     return f"{d.day} de {_MESES_ES[d.month]} de {d.year}"
+
+
+def _calcular_horas(hora_inicio: str, hora_fin: str) -> int | None:
+    """Calcula la duración en horas completas a partir de 'HH:MM' - 'HH:MM'."""
+    try:
+        hi = datetime.strptime(hora_inicio, "%H:%M")
+        hf = datetime.strptime(hora_fin, "%H:%M")
+        horas = round((hf - hi).total_seconds() / 3600)
+        return horas if horas > 0 else None
+    except (ValueError, TypeError):
+        return None
 
 
 def mostrar_certificado_individual() -> None:
@@ -84,6 +95,11 @@ def mostrar_certificado_individual() -> None:
     # Valores precargados desde el reporte seleccionado
     precarga_nombre_evento = reporte_sel.get("tema", "") if reporte_sel else ""
     precarga_fecha_str     = reporte_sel.get("fecha_evento", "") if reporte_sel else ""
+    precarga_ciudad        = reporte_sel.get("canton", "") if reporte_sel else ""
+    precarga_horas = (
+        _calcular_horas(reporte_sel.get("hora_inicio", ""), reporte_sel.get("hora_fin", ""))
+        if reporte_sel else None
+    )
 
     try:
         precarga_fecha = date.fromisoformat(precarga_fecha_str) if precarga_fecha_str else date.today()
@@ -116,7 +132,7 @@ def mostrar_certificado_individual() -> None:
             "Cantidad",
             min_value=1,
             max_value=999,
-            value=8,
+            value=precarga_horas or 8,
             step=1,
             key="ci_valor_dur",
         )
@@ -159,7 +175,12 @@ def mostrar_certificado_individual() -> None:
         key="ci_texto_participacion",
     )
 
-    ciudad = st.text_input("Ciudad", key="ci_ciudad", max_chars=100)
+    ciudad = st.text_input(
+        "Ciudad",
+        value=precarga_ciudad,
+        key="ci_ciudad",
+        max_chars=100,
+    )
 
     generado_por = st.text_input(
         "Generado por (nombre de quien genera el certificado)",
