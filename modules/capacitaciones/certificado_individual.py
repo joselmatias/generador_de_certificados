@@ -50,6 +50,25 @@ def _calcular_horas(hora_inicio: str, hora_fin: str) -> int | None:
         return None
 
 
+def _parsear_fecha_reporte(texto: str) -> tuple[date, date | None]:
+    """Interpreta el fecha_evento del reporte: 'YYYY-MM-DD' o 'YYYY-MM-DD al YYYY-MM-DD'.
+
+    Devuelve (inicio, fin). fin es None si es un solo día.
+    """
+    partes = (texto or "").split(" al ")
+    try:
+        inicio = date.fromisoformat(partes[0].strip())
+    except (ValueError, TypeError, IndexError):
+        return date.today(), None
+    fin: date | None = None
+    if len(partes) > 1:
+        try:
+            fin = date.fromisoformat(partes[1].strip())
+        except (ValueError, TypeError):
+            fin = None
+    return inicio, fin
+
+
 def mostrar_certificado_individual() -> None:
     """Renderiza el módulo de generación de certificado individual."""
     oficina        = st.session_state.get("oficina_id", "")
@@ -78,33 +97,59 @@ def mostrar_certificado_individual() -> None:
 
     st.divider()
 
+    # Defaults iniciales de los campos que se precargan desde un reporte. Se
+    # siembran en session_state ANTES de crear los widgets; los widgets NO usan
+    # value= (para evitar el conflicto value/session_state de Streamlit) y el
+    # callback del selectbox los actualiza al vincular un reporte.
+    _defaults = {
+        "ci_nombre_evento":      "",
+        "ci_ciudad":             "",
+        "ci_valor_dur":          8,
+        "ci_tipo_dur":           "Por horas",
+        "ci_fecha_evento":       date.today(),
+        "ci_fecha_evento_rango": (date.today(), date.today()),
+    }
+    for _k, _v in _defaults.items():
+        st.session_state.setdefault(_k, _v)
+
     opciones = ["— Sin vincular a reporte —"] + [
         f"N.° {r['numero_reporte']} ({r.get('year_reporte', anio_actual)}) — {r.get('tema', '')}"
         for r in reportes
     ]
 
-    sel_idx = st.selectbox(
+    def _aplicar_reporte() -> None:
+        """Al cambiar el reporte vinculado, precarga los campos del evento."""
+        idx = st.session_state.get("ci_reporte_idx", 0)
+        rep = reportes[idx - 1] if idx > 0 else None
+        if not rep:
+            return
+        st.session_state["ci_nombre_evento"] = rep.get("tema", "") or ""
+        st.session_state["ci_ciudad"]        = rep.get("canton", "") or ""
+        inicio, fin = _parsear_fecha_reporte(rep.get("fecha_evento", ""))
+        if fin and fin != inicio:
+            # Evento de varios días → duración en días
+            st.session_state["ci_tipo_dur"]           = "Por días"
+            st.session_state["ci_fecha_evento_rango"] = (inicio, fin)
+            st.session_state["ci_valor_dur"]          = (fin - inicio).days + 1
+        else:
+            st.session_state["ci_tipo_dur"]     = "Por horas"
+            st.session_state["ci_fecha_evento"] = inicio
+            horas = _calcular_horas(rep.get("hora_inicio", ""), rep.get("hora_fin", ""))
+            if horas:
+                st.session_state["ci_valor_dur"] = horas
+
+    st.selectbox(
         "Vincular a reporte de capacitación del año actual (opcional)",
         options=range(len(opciones)),
         format_func=lambda i: opciones[i],
         key="ci_reporte_idx",
+        on_change=_aplicar_reporte,
     )
 
-    reporte_sel = reportes[sel_idx - 1] if sel_idx > 0 else None
-
-    # Valores precargados desde el reporte seleccionado
-    precarga_nombre_evento = reporte_sel.get("tema", "") if reporte_sel else ""
-    precarga_fecha_str     = reporte_sel.get("fecha_evento", "") if reporte_sel else ""
-    precarga_ciudad        = reporte_sel.get("canton", "") if reporte_sel else ""
-    precarga_horas = (
-        _calcular_horas(reporte_sel.get("hora_inicio", ""), reporte_sel.get("hora_fin", ""))
-        if reporte_sel else None
+    reporte_sel = (
+        reportes[st.session_state["ci_reporte_idx"] - 1]
+        if st.session_state.get("ci_reporte_idx", 0) > 0 else None
     )
-
-    try:
-        precarga_fecha = date.fromisoformat(precarga_fecha_str) if precarga_fecha_str else date.today()
-    except ValueError:
-        precarga_fecha = date.today()
 
     st.divider()
     st.subheader("Datos del participante")
@@ -119,7 +164,6 @@ def mostrar_certificado_individual() -> None:
 
     nombre_evento = st.text_input(
         "Nombre del evento",
-        value=precarga_nombre_evento,
         key="ci_nombre_evento",
         max_chars=300,
     )
@@ -132,7 +176,6 @@ def mostrar_certificado_individual() -> None:
             "Cantidad",
             min_value=1,
             max_value=999,
-            value=precarga_horas or 8,
             step=1,
             key="ci_valor_dur",
         )
@@ -143,13 +186,12 @@ def mostrar_certificado_individual() -> None:
     if tipo_duracion == "Por días":
         fechas_sel = st.date_input(
             "Fecha del evento (selecciona el rango de días)",
-            value=(precarga_fecha, precarga_fecha),
             min_value=date(2024, 1, 1),
             max_value=date(2030, 12, 31),
             key="ci_fecha_evento_rango",
         )
-        fecha_inicio = fechas_sel[0] if fechas_sel else precarga_fecha
-        fecha_fin    = fechas_sel[-1] if fechas_sel else precarga_fecha
+        fecha_inicio = fechas_sel[0] if fechas_sel else date.today()
+        fecha_fin    = fechas_sel[-1] if fechas_sel else fecha_inicio
         fecha_evento_d = fecha_inicio
         if fecha_fin != fecha_inicio:
             fecha_evento_txt_rango = (
@@ -161,7 +203,6 @@ def mostrar_certificado_individual() -> None:
     else:
         fecha_evento_d = st.date_input(
             "Fecha del evento",
-            value=precarga_fecha,
             min_value=date(2024, 1, 1),
             max_value=date(2030, 12, 31),
             key="ci_fecha_evento",
@@ -177,7 +218,6 @@ def mostrar_certificado_individual() -> None:
 
     ciudad = st.text_input(
         "Ciudad",
-        value=precarga_ciudad,
         key="ci_ciudad",
         max_chars=100,
     )
