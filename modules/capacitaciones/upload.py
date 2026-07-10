@@ -3,13 +3,15 @@ upload.py — Módulo de carga de capacitaciones desde Google Forms.
 
 Flujo:
 1. Usuario sube el Excel/CSV exportado de Google Forms.
-2. forms_parser mapea y valida cada registro.
-3. Se muestra resumen de válidos vs. errores.
-4. Usuario ingresa el nombre del curso (aplica a todo el lote).
-5. Usuario selecciona la(s) fecha(s) del evento (reemplaza fecha del CSV).
-6. Se detectan duplicados antes de insertar (advertencia, no bloqueo).
-7. Botón confirmar → insertar registros válidos en la BD.
-8. Batch guardado en session state para transferir a Certificados.
+2. Opcionalmente vincula un reporte de capacitación, que precarga nombre
+   del curso, ciudad, duración y fecha(s) del evento.
+3. Completa/ajusta nombre del curso, generado por, ciudad y duración.
+4. Selecciona la(s) fecha(s) del evento (reemplaza fecha del CSV).
+5. forms_parser mapea y valida cada registro.
+6. Se muestra resumen de válidos vs. errores.
+7. Se detectan duplicados antes de insertar (advertencia, no bloqueo).
+8. Botón confirmar → insertar registros válidos en la BD; batch guardado
+   en session state (incluye ciudad/duración) para transferir a Certificados.
 """
 
 import io
@@ -18,13 +20,23 @@ from datetime import date
 import streamlit as st
 import pandas as pd
 
-from database.db import get_connection, insertar_capacitacion, verificar_duplicados
+from database.db import (
+    get_connection,
+    insertar_capacitacion,
+    verificar_duplicados,
+    consultar_reportes_capacitacion,
+)
 from utils.forms_parser import parsear_forms, registros_a_dataframe, RegistroProcesado
+from utils.reporte_helpers import calcular_horas, parsear_fecha_reporte
 
 
 _KEY_RESULTADO     = "cap_upload_resultado"
 _KEY_CURSO         = "cap_upload_curso"
 _KEY_GENERADO_POR  = "cap_upload_generado_por"
+_KEY_CIUDAD        = "cap_upload_ciudad"
+_KEY_TIPO_DUR      = "cap_upload_tipo_dur"
+_KEY_VALOR_DUR     = "cap_upload_valor_dur"
+_KEY_REPORTE_IDX   = "cap_upload_reporte_idx"
 _KEY_BATCH         = "cap_batch_listo"
 _KEY_FORZAR_TODOS  = "cap_upload_forzar_todos"
 
@@ -55,9 +67,51 @@ def mostrar_carga() -> None:
     )
 
     # ------------------------------------------------------------------
-    # PASO 2: Nombre del curso y generado por
+    # PASO 2: Vincular a reporte de capacitación (opcional)
     # ------------------------------------------------------------------
-    st.subheader("2. Datos del lote")
+    st.subheader("2. Vincular a reporte de capacitación (opcional)")
+
+    anio_actual = date.today().year
+    with get_connection() as con:
+        reportes = consultar_reportes_capacitacion(con, oficina=oficina, anio=anio_actual)
+
+    opciones_reporte = ["— Sin vincular a reporte —"] + [
+        f"N.° {r['numero_reporte']} ({r.get('year_reporte', anio_actual)}) — {r.get('tema', '')}"
+        for r in reportes
+    ]
+
+    def _aplicar_reporte() -> None:
+        """Al vincular un reporte, precarga curso, ciudad, duración y fecha(s)."""
+        idx = st.session_state.get(_KEY_REPORTE_IDX, 0)
+        rep = reportes[idx - 1] if idx > 0 else None
+        if not rep:
+            return
+        st.session_state[_KEY_CURSO]  = rep.get("tema", "") or ""
+        st.session_state[_KEY_CIUDAD] = rep.get("canton", "") or ""
+        inicio, fin = parsear_fecha_reporte(rep.get("fecha_evento", ""))
+        if fin and fin != inicio:
+            st.session_state["cap_upload_fecha"] = (inicio, fin)
+            st.session_state[_KEY_TIPO_DUR]      = "Por días"
+            st.session_state[_KEY_VALOR_DUR]     = (fin - inicio).days + 1
+        else:
+            st.session_state["cap_upload_fecha"] = (inicio,)
+            st.session_state[_KEY_TIPO_DUR]      = "Por horas"
+            horas = calcular_horas(rep.get("hora_inicio", ""), rep.get("hora_fin", ""))
+            if horas:
+                st.session_state[_KEY_VALOR_DUR] = horas
+
+    st.selectbox(
+        "Reporte de capacitación del año actual",
+        options=range(len(opciones_reporte)),
+        format_func=lambda i: opciones_reporte[i],
+        key=_KEY_REPORTE_IDX,
+        on_change=_aplicar_reporte,
+    )
+
+    # ------------------------------------------------------------------
+    # PASO 3: Datos del lote
+    # ------------------------------------------------------------------
+    st.subheader("3. Datos del lote")
     nombre_curso = st.text_input(
         "Nombre del curso (aplica a todos los registros del archivo)",
         placeholder="Ej: Gestión de Recursos Hídricos — Noviembre 2024",
@@ -70,11 +124,33 @@ def mostrar_carga() -> None:
         max_chars=200,
         key=_KEY_GENERADO_POR,
     )
+    ciudad = st.text_input(
+        "Ciudad",
+        placeholder="Ej: Guayaquil",
+        max_chars=100,
+        key=_KEY_CIUDAD,
+    )
+    col_tipo_dur, col_val_dur = st.columns([1, 1])
+    with col_tipo_dur:
+        tipo_duracion = st.radio(
+            "Tipo de duración", options=["Por horas", "Por días"], key=_KEY_TIPO_DUR,
+        )
+    with col_val_dur:
+        valor_duracion = st.number_input(
+            "Cantidad",
+            min_value=1,
+            max_value=999,
+            value=8,
+            step=1,
+            key=_KEY_VALOR_DUR,
+        )
+    unidad_dur   = "horas" if tipo_duracion == "Por horas" else "días"
+    duracion_str = f"{valor_duracion} {unidad_dur}"
 
     # ------------------------------------------------------------------
-    # PASO 3: Fecha(s) del evento
+    # PASO 4: Fecha(s) del evento
     # ------------------------------------------------------------------
-    st.subheader("3. Fecha(s) del evento")
+    st.subheader("4. Fecha(s) del evento")
     fechas_sel = st.date_input(
         "Selecciona el día o rango de días del evento",
         value=(),
@@ -100,7 +176,7 @@ def mostrar_carga() -> None:
         fecha_evento_str = fecha_capacitacion_iso = None
 
     # ------------------------------------------------------------------
-    # PASO 4: Parsear y validar
+    # PASO 5: Parsear y validar
     # ------------------------------------------------------------------
     col_parsear, _ = st.columns([1, 3])
     with col_parsear:
@@ -130,7 +206,7 @@ def mostrar_carga() -> None:
                 return
 
     # ------------------------------------------------------------------
-    # PASO 5: Mostrar resultado de validación
+    # PASO 6: Mostrar resultado de validación
     # ------------------------------------------------------------------
     resultado = st.session_state.get(_KEY_RESULTADO)
     if resultado is None:
@@ -143,7 +219,7 @@ def mostrar_carga() -> None:
             reg.datos["fecha_evento"]       = fecha_evento_str
 
     st.divider()
-    st.subheader("4. Resultado de validación")
+    st.subheader("6. Resultado de validación")
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Total de filas", resultado.total_filas)
@@ -205,11 +281,11 @@ def mostrar_carga() -> None:
             )
 
     # ------------------------------------------------------------------
-    # PASO 6: Detectar duplicados
+    # PASO 7: Detectar duplicados
     # ------------------------------------------------------------------
     if registros_base:
         st.divider()
-        st.subheader("5. Verificación de duplicados")
+        st.subheader("7. Verificación de duplicados")
 
         duplicados: list[RegistroProcesado] = []
         nuevos: list[RegistroProcesado] = []
@@ -246,11 +322,11 @@ def mostrar_carga() -> None:
         st.info(f"**{len(nuevos)} registros nuevos** listos para insertar.")
 
         # ------------------------------------------------------------------
-        # PASO 7: Confirmar inserción
+        # PASO 8: Confirmar inserción
         # ------------------------------------------------------------------
         if nuevos:
             st.divider()
-            st.subheader("6. Confirmar carga")
+            st.subheader("8. Confirmar carga")
 
             if st.button(
                 f"✅ Insertar {len(nuevos)} registros en la base de datos",
@@ -277,6 +353,8 @@ def mostrar_carga() -> None:
                         "oficina":        oficina,
                         "oficina_nombre": oficina_nombre,
                         "generado_por":   generado_por.strip(),
+                        "ciudad":         ciudad.strip(),
+                        "duracion":       duracion_str,
                     }
 
                 del st.session_state[_KEY_RESULTADO]

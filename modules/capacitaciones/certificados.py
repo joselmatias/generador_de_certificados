@@ -101,7 +101,11 @@ def mostrar_certificados() -> None:
 
     with col_pdf:
         if st.button(f"📄 Generar {len(df)} certificados PDF", type="primary", use_container_width=True):
-            zip_bytes, errores = _generar_zip_certificados(df)
+            zip_bytes, errores = _generar_zip_certificados(
+                df,
+                ciudad=batch.get("ciudad", ""),
+                duracion=batch.get("duracion", ""),
+            )
 
             if errores:
                 st.warning(f"Se generaron certificados con {len(errores)} errores:")
@@ -189,7 +193,9 @@ def _mostrar_registro_emitidos() -> None:
     )
 
 
-def _generar_zip_certificados(df: pd.DataFrame) -> tuple[bytes | None, list[str]]:
+def _generar_zip_certificados(
+    df: pd.DataFrame, ciudad: str = "", duracion: str = "",
+) -> tuple[bytes | None, list[str]]:
     """Genera un ZIP en memoria con un .pdf por participante."""
     zip_buffer = io.BytesIO()
     errores: list[str] = []
@@ -207,6 +213,8 @@ def _generar_zip_certificados(df: pd.DataFrame) -> tuple[bytes | None, list[str]
                     nombre_curso=str(fila.get("nombre_curso", "")),
                     fecha_capacitacion=str(fila.get("fecha_capacitacion", "")),
                     codigo_certificado=str(fila.get("codigo_certificado", "")),
+                    ciudad=ciudad,
+                    duracion=duracion,
                 )
                 nombre_archivo = _nombre_archivo_pdf(
                     str(fila.get("nombre", "participante")),

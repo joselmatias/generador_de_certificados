@@ -9,7 +9,7 @@ Flujo:
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 
 import streamlit as st
 
@@ -21,6 +21,7 @@ from database.db import (
     obtener_ultimo_codigo_certificado,
 )
 from utils.docx_generator import generar_certificado_pdf
+from utils.reporte_helpers import calcular_horas, parsear_fecha_reporte
 from utils.validator import validar_cedula
 
 
@@ -37,36 +38,6 @@ _TEXTO_PARTICIPACION_DEFAULT = (
 
 def _fmt_fecha(d: date) -> str:
     return f"{d.day} de {_MESES_ES[d.month]} de {d.year}"
-
-
-def _calcular_horas(hora_inicio: str, hora_fin: str) -> int | None:
-    """Calcula la duración en horas completas a partir de 'HH:MM' - 'HH:MM'."""
-    try:
-        hi = datetime.strptime(hora_inicio, "%H:%M")
-        hf = datetime.strptime(hora_fin, "%H:%M")
-        horas = round((hf - hi).total_seconds() / 3600)
-        return horas if horas > 0 else None
-    except (ValueError, TypeError):
-        return None
-
-
-def _parsear_fecha_reporte(texto: str) -> tuple[date, date | None]:
-    """Interpreta el fecha_evento del reporte: 'YYYY-MM-DD' o 'YYYY-MM-DD al YYYY-MM-DD'.
-
-    Devuelve (inicio, fin). fin es None si es un solo día.
-    """
-    partes = (texto or "").split(" al ")
-    try:
-        inicio = date.fromisoformat(partes[0].strip())
-    except (ValueError, TypeError, IndexError):
-        return date.today(), None
-    fin: date | None = None
-    if len(partes) > 1:
-        try:
-            fin = date.fromisoformat(partes[1].strip())
-        except (ValueError, TypeError):
-            fin = None
-    return inicio, fin
 
 
 def mostrar_certificado_individual() -> None:
@@ -125,7 +96,7 @@ def mostrar_certificado_individual() -> None:
             return
         st.session_state["ci_nombre_evento"] = rep.get("tema", "") or ""
         st.session_state["ci_ciudad"]        = rep.get("canton", "") or ""
-        inicio, fin = _parsear_fecha_reporte(rep.get("fecha_evento", ""))
+        inicio, fin = parsear_fecha_reporte(rep.get("fecha_evento", ""))
         if fin and fin != inicio:
             # Evento de varios días → duración en días
             st.session_state["ci_tipo_dur"]           = "Por días"
@@ -134,7 +105,7 @@ def mostrar_certificado_individual() -> None:
         else:
             st.session_state["ci_tipo_dur"]     = "Por horas"
             st.session_state["ci_fecha_evento"] = inicio
-            horas = _calcular_horas(rep.get("hora_inicio", ""), rep.get("hora_fin", ""))
+            horas = calcular_horas(rep.get("hora_inicio", ""), rep.get("hora_fin", ""))
             if horas:
                 st.session_state["ci_valor_dur"] = horas
 
