@@ -1517,9 +1517,6 @@ def _validar_campos_reporte_adicionales(ctx: dict) -> list[str]:
 
     if int(ctx.get("num_personas") or 0) <= 0:
         errores.append("Ingresa un numero de personas capacitadas mayor a 0.")
-    if int(ctx.get("encuestas_realizadas") or 0) <= 0:
-        errores.append("Ingresa un numero de encuestas realizadas mayor a 0.")
-
     return errores
 
 
