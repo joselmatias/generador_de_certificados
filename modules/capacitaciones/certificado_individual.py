@@ -4,7 +4,7 @@ certificado_individual.py — Generación de un certificado individual con formu
 Flujo:
 1. Selecciona (opcionalmente) un reporte de capacitación existente para precargar fecha y nombre.
 2. Completa los datos del participante: nombre, CI, evento, fecha, duración, ciudad, texto.
-3. Genera PDF → descarga directa + registra en Supabase (capacitaciones + lotes_certificados).
+3. Reserva un código, registra el lote resumido en Supabase y genera el PDF.
 """
 
 from __future__ import annotations
@@ -16,9 +16,9 @@ import streamlit as st
 from database.db import (
     get_connection,
     consultar_reportes_capacitacion,
-    insertar_capacitacion,
     insertar_lote_certificado,
     obtener_ultimo_codigo_certificado,
+    reservar_rango_codigos_certificado,
 )
 from utils.docx_generator import generar_certificado_pdf
 from utils.reporte_helpers import calcular_horas, parsear_fecha_reporte
@@ -214,46 +214,46 @@ def mostrar_certificado_individual() -> None:
         fecha_iso        = str(fecha_evento_d)
         fecha_evento_txt = fecha_evento_txt_rango or _fmt_fecha(fecha_evento_d)
 
-        with get_connection() as con:
-            datos_cap = {
-                "oficina":            oficina,
-                "timestamp_forms":    None,
-                "nombre":             nombre.strip(),
-                "email":              None,
-                "cedula":             cedula.strip(),
-                "fecha_capacitacion": fecha_iso,
-                "fecha_evento":       fecha_evento_txt,
-                "institucion":        None,
-                "provincia":          None,
-                "nombre_curso":       nombre_evento.strip(),
-                "codigo_certificado": None,
-                "p1_conocimiento":    None,
-                "p2_inquietudes":     None,
-                "p3_contenido":       None,
-                "p4_presencialidad":  None,
-                "p5_puntualidad":     None,
-                "p6_logistica":       None,
-                "p7_duracion":        None,
-                "temas_adicionales":  None,
-                "sugerencias":        None,
-                "registrado_por":     generado_por.strip(),
-            }
-            insertar_capacitacion(con, datos_cap)
-            codigo = datos_cap["codigo_certificado"]
+        numero_reporte_vinculado = (
+            reporte_sel["numero_reporte"] if reporte_sel else None
+        )
+        clave_emision = (
+            oficina,
+            nombre.strip(),
+            cedula.strip(),
+            nombre_evento.strip(),
+            fecha_evento_txt,
+            generado_por.strip(),
+            numero_reporte_vinculado,
+        )
+        reserva = st.session_state.get("ci_emision_reservada")
 
-            numero_reporte_vinculado = (
-                reporte_sel["numero_reporte"] if reporte_sel else None
-            )
-            insertar_lote_certificado(con, {
-                "oficina":                  oficina,
-                "nombre_evento":            nombre_evento.strip(),
-                "fecha_evento":             fecha_evento_txt,
-                "num_participantes":        1,
-                "codigo_inicio":            codigo,
-                "codigo_fin":               codigo,
-                "generado_por":             generado_por.strip(),
-                "numero_reporte_vinculado": numero_reporte_vinculado,
-            })
+        # Si LibreOffice falla, un nuevo clic con los mismos datos reutiliza el
+        # código ya consumido y no crea otra fila en lotes_certificados.
+        if not reserva or reserva.get("clave") != clave_emision:
+            try:
+                with get_connection() as con:
+                    codigo = reservar_rango_codigos_certificado(
+                        con, date.today().year, 1,
+                    )[0]
+                    lote_id = insertar_lote_certificado(con, {
+                        "oficina":                  oficina,
+                        "nombre_evento":            nombre_evento.strip(),
+                        "fecha_evento":             fecha_evento_txt,
+                        "num_participantes":        1,
+                        "codigo_inicio":            codigo,
+                        "codigo_fin":               codigo,
+                        "generado_por":             generado_por.strip(),
+                        "numero_reporte_vinculado": numero_reporte_vinculado,
+                    })
+            except Exception as e:
+                st.error(f"No se pudo reservar el código en Supabase: {e}")
+                return
+
+            reserva = {"clave": clave_emision, "codigo": codigo, "lote_id": lote_id}
+            st.session_state["ci_emision_reservada"] = reserva
+        else:
+            codigo = reserva["codigo"]
 
         try:
             pdf_bytes = generar_certificado_pdf(

@@ -160,6 +160,54 @@ def parsear_forms(
     return resultado
 
 
+def parsear_forms_sin_validacion(
+    archivo: io.BytesIO | str,
+    nombre_curso: str,
+    oficina: str,
+    registrado_por: str,
+) -> list[dict[str, Any]]:
+    """Lee un export de Forms sin validar ni normalizar su contenido.
+
+    Este flujo se usa exclusivamente para preparar certificados. Se asume que
+    el archivo ya fue revisado por el operador; por eso solo se comprueba que
+    sea legible y que incluya las columnas técnicas indispensables de nombre y
+    cédula. Las demás columnas reconocidas se conservan en memoria para la
+    vista previa y la exportación, pero nunca se persisten en Supabase.
+    """
+    df = _leer_archivo(archivo)
+    df_mapeado, _, _ = _mapear_columnas(df)
+
+    requeridas = {"nombre", "cedula"}
+    faltantes = sorted(requeridas - set(df_mapeado.columns))
+    if faltantes:
+        etiquetas = {
+            "nombre": "Nombres y apellidos",
+            "cedula": "Número de cédula",
+        }
+        nombres = ", ".join(etiquetas[campo] for campo in faltantes)
+        raise ValueError(f"Faltan columnas requeridas: {nombres}.")
+
+    registros: list[dict[str, Any]] = []
+    for _, fila in df_mapeado.iterrows():
+        datos: dict[str, Any] = {
+            "nombre_curso": nombre_curso.strip(),
+            "oficina": oficina,
+            "registrado_por": registrado_por.strip(),
+            "codigo_certificado": None,
+        }
+        for campo in _MAPEO_COLUMNAS.values():
+            valor = _get(fila, campo)
+            datos[campo] = valor or None
+
+        # Nombre y cédula son las únicas columnas estructuralmente obligatorias.
+        # Sus valores se preservan tal como llegan, sin aplicar reglas de negocio.
+        datos["nombre"] = _get(fila, "nombre")
+        datos["cedula"] = _get(fila, "cedula")
+        registros.append(datos)
+
+    return registros
+
+
 # ---------------------------------------------------------------------------
 # Funciones auxiliares privadas
 # ---------------------------------------------------------------------------

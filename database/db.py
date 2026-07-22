@@ -64,6 +64,35 @@ _FECHA_EVENTO_INICIAL_SQL = (
 # Capacitaciones
 # ---------------------------------------------------------------------------
 
+def reservar_rango_codigos_certificado(
+    con: _Conn,
+    year: int,
+    cantidad: int,
+) -> list[str]:
+    """Reserva atómicamente ``cantidad`` códigos consecutivos para un año.
+
+    La primera numeración de un año comienza en 1676. La operación usa una
+    única sentencia UPSERT, de modo que dos oficinas no pueden recibir rangos
+    superpuestos aunque generen certificados al mismo tiempo.
+    """
+    if cantidad < 1:
+        raise ValueError("La cantidad de códigos a reservar debe ser mayor que cero.")
+
+    row = con.execute(
+        """
+        INSERT INTO contador_certificado (year, ultimo_numero)
+        VALUES (%(year)s, 1675 + %(cantidad)s)
+        ON CONFLICT (year) DO UPDATE
+        SET ultimo_numero = contador_certificado.ultimo_numero + %(cantidad)s
+        RETURNING ultimo_numero
+        """,
+        {"year": year, "cantidad": cantidad},
+    ).fetchone()
+    numero_fin = row["ultimo_numero"]
+    numero_inicio = numero_fin - cantidad + 1
+    return [f"DRAC-{year}-{numero}" for numero in range(numero_inicio, numero_fin + 1)]
+
+
 def obtener_siguiente_codigo_certificado(con: _Conn, year: int) -> str:
     """
     Genera el siguiente código de certificado con formato DRAC-YYYY-NNNN.
@@ -73,17 +102,7 @@ def obtener_siguiente_codigo_certificado(con: _Conn, year: int) -> str:
     borrar filas de prueba en `capacitaciones` nunca afecta la numeración
     futura ni genera colisiones. La numeración parte de 1676 (histórico).
     """
-    row = con.execute(
-        """
-        INSERT INTO contador_certificado (year, ultimo_numero)
-        VALUES (%(year)s, 1676)
-        ON CONFLICT (year) DO UPDATE
-        SET ultimo_numero = contador_certificado.ultimo_numero + 1
-        RETURNING ultimo_numero
-        """,
-        {"year": year},
-    ).fetchone()
-    return f"DRAC-{year}-{row['ultimo_numero']}"
+    return reservar_rango_codigos_certificado(con, year, 1)[0]
 
 
 def obtener_ultimo_codigo_certificado(con: _Conn, year: int) -> str | None:

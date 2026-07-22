@@ -1,44 +1,31 @@
 """
-upload.py — Módulo de carga de capacitaciones desde Google Forms.
+upload.py — Preparación de lotes de certificados desde un export de Google Forms.
 
-Flujo:
-1. Usuario sube el Excel/CSV exportado de Google Forms.
-2. Opcionalmente vincula un reporte de capacitación, que precarga nombre
-   del curso, ciudad, duración y fecha(s) del evento.
-3. Completa/ajusta nombre del curso, generado por, ciudad y duración.
-4. Selecciona la(s) fecha(s) del evento (reemplaza fecha del CSV).
-5. forms_parser mapea y valida cada registro.
-6. Se muestra resumen de válidos vs. errores.
-7. Se detectan duplicados antes de insertar (advertencia, no bloqueo).
-8. Botón confirmar → insertar registros válidos en la BD; batch guardado
-   en session state (incluye ciudad/duración) para transferir a Certificados.
+El archivo se considera previamente revisado por el operador. La aplicación
+solo comprueba que pueda leerse y que contenga las columnas de nombre y cédula;
+no valida contenido, no busca duplicados y no guarda encuestas en Supabase.
 """
 
 import io
 from datetime import date
 
-import streamlit as st
 import pandas as pd
+import streamlit as st
 
-from database.db import (
-    get_connection,
-    insertar_capacitacion,
-    verificar_duplicados,
-    consultar_reportes_capacitacion,
-)
-from utils.forms_parser import parsear_forms, registros_a_dataframe, RegistroProcesado
+from database.db import get_connection, consultar_reportes_capacitacion
+from utils.forms_parser import parsear_forms_sin_validacion
 from utils.reporte_helpers import calcular_horas, parsear_fecha_reporte
 
 
-_KEY_RESULTADO     = "cap_upload_resultado"
-_KEY_CURSO         = "cap_upload_curso"
-_KEY_GENERADO_POR  = "cap_upload_generado_por"
-_KEY_CIUDAD        = "cap_upload_ciudad"
-_KEY_TIPO_DUR      = "cap_upload_tipo_dur"
-_KEY_VALOR_DUR     = "cap_upload_valor_dur"
-_KEY_REPORTE_IDX   = "cap_upload_reporte_idx"
-_KEY_BATCH         = "cap_batch_listo"
-_KEY_FORZAR_TODOS  = "cap_upload_forzar_todos"
+_KEY_RESULTADO = "cap_upload_registros"
+_KEY_CURSO = "cap_upload_curso"
+_KEY_GENERADO_POR = "cap_upload_generado_por"
+_KEY_CIUDAD = "cap_upload_ciudad"
+_KEY_TIPO_DUR = "cap_upload_tipo_dur"
+_KEY_VALOR_DUR = "cap_upload_valor_dur"
+_KEY_REPORTE_IDX = "cap_upload_reporte_idx_obligatorio"
+_KEY_FECHA = "cap_upload_fecha"
+_KEY_BATCH = "cap_batch_listo"
 
 _MESES_ES = {
     1: "enero", 2: "febrero", 3: "marzo", 4: "abril",
@@ -48,17 +35,18 @@ _MESES_ES = {
 
 
 def mostrar_carga() -> None:
-    """Renderiza el módulo completo de carga de capacitaciones."""
-    oficina        = st.session_state.get("oficina_id", "")
+    """Renderiza la preparación de un lote sin persistir sus participantes."""
+    oficina = st.session_state.get("oficina_id", "")
     oficina_nombre = st.session_state.get("oficina_nombre", oficina)
 
     st.title("📋 Carga de Capacitaciones — Google Forms")
     st.markdown(f"**Oficina:** {oficina_nombre}")
+    st.info(
+        "El archivo se procesará tal como fue cargado. Asegúrate de haber "
+        "revisado previamente nombres, cédulas, correos y demás respuestas."
+    )
     st.divider()
 
-    # ------------------------------------------------------------------
-    # PASO 1: Subir archivo
-    # ------------------------------------------------------------------
     st.subheader("1. Seleccionar archivo exportado de Google Forms")
     archivo = st.file_uploader(
         "Subir Excel (.xlsx) o CSV (.csv)",
@@ -66,100 +54,98 @@ def mostrar_carga() -> None:
         help="Exporta el archivo desde Google Forms → Respuestas → Descargar CSV o XLSX.",
     )
 
-    # ------------------------------------------------------------------
-    # PASO 2: Vincular a reporte de capacitación (opcional)
-    # ------------------------------------------------------------------
-    st.subheader("2. Vincular a reporte de capacitación (opcional)")
-
+    st.subheader("2. Vincular a reporte de capacitación")
     anio_actual = date.today().year
     with get_connection() as con:
-        reportes = consultar_reportes_capacitacion(con, oficina=oficina, anio=anio_actual)
-
-    opciones_reporte = ["— Sin vincular a reporte —"] + [
-        f"N.° {r['numero_reporte']} ({r.get('year_reporte', anio_actual)}) — {r.get('tema', '')}"
-        for r in reportes
-    ]
+        reportes = consultar_reportes_capacitacion(
+            con, oficina=oficina, anio=anio_actual,
+        )
 
     def _aplicar_reporte() -> None:
-        """Al vincular un reporte, precarga curso, ciudad, duración y fecha(s)."""
-        idx = st.session_state.get(_KEY_REPORTE_IDX, 0)
-        rep = reportes[idx - 1] if idx > 0 else None
-        if not rep:
+        """Precarga los datos del evento desde el reporte seleccionado."""
+        idx = st.session_state.get(_KEY_REPORTE_IDX)
+        if idx is None or idx >= len(reportes):
             return
-        st.session_state[_KEY_CURSO]  = rep.get("tema", "") or ""
+        rep = reportes[idx]
+        st.session_state[_KEY_CURSO] = rep.get("tema", "") or ""
         st.session_state[_KEY_CIUDAD] = rep.get("canton", "") or ""
         inicio, fin = parsear_fecha_reporte(rep.get("fecha_evento", ""))
         if fin and fin != inicio:
-            st.session_state["cap_upload_fecha"] = (inicio, fin)
-            st.session_state[_KEY_TIPO_DUR]      = "Por días"
-            st.session_state[_KEY_VALOR_DUR]     = (fin - inicio).days + 1
+            st.session_state[_KEY_FECHA] = (inicio, fin)
+            st.session_state[_KEY_TIPO_DUR] = "Por días"
+            st.session_state[_KEY_VALOR_DUR] = (fin - inicio).days + 1
         else:
-            st.session_state["cap_upload_fecha"] = (inicio,)
-            st.session_state[_KEY_TIPO_DUR]      = "Por horas"
+            st.session_state[_KEY_FECHA] = (inicio,)
+            st.session_state[_KEY_TIPO_DUR] = "Por horas"
             horas = calcular_horas(rep.get("hora_inicio", ""), rep.get("hora_fin", ""))
             if horas:
                 st.session_state[_KEY_VALOR_DUR] = horas
 
-    st.selectbox(
-        "Reporte de capacitación del año actual",
-        options=range(len(opciones_reporte)),
-        format_func=lambda i: opciones_reporte[i],
-        key=_KEY_REPORTE_IDX,
-        on_change=_aplicar_reporte,
-    )
+    if reportes:
+        reporte_idx = st.selectbox(
+            "Reporte de capacitación del año actual",
+            options=range(len(reportes)),
+            index=None,
+            format_func=lambda i: (
+                f"N.° {reportes[i]['numero_reporte']} "
+                f"({reportes[i].get('year_reporte', anio_actual)}) — "
+                f"{reportes[i].get('tema', '')}"
+            ),
+            placeholder="Selecciona un reporte",
+            key=_KEY_REPORTE_IDX,
+            on_change=_aplicar_reporte,
+        )
+    else:
+        reporte_idx = None
+        st.session_state.pop(_KEY_REPORTE_IDX, None)
+        st.warning(
+            f"No existen reportes de capacitación de {anio_actual} para esta oficina. "
+            "Crea el reporte antes de preparar certificados."
+        )
 
-    # ------------------------------------------------------------------
-    # PASO 3: Datos del lote
-    # ------------------------------------------------------------------
+    reporte_sel = reportes[reporte_idx] if reporte_idx is not None else None
+
     st.subheader("3. Datos del lote")
+    st.session_state.setdefault(_KEY_CURSO, "")
+    st.session_state.setdefault(_KEY_GENERADO_POR, "")
+    st.session_state.setdefault(_KEY_CIUDAD, "")
+    st.session_state.setdefault(_KEY_TIPO_DUR, "Por horas")
+    st.session_state.setdefault(_KEY_VALOR_DUR, 8)
+    st.session_state.setdefault(_KEY_FECHA, ())
+
     nombre_curso = st.text_input(
         "Nombre del curso (aplica a todos los registros del archivo)",
-        placeholder="Ej: Gestión de Recursos Hídricos — Noviembre 2024",
         max_chars=200,
         key=_KEY_CURSO,
     )
     generado_por = st.text_input(
         "Generado por (nombre de quien genera los certificados)",
-        placeholder="Nombre completo",
         max_chars=200,
         key=_KEY_GENERADO_POR,
     )
-    ciudad = st.text_input(
-        "Ciudad",
-        placeholder="Ej: Guayaquil",
-        max_chars=100,
-        key=_KEY_CIUDAD,
-    )
-    col_tipo_dur, col_val_dur = st.columns([1, 1])
+    ciudad = st.text_input("Ciudad", max_chars=100, key=_KEY_CIUDAD)
+
+    col_tipo_dur, col_val_dur = st.columns(2)
     with col_tipo_dur:
         tipo_duracion = st.radio(
-            "Tipo de duración", options=["Por horas", "Por días"], key=_KEY_TIPO_DUR,
+            "Tipo de duración", ["Por horas", "Por días"], key=_KEY_TIPO_DUR,
         )
     with col_val_dur:
         valor_duracion = st.number_input(
-            "Cantidad",
-            min_value=1,
-            max_value=999,
-            value=8,
-            step=1,
-            key=_KEY_VALOR_DUR,
+            "Cantidad", min_value=1, max_value=999, step=1, key=_KEY_VALOR_DUR,
         )
-    unidad_dur   = "horas" if tipo_duracion == "Por horas" else "días"
+    unidad_dur = "horas" if tipo_duracion == "Por horas" else "días"
     duracion_str = f"{valor_duracion} {unidad_dur}"
 
-    # ------------------------------------------------------------------
-    # PASO 4: Fecha(s) del evento
-    # ------------------------------------------------------------------
     st.subheader("4. Fecha(s) del evento")
     fechas_sel = st.date_input(
         "Selecciona el día o rango de días del evento",
-        value=(),
         min_value=date(2024, 1, 1),
         max_value=date(2030, 12, 31),
-        key="cap_upload_fecha",
+        key=_KEY_FECHA,
     )
     fecha_inicio: date | None = fechas_sel[0] if fechas_sel else None
-    fecha_fin:   date | None = fechas_sel[-1] if fechas_sel else None
+    fecha_fin: date | None = fechas_sel[-1] if fechas_sel else None
 
     fecha_fin_iso: str | None = None
     if fecha_inicio and fecha_fin and fecha_inicio != fecha_fin:
@@ -171,221 +157,100 @@ def mostrar_carga() -> None:
         fecha_fin_iso = fecha_fin.isoformat()
     elif fecha_inicio:
         fecha_evento_str = (
-            f"{fecha_inicio.day} de {_MESES_ES[fecha_inicio.month]} de {fecha_inicio.year}"
+            f"{fecha_inicio.day} de {_MESES_ES[fecha_inicio.month]} "
+            f"de {fecha_inicio.year}"
         )
         fecha_capacitacion_iso = fecha_inicio.isoformat()
     else:
         fecha_evento_str = fecha_capacitacion_iso = None
 
-    # ------------------------------------------------------------------
-    # PASO 5: Parsear y validar
-    # ------------------------------------------------------------------
-    col_parsear, _ = st.columns([1, 3])
-    with col_parsear:
-        boton_parsear = st.button(
-            "Validar archivo",
-            disabled=(
-                archivo is None
-                or not nombre_curso.strip()
-                or not generado_por.strip()
-                or fecha_inicio is None
-            ),
-            use_container_width=True,
-        )
-
-    if boton_parsear and archivo and nombre_curso.strip() and generado_por.strip() and fecha_inicio:
-        with st.spinner("Procesando archivo..."):
+    st.subheader("5. Procesar archivo")
+    puede_procesar = bool(
+        archivo is not None
+        and reporte_sel is not None
+        and nombre_curso.strip()
+        and generado_por.strip()
+        and fecha_inicio is not None
+    )
+    if st.button(
+        "Procesar archivo",
+        disabled=not puede_procesar,
+        use_container_width=False,
+    ):
+        with st.spinner("Leyendo archivo..."):
             try:
-                resultado = parsear_forms(
+                archivo.seek(0)
+                registros = parsear_forms_sin_validacion(
                     archivo=io.BytesIO(archivo.read()),
-                    nombre_curso=nombre_curso.strip(),
+                    nombre_curso=nombre_curso,
                     oficina=oficina,
-                    registrado_por=generado_por.strip(),
+                    registrado_por=generado_por,
                 )
-                st.session_state[_KEY_RESULTADO] = resultado
-            except ValueError as e:
-                st.error(f"Error al leer el archivo: {e}")
+            except ValueError as exc:
+                st.error(f"Error al leer el archivo: {exc}")
                 return
+        st.session_state[_KEY_RESULTADO] = registros
 
-    # ------------------------------------------------------------------
-    # PASO 6: Mostrar resultado de validación
-    # ------------------------------------------------------------------
-    resultado = st.session_state.get(_KEY_RESULTADO)
-    if resultado is None:
+    registros = st.session_state.get(_KEY_RESULTADO)
+    if registros is None:
+        return
+    if not registros:
+        st.warning("El archivo no contiene participantes.")
         return
 
-    # Inyectar fechas del evento seleccionadas en cada registro (cada render)
-    if fecha_capacitacion_iso:
-        for reg in resultado.validos + resultado.invalidos:
-            reg.datos["fecha_capacitacion"] = fecha_capacitacion_iso
-            reg.datos["fecha_evento"]       = fecha_evento_str
-            reg.datos["fecha_fin"]          = fecha_fin_iso
+    # Los datos del evento prevalecen sobre cualquier fecha incluida en el export.
+    for registro in registros:
+        registro["nombre_curso"] = nombre_curso.strip()
+        registro["oficina"] = oficina
+        registro["registrado_por"] = generado_por.strip()
+        registro["fecha_capacitacion"] = fecha_capacitacion_iso
+        registro["fecha_evento"] = fecha_evento_str
+        registro["fecha_fin"] = fecha_fin_iso
+        registro["codigo_certificado"] = None
 
     st.divider()
-    st.subheader("6. Resultado de validación")
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total de filas", resultado.total_filas)
-    col2.metric("Registros válidos", resultado.total_validos)
-    col3.metric(
-        "Registros con errores",
-        resultado.total_invalidos,
-        delta=f"-{resultado.total_invalidos}" if resultado.total_invalidos > 0 else None,
-        delta_color="inverse",
+    st.subheader("6. Vista previa")
+    st.metric("Participantes encontrados", len(registros))
+    df_preview = pd.DataFrame(registros)
+    columnas_preview = [
+        "nombre", "cedula", "fecha_capacitacion", "institucion", "provincia", "email",
+    ]
+    cols_ex = [c for c in columnas_preview if c in df_preview.columns]
+    st.dataframe(
+        df_preview[cols_ex].rename(columns={
+            "nombre": "Nombre",
+            "cedula": "Cédula",
+            "fecha_capacitacion": "Fecha",
+            "institucion": "Institución",
+            "provincia": "Provincia",
+            "email": "Email",
+        }),
+        use_container_width=True,
+        hide_index=True,
     )
 
-    if resultado.columnas_faltantes:
-        st.warning(
-            f"Columnas no encontradas en el archivo: {', '.join(resultado.columnas_faltantes)}. "
-            "Verifique que el archivo sea el export correcto de Google Forms."
+    st.subheader("7. Preparar lote")
+    if st.button(
+        f"✅ Preparar lote de {len(registros)} certificados",
+        type="primary",
+    ):
+        st.session_state[_KEY_BATCH] = {
+            "records": [registro.copy() for registro in registros],
+            "nombre_evento": nombre_curso.strip(),
+            "fecha_evento": fecha_evento_str or "",
+            "fecha_inicio": fecha_capacitacion_iso or "",
+            "oficina": oficina,
+            "oficina_nombre": oficina_nombre,
+            "generado_por": generado_por.strip(),
+            "ciudad": ciudad.strip(),
+            "duracion": duracion_str,
+            "numero_reporte_vinculado": reporte_sel["numero_reporte"],
+        }
+        st.session_state.pop("cert_zip_descarga", None)
+        st.session_state.pop("cert_excel_descarga", None)
+        st.session_state.pop(_KEY_RESULTADO, None)
+        st.success(
+            "Lote preparado. Ve a **Capacitaciones — Certificados** para reservar "
+            "los códigos y generar los documentos."
         )
-
-    forzar_todos = False
-    if resultado.invalidos:
-        with st.expander(f"Ver {resultado.total_invalidos} registros con errores"):
-            filas_error = [
-                {
-                    "Fila":    reg.fila_original,
-                    "Nombre":  reg.datos.get("nombre", ""),
-                    "Cédula":  reg.datos.get("cedula", ""),
-                    "Errores": " | ".join(reg.errores),
-                }
-                for reg in resultado.invalidos
-            ]
-            st.dataframe(pd.DataFrame(filas_error), use_container_width=True, hide_index=True)
-
-        st.warning(
-            "⚠️ Hay registros con errores de validación. Si confirmas que los datos son "
-            "correctos (por ejemplo, la cédula es válida pero el sistema la marcó por error), "
-            "puedes forzar su inclusión."
-        )
-        forzar_todos = st.checkbox(
-            "Rechazar la validación e incluir TODOS los registros (también los que tienen errores) "
-            "para generar sus certificados",
-            key=_KEY_FORZAR_TODOS,
-        )
-
-    registros_base = (
-        resultado.validos + resultado.invalidos if forzar_todos else resultado.validos
-    )
-
-    if resultado.validos:
-        with st.expander(f"Ver {resultado.total_validos} registros válidos"):
-            df_preview = registros_a_dataframe(resultado.validos)
-            columnas_preview = ["nombre", "cedula", "fecha_capacitacion", "institucion", "provincia", "email"]
-            cols_ex = [c for c in columnas_preview if c in df_preview.columns]
-            st.dataframe(
-                df_preview[cols_ex].rename(columns={
-                    "nombre": "Nombre", "cedula": "Cédula",
-                    "fecha_capacitacion": "Fecha", "institucion": "Institución",
-                    "provincia": "Provincia", "email": "Email",
-                }),
-                use_container_width=True, hide_index=True,
-            )
-
-    # ------------------------------------------------------------------
-    # PASO 7: Detectar duplicados
-    # ------------------------------------------------------------------
-    if registros_base:
-        st.divider()
-        st.subheader("7. Verificación de duplicados")
-
-        duplicados: list[RegistroProcesado] = []
-        nuevos: list[RegistroProcesado] = []
-
-        with get_connection() as con:
-            for reg in registros_base:
-                if verificar_duplicados(
-                    con,
-                    cedula=reg.datos["cedula"],
-                    fecha_capacitacion=reg.datos["fecha_capacitacion"],
-                    oficina=oficina,
-                ):
-                    duplicados.append(reg)
-                else:
-                    nuevos.append(reg)
-
-        if duplicados:
-            st.warning(
-                f"Se detectaron **{len(duplicados)} registros duplicados** "
-                "(misma cédula y fecha ya registrados para esta oficina). "
-                "Estos no se insertarán."
-            )
-            with st.expander("Ver duplicados"):
-                st.dataframe(
-                    pd.DataFrame([{
-                        "Fila":   r.fila_original,
-                        "Nombre": r.datos.get("nombre", ""),
-                        "Cédula": r.datos.get("cedula", ""),
-                        "Fecha":  r.datos.get("fecha_capacitacion", ""),
-                    } for r in duplicados]),
-                    use_container_width=True, hide_index=True,
-                )
-
-        st.info(f"**{len(nuevos)} registros nuevos** listos para insertar.")
-
-        # ------------------------------------------------------------------
-        # PASO 8: Confirmar inserción
-        # ------------------------------------------------------------------
-        if nuevos:
-            st.divider()
-            st.subheader("8. Confirmar carga")
-
-            if st.button(
-                f"✅ Insertar {len(nuevos)} registros en la base de datos",
-                type="primary",
-            ):
-                insertados, insertados_dicts, errores_insercion = _insertar_lote(nuevos)
-
-                if errores_insercion:
-                    st.warning(f"Se insertaron {insertados} registros. {len(errores_insercion)} fallaron.")
-                    with st.expander("Ver errores de inserción"):
-                        for err in errores_insercion:
-                            st.text(err)
-                else:
-                    st.success(
-                        f"✅ {insertados} registros insertados correctamente en la oficina **{oficina_nombre}**."
-                    )
-
-                if insertados > 0:
-                    st.session_state[_KEY_BATCH] = {
-                        "records":        insertados_dicts,
-                        "nombre_evento":  nombre_curso.strip(),
-                        "fecha_evento":   fecha_evento_str or "",
-                        "fecha_inicio":   fecha_capacitacion_iso or "",
-                        "oficina":        oficina,
-                        "oficina_nombre": oficina_nombre,
-                        "generado_por":   generado_por.strip(),
-                        "ciudad":         ciudad.strip(),
-                        "duracion":       duracion_str,
-                    }
-
-                del st.session_state[_KEY_RESULTADO]
-                st.balloons()
-        else:
-            st.info("No hay registros nuevos para insertar (todos son duplicados).")
-
-
-def _insertar_lote(registros: list[RegistroProcesado]) -> tuple[int, list[dict], list[str]]:
-    """
-    Inserta un lote de registros válidos. Continúa si uno falla.
-
-    Returns:
-        Tupla (cantidad_insertados, registros_con_codigo_asignado, lista_de_errores).
-    """
-    insertados_count = 0
-    insertados_dicts: list[dict] = []
-    errores: list[str] = []
-
-    with get_connection() as con:
-        for reg in registros:
-            try:
-                insertar_capacitacion(con, reg.datos)
-                insertados_count += 1
-                insertados_dicts.append(reg.datos.copy())
-            except Exception as e:
-                nombre = reg.datos.get("nombre", "?")
-                cedula = reg.datos.get("cedula", "?")
-                errores.append(f"Fila {reg.fila_original} ({nombre} / {cedula}): {e}")
-
-    return insertados_count, insertados_dicts, errores
+        st.balloons()
