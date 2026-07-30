@@ -72,6 +72,18 @@ def mostrar_certificados() -> None:
         st.warning("El lote preparado no contiene registros.")
         _mostrar_registro_emitidos()
         return
+    cedulas_invalidas = [
+        str(registro.get("cedula", "")).strip() or "(vacía)"
+        for registro in records
+        if re.fullmatch(r"[0-9]{10}", str(registro.get("cedula", "")).strip()) is None
+    ]
+    if cedulas_invalidas:
+        st.error(
+            "No se pueden generar los certificados: todas las cédulas deben "
+            "contener exactamente 10 dígitos numéricos. Regresa a "
+            "**Capacitaciones — Carga**, corrige el archivo y procésalo nuevamente."
+        )
+        return
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Evento", batch.get("nombre_evento", "—"))

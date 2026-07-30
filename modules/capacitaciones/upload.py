@@ -2,8 +2,9 @@
 upload.py — Preparación de lotes de certificados desde un export de Google Forms.
 
 El archivo se considera previamente revisado por el operador. La aplicación
-solo comprueba que pueda leerse y que contenga las columnas de nombre y cédula;
-no valida contenido, no busca duplicados y no guarda encuestas en Supabase.
+comprueba que pueda leerse, que contenga las columnas de nombre y cédula y que
+cada cédula tenga exactamente 10 dígitos; no aplica otras validaciones, no busca
+duplicados y no guarda encuestas en Supabase.
 """
 
 import io
@@ -177,6 +178,11 @@ def mostrar_carga() -> None:
         disabled=not puede_procesar,
         use_container_width=False,
     ):
+        # Un nuevo intento invalida resultados y certificados preparados antes.
+        st.session_state.pop(_KEY_RESULTADO, None)
+        st.session_state.pop(_KEY_BATCH, None)
+        st.session_state.pop("cert_zip_descarga", None)
+        st.session_state.pop("cert_excel_descarga", None)
         with st.spinner("Leyendo archivo..."):
             try:
                 archivo.seek(0)
@@ -187,7 +193,7 @@ def mostrar_carga() -> None:
                     registrado_por=generado_por,
                 )
             except ValueError as exc:
-                st.error(f"Error al leer el archivo: {exc}")
+                st.error(f"No se puede procesar el archivo: {exc}")
                 return
         st.session_state[_KEY_RESULTADO] = registros
 

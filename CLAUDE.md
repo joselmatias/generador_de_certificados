@@ -44,7 +44,11 @@ Schema is initialized idempotently at startup via `database/init_db.py:init_db()
 
 Sequential report numbers are stored in `contador_reporte` (starts at 83, next = 84) and `contador_asamblea` (starts at 17, next = 018). Certificate codes (`DRAC-{year}-NNNN`, starting at 1676) use `contador_certificado` (keyed by `year`), incremented atomically by the requested range size via `INSERT ... ON CONFLICT ... DO UPDATE` in `db.py:reservar_rango_codigos_certificado`. All three counters are in Supabase, not local — never reset them, and never derive the next number by counting/deleting rows in the data table (that was the original certificate design and it silently produces duplicate codes if some but not all test rows get deleted before the next one is generated).
 
-Certificate generation must not insert participant or survey rows into `capacitaciones`. Bulk exports are assumed to be pre-validated, remain only in `st.session_state`, and require a linked training report. Codes are reserved as one atomic range only when PDF generation begins; Supabase persists only the tiny `contador_certificado` update and one summary row in `lotes_certificados` (including `numero_reporte_vinculado`). Individual certificates follow the same persistence rule. Existing historical rows in `capacitaciones` are preserved for compatibility but are not fed by active certificate flows.
+Certificate generation must not insert participant or survey rows into `capacitaciones`. Bulk exports remain only in `st.session_state` and require a linked training report. Codes are reserved as one atomic range only when PDF generation begins; Supabase persists only the tiny `contador_certificado` update and one summary row in `lotes_certificados` (including `numero_reporte_vinculado`). Individual certificates follow the same persistence rule. Existing historical rows in `capacitaciones` are preserved for compatibility but are not fed by active certificate flows.
+
+### Bulk certificate upload: mandatory ID-length check
+
+`Capacitaciones — Carga` has one blocking content rule even though the rest of the export is assumed to have been reviewed by the operator: every value in the `cedula` column must match exactly `[0-9]{10}`. `utils/forms_parser.py:parsear_forms_sin_validacion` rejects the entire file and reports the offending spreadsheet rows if any value is empty, shorter or longer than 10 characters, or contains non-ASCII digits/other characters. A failed or new processing attempt clears the previous upload result, prepared batch, ZIP, and Excel download from `st.session_state`, so stale data cannot be used to generate certificates. `modules/capacitaciones/certificados.py` repeats the same check defensively before reserving codes or generating PDFs.
 
 ## PDF generation
 
@@ -74,10 +78,20 @@ MERGEFIELD markers (`<w:instrText> MERGEFIELD X </w:instrText>`) are stripped by
 - `utils/convenios.py` — Static catalog of 20 institutional agreements. `CONTRAPARTES` list and `CONTRAPARTE_NUMEROS` dict are the two derived structures used in the report form.
 - `utils/forms_parser.py` — Maps exact Google Forms column headers (including tildes) to internal schema. Column names are brittle — if the Forms structure changes, update this file.
 
+## One-off corrected certificates: ISTIPP (30 July 2026)
+
+The 13 final PDFs are in:
+
+`C:\Users\Admin\Documents\sce 26\PROMOCIÓN DE LA COMPETENCIA\ISTIPP\certificados instipp\certificados corregidos`
+
+Twelve source certificates had 9-digit IDs beginning with `7`; a leading `0` was inserted before that `7`, the complete `Con C.I.` line was re-centered without covering the ornamental background, and each filename prefix was changed to the corrected 10-digit ID. The already-correct certificate `1105823999_Fátima_Yomar_Poma_Capa.pdf` was included unchanged. The original 13 PDFs in the parent folder were not modified. The final folder contains exactly 13 PDFs and was verified by text extraction, visual rendering, page count, and SHA-256 comparison against the staged corrected files.
+
 ## Per-office config in report generator
 
 `modules/reportes/generador.py` has a `_OFICINA_CFG` dict keyed by `oficina_id` (`"guayaquil"`, `"cuenca"`, `"manabi"`, `"loja"`) with fields `revisado_por`, `area_elaborado`, `nombre_institucion`, `lineas_institucion`. These values appear in PDF headers and signature blocks.
 
 ## Git workflow
 
-Always stage specific files — **never `git add .`**. The repo has `.streamlit/secrets.toml` and exploratory scripts (extract_doc*.py, *.pdf, *.docx) that must not be committed. After verified changes: `git add <specific files>` → `git commit` → `git push origin main`.
+Always stage specific files — **never `git add .`**. The repo has `.streamlit/secrets.toml` and exploratory scripts (extract_doc*.py, *.pdf, *.docx) that must not be committed.
+
+After every verified code or tracked-project change, always offer to run the complete deployment workflow: `git add <specific files>` → `git commit` → `git push origin main`. **Before executing any commit or push, ask the user for explicit confirmation and wait for the answer.** Do not assume confirmation from an earlier task or silently leave verified changes unpushed. After receiving confirmation, perform the commit and push directly, then report the commit hash and push result.

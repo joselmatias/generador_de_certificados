@@ -27,6 +27,7 @@ Columnas esperadas del export (nombres exactos con tildes):
 from __future__ import annotations
 
 import io
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -166,13 +167,14 @@ def parsear_forms_sin_validacion(
     oficina: str,
     registrado_por: str,
 ) -> list[dict[str, Any]]:
-    """Lee un export de Forms sin validar ni normalizar su contenido.
+    """Lee un export de Forms y exige cédulas de exactamente 10 dígitos.
 
     Este flujo se usa exclusivamente para preparar certificados. Se asume que
     el archivo ya fue revisado por el operador; por eso solo se comprueba que
-    sea legible y que incluya las columnas técnicas indispensables de nombre y
-    cédula. Las demás columnas reconocidas se conservan en memoria para la
-    vista previa y la exportación, pero nunca se persisten en Supabase.
+    sea legible, que incluya las columnas técnicas indispensables de nombre y
+    cédula, y que cada cédula contenga exactamente 10 dígitos. Las demás
+    columnas reconocidas se conservan en memoria para la vista previa y la
+    exportación, pero nunca se persisten en Supabase.
     """
     df = _leer_archivo(archivo)
     df_mapeado, _, _ = _mapear_columnas(df)
@@ -188,7 +190,14 @@ def parsear_forms_sin_validacion(
         raise ValueError(f"Faltan columnas requeridas: {nombres}.")
 
     registros: list[dict[str, Any]] = []
-    for _, fila in df_mapeado.iterrows():
+    cedulas_invalidas: list[str] = []
+    for idx, fila in df_mapeado.iterrows():
+        cedula = _get(fila, "cedula").strip()
+        if re.fullmatch(r"[0-9]{10}", cedula) is None:
+            valor_mostrado = cedula or "(vacía)"
+            cedulas_invalidas.append(f"fila {int(idx) + 2}: {valor_mostrado}")
+            continue
+
         datos: dict[str, Any] = {
             "nombre_curso": nombre_curso.strip(),
             "oficina": oficina,
@@ -200,10 +209,19 @@ def parsear_forms_sin_validacion(
             datos[campo] = valor or None
 
         # Nombre y cédula son las únicas columnas estructuralmente obligatorias.
-        # Sus valores se preservan tal como llegan, sin aplicar reglas de negocio.
         datos["nombre"] = _get(fila, "nombre")
-        datos["cedula"] = _get(fila, "cedula")
+        datos["cedula"] = cedula
         registros.append(datos)
+
+    if cedulas_invalidas:
+        detalle = "; ".join(cedulas_invalidas[:10])
+        restantes = len(cedulas_invalidas) - 10
+        if restantes > 0:
+            detalle += f"; y {restantes} fila(s) más"
+        raise ValueError(
+            "La columna Cédula debe contener exactamente 10 dígitos numéricos "
+            f"en todas las filas. Corrige: {detalle}."
+        )
 
     return registros
 
