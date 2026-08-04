@@ -661,14 +661,14 @@ def _tab_reporte_capacitacion(oficina_id: str, oficina_nombre: str) -> None:
     if reportes:
         import pandas as pd
         df = pd.DataFrame([dict(r) for r in reportes])
-        cols_mostrar = ["numero_reporte", "year_reporte", "fecha_reporte",
+        cols_mostrar = ["numero_reporte", "year_reporte", "fecha_evento",
                         "tipo_evento", "tema", "num_personas_capacitadas"]
         cols_ex = [c for c in cols_mostrar if c in df.columns]
         st.dataframe(
             df[cols_ex].rename(columns={
                 "numero_reporte": "N.° Reporte",
                 "year_reporte": "Año",
-                "fecha_reporte": "Fecha",
+                "fecha_evento": "Fecha Evento",
                 "tipo_evento": "Tipo Evento",
                 "tema": "Tema",
                 "num_personas_capacitadas": "Personas",
@@ -1362,7 +1362,15 @@ def _tab_estadisticas(oficina_id: str, oficina_nombre: str) -> None:
     c4.metric("Personas en asambleas",         stats["personas_asambleas"])
 
     st.divider()
-    st.markdown("**Detalle de Capacitaciones del mes:**")
+    _col_titulo_detalle, _col_filtro_encuestas = st.columns([4, 1])
+    with _col_titulo_detalle:
+        st.markdown("**Detalle de Capacitaciones del mes:**")
+    with _col_filtro_encuestas:
+        _solo_con_encuestas = st.toggle(
+            "Solo con encuestas",
+            key="stats_filtro_encuestas",
+            help="Muestra únicamente reportes con encuestas realizadas mayores a cero.",
+        )
     with get_connection() as con:
         reportes = consultar_reportes_capacitacion(
             con, oficina=oficina_filtro, anio=int(anio_sel), mes=int(mes_sel)
@@ -1371,10 +1379,14 @@ def _tab_estadisticas(oficina_id: str, oficina_nombre: str) -> None:
     if reportes:
         import pandas as pd
         df_r = pd.DataFrame([dict(r) for r in reportes])
+        if _solo_con_encuestas:
+            df_r = df_r[
+                pd.to_numeric(df_r["encuestas_realizadas"], errors="coerce").fillna(0) > 0
+            ]
         # Cuando se muestran todas las oficinas, incluir columna "oficina"
         cols_base = [
             "numero_reporte", "fecha_evento", "tipo_evento",
-            "tema", "elaborado_por", "num_personas_capacitadas",
+            "tema", "elaborado_por", "num_personas_capacitadas", "encuestas_realizadas",
             "institucion_invitada", "numero_convenio", "convenio_contraparte",
         ]
         if es_master and oficina_filtro is None:
@@ -1388,6 +1400,7 @@ def _tab_estadisticas(oficina_id: str, oficina_nombre: str) -> None:
             "tema":                     "Tema",
             "elaborado_por":            "Elaborado por",
             "num_personas_capacitadas": "Personas",
+            "encuestas_realizadas":     "Encuestas realizadas",
             "institucion_invitada":     "Institución",
             "numero_convenio":          "N.° Convenio",
             "convenio_contraparte":     "Contraparte",
