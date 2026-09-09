@@ -11,6 +11,8 @@ import streamlit as st
 from database.init_db import init_db
 from utils.feature_flags import CERTIFICATE_GENERATION_ENABLED
 
+DB_SCHEMA_VERSION = 2
+
 
 st.set_page_config(
     page_title="Sistema de Gestión — OTRs",
@@ -21,7 +23,8 @@ st.set_page_config(
 
 
 @st.cache_resource(show_spinner=False)
-def _inicializar_db() -> int:
+def _inicializar_db(schema_version: int) -> int:
+    del schema_version  # Su valor invalida la caché cuando cambia el esquema.
     init_db()
     from modules.congresos.seguimiento import precargar_congreso_desde_repositorio
 
@@ -29,7 +32,7 @@ def _inicializar_db() -> int:
 
 
 try:
-    _inicializar_db()
+    _inicializar_db(DB_SCHEMA_VERSION)
 except Exception as exc:
     st.warning(f"No se pudo completar la precarga del congreso: {exc}")
 

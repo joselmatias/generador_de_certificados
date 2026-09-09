@@ -695,6 +695,12 @@ def actualizar_invitado_congreso(
     if campos_invalidos:
         raise ValueError(f"Campos no editables: {', '.join(sorted(campos_invalidos))}")
 
+    # Respaldo idempotente para despliegues donde Streamlit conserve la caché
+    # de inicialización mientras ya sirve la interfaz actualizada.
+    con.execute(
+        "ALTER TABLE congreso_invitados "
+        "ADD COLUMN IF NOT EXISTS cargos_asistentes_delegados TEXT"
+    )
     actual = con.execute(
         "SELECT * FROM congreso_invitados WHERE id = %s", (invitado_id,)
     ).fetchone()
