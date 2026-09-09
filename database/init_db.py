@@ -201,6 +201,80 @@ CREATE TABLE IF NOT EXISTS lotes_certificados (
 );
 """
 
+_DDL_CONGRESO_RESPONSABLES = """
+CREATE TABLE IF NOT EXISTS congreso_responsables (
+    id              SERIAL PRIMARY KEY,
+    oficina         TEXT NOT NULL,
+    nombres         TEXT NOT NULL,
+    celular         TEXT NOT NULL,
+    correo          TEXT NOT NULL,
+    activo          BOOLEAN NOT NULL DEFAULT TRUE,
+    fecha_creacion  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
+_DDL_CONGRESO_INVITADOS = """
+CREATE TABLE IF NOT EXISTS congreso_invitados (
+    id                  SERIAL PRIMARY KEY,
+    fila_origen         INTEGER,
+    numero_lista        TEXT,
+    institucion         TEXT NOT NULL,
+    tipo_institucion    TEXT,
+    destinatario_oficio TEXT,
+    firma               TEXT,
+    calidad             TEXT,
+    cargo               TEXT,
+    direccion           TEXT,
+    correo_institucional TEXT,
+    sitio_web           TEXT,
+    oficina             TEXT,
+    responsable_id      INTEGER REFERENCES congreso_responsables(id) ON DELETE RESTRICT,
+    nombre_asistente_delegado TEXT,
+    confirmado          TEXT NOT NULL DEFAULT 'Pendiente'
+                        CHECK (confirmado IN ('Pendiente', 'Sí', 'No')),
+    asistencia_21       TEXT NOT NULL DEFAULT 'Pendiente'
+                        CHECK (asistencia_21 IN ('Pendiente', 'Sí', 'No')),
+    asistencia_22       TEXT NOT NULL DEFAULT 'Pendiente'
+                        CHECK (asistencia_22 IN ('Pendiente', 'Sí', 'No')),
+    observaciones_seguimiento TEXT,
+    numero_oficio       TEXT,
+    observaciones_cruce TEXT,
+    fecha_creacion      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
+_DDL_CONGRESO_HISTORIAL = """
+CREATE TABLE IF NOT EXISTS congreso_historial (
+    id                  SERIAL PRIMARY KEY,
+    entidad_tipo        TEXT NOT NULL,
+    entidad_id          INTEGER,
+    invitado_id         INTEGER REFERENCES congreso_invitados(id) ON DELETE CASCADE,
+    oficina             TEXT,
+    accion              TEXT NOT NULL,
+    campo               TEXT,
+    valor_anterior      TEXT,
+    valor_nuevo         TEXT,
+    actor_responsable_id INTEGER REFERENCES congreso_responsables(id) ON DELETE SET NULL,
+    actor_nombre        TEXT NOT NULL,
+    actor_oficina       TEXT,
+    fecha_cambio        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
+_DDL_CONGRESO_IMPORTACIONES = """
+CREATE TABLE IF NOT EXISTS congreso_importaciones (
+    id              SERIAL PRIMARY KEY,
+    nombre_archivo  TEXT NOT NULL,
+    hash_archivo    TEXT NOT NULL UNIQUE,
+    cantidad_registros INTEGER NOT NULL,
+    resultado       TEXT NOT NULL,
+    actor_nombre    TEXT NOT NULL,
+    fecha_importacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
 # Índices para mejorar rendimiento de consultas frecuentes
 _INDICES = [
     "CREATE INDEX IF NOT EXISTS idx_cap_oficina ON capacitaciones(oficina);",
@@ -212,6 +286,11 @@ _INDICES = [
     "CREATE INDEX IF NOT EXISTS idx_rep_oficina ON reportes_capacitacion(oficina);",
     "CREATE INDEX IF NOT EXISTS idx_rep_fecha ON reportes_capacitacion(fecha_reporte);",
     "CREATE INDEX IF NOT EXISTS idx_asm_prod_oficina ON asamblea_productiva(oficina);",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_congreso_responsable_oficina_nombre ON congreso_responsables(oficina, LOWER(nombres));",
+    "CREATE INDEX IF NOT EXISTS idx_congreso_invitado_oficina ON congreso_invitados(oficina);",
+    "CREATE INDEX IF NOT EXISTS idx_congreso_invitado_responsable ON congreso_invitados(responsable_id);",
+    "CREATE INDEX IF NOT EXISTS idx_congreso_historial_invitado ON congreso_historial(invitado_id);",
+    "CREATE INDEX IF NOT EXISTS idx_congreso_historial_fecha ON congreso_historial(fecha_cambio DESC);",
 ]
 
 
@@ -236,6 +315,10 @@ def init_db() -> None:
                 cur.execute(_DDL_CONTADOR_ASAMBLEA)
                 cur.execute(_DDL_CONTADOR_CERTIFICADO)
                 cur.execute(_DDL_LOTES_CERTIFICADOS)
+                cur.execute(_DDL_CONGRESO_RESPONSABLES)
+                cur.execute(_DDL_CONGRESO_INVITADOS)
+                cur.execute(_DDL_CONGRESO_HISTORIAL)
+                cur.execute(_DDL_CONGRESO_IMPORTACIONES)
                 cur.execute(
                     "INSERT INTO contador_reporte (id, ultimo_numero) VALUES (1, 83) "
                     "ON CONFLICT (id) DO NOTHING"

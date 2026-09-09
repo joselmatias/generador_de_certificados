@@ -491,3 +491,431 @@ def estadisticas_mensuales(
         "total_capacitados_incluye_asamblea": personas_capacitadas + personas_asambleas,
         "num_capacitaciones_incluye_asamblea": num_capacitaciones + num_asambleas,
     }
+
+
+# ---------------------------------------------------------------------------
+# Seguimiento del Congreso Internacional — octubre de 2026
+# ---------------------------------------------------------------------------
+
+_CAMPOS_EDITABLES_CONGRESO = {
+    "oficina",
+    "responsable_id",
+    "nombre_asistente_delegado",
+    "confirmado",
+    "asistencia_21",
+    "asistencia_22",
+    "observaciones_seguimiento",
+    "numero_oficio",
+    "observaciones_cruce",
+}
+
+
+def contar_invitados_congreso(con: _Conn) -> int:
+    row = con.execute("SELECT COUNT(*) AS total FROM congreso_invitados").fetchone()
+    return int(row["total"]) if row else 0
+
+
+def listar_responsables_congreso(
+    con: _Conn,
+    oficina: str | None = None,
+    solo_activos: bool = False,
+) -> list[Any]:
+    condiciones: list[str] = []
+    params: list[Any] = []
+    if oficina is not None:
+        condiciones.append("oficina = %s")
+        params.append(oficina)
+    if solo_activos:
+        condiciones.append("activo = TRUE")
+    where = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
+    return con.execute(
+        f"""
+        SELECT r.*,
+               (SELECT COUNT(*) FROM congreso_invitados i
+                WHERE i.responsable_id = r.id) AS invitados_asignados
+        FROM congreso_responsables r
+        {where}
+        ORDER BY r.oficina, r.activo DESC, r.nombres
+        """,
+        params,
+    ).fetchall()
+
+
+def crear_responsable_congreso(
+    con: _Conn,
+    oficina: str,
+    nombres: str,
+    celular: str,
+    correo: str,
+    actor_responsable_id: int | None,
+    actor_nombre: str,
+    actor_oficina: str,
+) -> int:
+    row = con.execute(
+        """
+        INSERT INTO congreso_responsables (oficina, nombres, celular, correo)
+        VALUES (%s, %s, %s, %s)
+        RETURNING id
+        """,
+        (oficina, nombres.strip(), celular.strip(), correo.strip().lower()),
+    ).fetchone()
+    responsable_id = int(row["id"])
+    _registrar_historial_congreso(
+        con,
+        entidad_tipo="responsable",
+        entidad_id=responsable_id,
+        invitado_id=None,
+        oficina=oficina,
+        accion="Creación",
+        campo="Responsable",
+        valor_anterior=None,
+        valor_nuevo=nombres.strip(),
+        actor_responsable_id=actor_responsable_id,
+        actor_nombre=actor_nombre,
+        actor_oficina=actor_oficina,
+    )
+    return responsable_id
+
+
+def actualizar_responsable_congreso(
+    con: _Conn,
+    responsable_id: int,
+    nombres: str,
+    celular: str,
+    correo: str,
+    activo: bool,
+    actor_responsable_id: int | None,
+    actor_nombre: str,
+    actor_oficina: str,
+    oficina_permitida: str | None = None,
+) -> None:
+    actual = con.execute(
+        "SELECT * FROM congreso_responsables WHERE id = %s", (responsable_id,)
+    ).fetchone()
+    if actual is None:
+        raise ValueError("El responsable seleccionado ya no existe.")
+    if oficina_permitida is not None and actual["oficina"] != oficina_permitida:
+        raise PermissionError("No puedes modificar responsables de otra oficina.")
+    if not activo:
+        asignados = con.execute(
+            "SELECT COUNT(*) AS total FROM congreso_invitados WHERE responsable_id = %s",
+            (responsable_id,),
+        ).fetchone()["total"]
+        if asignados:
+            raise ValueError(
+                "Reasigna primero los invitados de este responsable antes de desactivarlo."
+            )
+
+    nuevos = {
+        "nombres": nombres.strip(),
+        "celular": celular.strip(),
+        "correo": correo.strip().lower(),
+        "activo": bool(activo),
+    }
+    cambios = {
+        campo: valor
+        for campo, valor in nuevos.items()
+        if actual[campo] != valor
+    }
+    if not cambios:
+        return
+
+    con.execute(
+        """
+        UPDATE congreso_responsables
+        SET nombres = %s, celular = %s, correo = %s, activo = %s,
+            fecha_actualizacion = CURRENT_TIMESTAMP
+        WHERE id = %s
+        """,
+        (nuevos["nombres"], nuevos["celular"], nuevos["correo"], nuevos["activo"], responsable_id),
+    )
+    for campo, valor_nuevo in cambios.items():
+        _registrar_historial_congreso(
+            con,
+            entidad_tipo="responsable",
+            entidad_id=responsable_id,
+            invitado_id=None,
+            oficina=actual["oficina"],
+            accion="Actualización",
+            campo=campo,
+            valor_anterior=actual[campo],
+            valor_nuevo=valor_nuevo,
+            actor_responsable_id=actor_responsable_id,
+            actor_nombre=actor_nombre,
+            actor_oficina=actor_oficina,
+        )
+
+
+def listar_invitados_congreso(
+    con: _Conn,
+    oficina: str | None = None,
+) -> list[Any]:
+    where = "WHERE i.oficina = %s" if oficina is not None else ""
+    params = (oficina,) if oficina is not None else ()
+    return con.execute(
+        f"""
+        SELECT i.*, r.nombres AS responsable_nombres,
+               r.celular AS responsable_celular,
+               r.correo AS responsable_correo,
+               r.activo AS responsable_activo
+        FROM congreso_invitados i
+        LEFT JOIN congreso_responsables r ON r.id = i.responsable_id
+        {where}
+        ORDER BY i.oficina NULLS FIRST, i.institucion, i.destinatario_oficio
+        """,
+        params,
+    ).fetchall()
+
+
+def obtener_invitado_congreso(con: _Conn, invitado_id: int) -> Any | None:
+    return con.execute(
+        """
+        SELECT i.*, r.nombres AS responsable_nombres,
+               r.celular AS responsable_celular,
+               r.correo AS responsable_correo
+        FROM congreso_invitados i
+        LEFT JOIN congreso_responsables r ON r.id = i.responsable_id
+        WHERE i.id = %s
+        """,
+        (invitado_id,),
+    ).fetchone()
+
+
+def actualizar_invitado_congreso(
+    con: _Conn,
+    invitado_id: int,
+    cambios: dict[str, Any],
+    actor_responsable_id: int | None,
+    actor_nombre: str,
+    actor_oficina: str,
+    oficina_permitida: str | None = None,
+) -> int:
+    campos_invalidos = set(cambios) - _CAMPOS_EDITABLES_CONGRESO
+    if campos_invalidos:
+        raise ValueError(f"Campos no editables: {', '.join(sorted(campos_invalidos))}")
+
+    actual = con.execute(
+        "SELECT * FROM congreso_invitados WHERE id = %s", (invitado_id,)
+    ).fetchone()
+    if actual is None:
+        raise ValueError("El invitado seleccionado ya no existe.")
+    if oficina_permitida is not None and actual["oficina"] != oficina_permitida:
+        raise PermissionError("No puedes modificar invitados de otra oficina.")
+
+    oficina_nueva = cambios.get("oficina", actual["oficina"])
+    responsable_nuevo = cambios.get("responsable_id", actual["responsable_id"])
+    if responsable_nuevo is not None:
+        responsable = con.execute(
+            "SELECT id, oficina, activo FROM congreso_responsables WHERE id = %s",
+            (responsable_nuevo,),
+        ).fetchone()
+        if responsable is None or not responsable["activo"]:
+            raise ValueError("Selecciona un responsable activo.")
+        if responsable["oficina"] != oficina_nueva:
+            raise ValueError("El responsable debe pertenecer a la oficina asignada.")
+    if oficina_nueva is None and responsable_nuevo is not None:
+        raise ValueError("Un invitado sin oficina no puede tener responsable.")
+
+    confirmado = cambios.get("confirmado", actual["confirmado"])
+    asistente = cambios.get(
+        "nombre_asistente_delegado", actual["nombre_asistente_delegado"]
+    )
+    dia_21 = cambios.get("asistencia_21", actual["asistencia_21"])
+    dia_22 = cambios.get("asistencia_22", actual["asistencia_22"])
+    if confirmado == "Sí" and (
+        not str(asistente or "").strip() or (dia_21 != "Sí" and dia_22 != "Sí")
+    ):
+        raise ValueError(
+            "Un invitado confirmado requiere el nombre del asistente o delegado "
+            "y al menos un día de asistencia marcado Sí."
+        )
+
+    cambios_reales: dict[str, Any] = {}
+    for campo, valor in cambios.items():
+        if isinstance(valor, str):
+            valor = valor.strip() or None
+        if campo in {"confirmado", "asistencia_21", "asistencia_22"} and valor is None:
+            valor = "Pendiente"
+        if actual[campo] != valor:
+            cambios_reales[campo] = valor
+    if not cambios_reales:
+        return 0
+
+    asignaciones = ", ".join(f"{campo} = %s" for campo in cambios_reales)
+    valores = list(cambios_reales.values()) + [invitado_id]
+    con.execute(
+        f"UPDATE congreso_invitados SET {asignaciones}, "
+        "fecha_actualizacion = CURRENT_TIMESTAMP WHERE id = %s",
+        valores,
+    )
+
+    def etiqueta_responsable(valor: Any) -> Any:
+        if valor is None:
+            return None
+        row = con.execute(
+            "SELECT nombres FROM congreso_responsables WHERE id = %s", (valor,)
+        ).fetchone()
+        return row["nombres"] if row else str(valor)
+
+    for campo, valor_nuevo in cambios_reales.items():
+        anterior = actual[campo]
+        if campo == "responsable_id":
+            anterior = etiqueta_responsable(anterior)
+            valor_nuevo = etiqueta_responsable(valor_nuevo)
+        _registrar_historial_congreso(
+            con,
+            entidad_tipo="invitado",
+            entidad_id=invitado_id,
+            invitado_id=invitado_id,
+            oficina=oficina_nueva,
+            accion="Actualización",
+            campo=campo,
+            valor_anterior=anterior,
+            valor_nuevo=valor_nuevo,
+            actor_responsable_id=actor_responsable_id,
+            actor_nombre=actor_nombre,
+            actor_oficina=actor_oficina,
+        )
+    return len(cambios_reales)
+
+
+def listar_historial_congreso(
+    con: _Conn,
+    oficina: str | None = None,
+    limite: int = 2000,
+) -> list[Any]:
+    where = "WHERE h.oficina = %s" if oficina is not None else ""
+    params: list[Any] = [oficina] if oficina is not None else []
+    params.append(limite)
+    return con.execute(
+        f"""
+        SELECT h.*, i.institucion, i.destinatario_oficio
+        FROM congreso_historial h
+        LEFT JOIN congreso_invitados i ON i.id = h.invitado_id
+        {where}
+        ORDER BY h.fecha_cambio DESC, h.id DESC
+        LIMIT %s
+        """,
+        params,
+    ).fetchall()
+
+
+def importar_datos_congreso(
+    con: _Conn,
+    invitados: list[dict[str, Any]],
+    responsables: list[dict[str, Any]],
+    nombre_archivo: str,
+    hash_archivo: str,
+    actor_nombre: str,
+) -> int:
+    con.execute("LOCK TABLE congreso_invitados IN EXCLUSIVE MODE")
+    if contar_invitados_congreso(con) > 0:
+        raise ValueError("La carga inicial ya fue realizada; no se permiten cargas adicionales.")
+    repetida = con.execute(
+        "SELECT 1 FROM congreso_importaciones WHERE hash_archivo = %s", (hash_archivo,)
+    ).fetchone()
+    if repetida:
+        raise ValueError("Este archivo ya fue importado.")
+
+    responsables_ids: dict[tuple[str, str], int] = {}
+    for item in responsables:
+        row = con.execute(
+            """
+            INSERT INTO congreso_responsables (oficina, nombres, celular, correo)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id
+            """,
+            (item["oficina"], item["nombres"], item["celular"], item["correo"]),
+        ).fetchone()
+        responsables_ids[(item["oficina"], item["nombres"].casefold())] = int(row["id"])
+
+    columnas = [
+        "fila_origen", "numero_lista", "institucion", "tipo_institucion",
+        "destinatario_oficio", "firma", "calidad", "cargo", "direccion",
+        "correo_institucional", "sitio_web", "oficina", "responsable_id",
+        "nombre_asistente_delegado", "confirmado", "asistencia_21",
+        "asistencia_22", "observaciones_seguimiento", "numero_oficio",
+        "observaciones_cruce",
+    ]
+    insertados = 0
+    for item in invitados:
+        datos_item = dict(item)
+        responsable_id = None
+        responsable_nombre = datos_item.pop("_responsable_nombre", None)
+        if datos_item.get("oficina") and responsable_nombre:
+            responsable_id = responsables_ids.get(
+                (datos_item["oficina"], responsable_nombre.casefold())
+            )
+        datos_item["responsable_id"] = responsable_id
+        valores = [datos_item.get(columna) for columna in columnas]
+        placeholders = ", ".join(["%s"] * len(columnas))
+        row = con.execute(
+            f"INSERT INTO congreso_invitados ({', '.join(columnas)}) "
+            f"VALUES ({placeholders}) RETURNING id",
+            valores,
+        ).fetchone()
+        invitado_id = int(row["id"])
+        _registrar_historial_congreso(
+            con,
+            entidad_tipo="invitado",
+            entidad_id=invitado_id,
+            invitado_id=invitado_id,
+            oficina=datos_item.get("oficina"),
+            accion="Importación inicial",
+            campo=None,
+            valor_anterior=None,
+            valor_nuevo=datos_item["institucion"],
+            actor_responsable_id=None,
+            actor_nombre=actor_nombre,
+            actor_oficina="guayaquil",
+        )
+        insertados += 1
+
+    con.execute(
+        """
+        INSERT INTO congreso_importaciones
+            (nombre_archivo, hash_archivo, cantidad_registros, resultado, actor_nombre)
+        VALUES (%s, %s, %s, 'Completada', %s)
+        """,
+        (nombre_archivo, hash_archivo, insertados, actor_nombre),
+    )
+    return insertados
+
+
+def _registrar_historial_congreso(
+    con: _Conn,
+    *,
+    entidad_tipo: str,
+    entidad_id: int | None,
+    invitado_id: int | None,
+    oficina: str | None,
+    accion: str,
+    campo: str | None,
+    valor_anterior: Any,
+    valor_nuevo: Any,
+    actor_responsable_id: int | None,
+    actor_nombre: str,
+    actor_oficina: str | None,
+) -> None:
+    con.execute(
+        """
+        INSERT INTO congreso_historial (
+            entidad_tipo, entidad_id, invitado_id, oficina, accion, campo,
+            valor_anterior, valor_nuevo, actor_responsable_id,
+            actor_nombre, actor_oficina
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """,
+        (
+            entidad_tipo,
+            entidad_id,
+            invitado_id,
+            oficina,
+            accion,
+            campo,
+            None if valor_anterior is None else str(valor_anterior),
+            None if valor_nuevo is None else str(valor_nuevo),
+            actor_responsable_id,
+            actor_nombre,
+            actor_oficina,
+        ),
+    )

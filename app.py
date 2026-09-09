@@ -120,6 +120,7 @@ with st.sidebar:
     st.divider()
 
     MODULOS_REGIONAL = {
+        "📌 Seguimiento Congreso":                         "seguimiento_congreso",
         "📋 Capacitaciones — Carga":                    "cap_carga",
         "🎓 Capacitaciones — Certificados":             "cap_certificados",
         "📜 Certificado Individual":                    "cert_individual",
@@ -157,6 +158,10 @@ modulo_id = modulos_disponibles[seleccion]
 if modulo_id == "cap_carga":
     from modules.capacitaciones.upload import mostrar_carga
     mostrar_carga()
+
+elif modulo_id == "seguimiento_congreso":
+    from modules.congresos.seguimiento import mostrar_seguimiento_congreso
+    mostrar_seguimiento_congreso()
 
 elif modulo_id == "cap_certificados":
     from modules.capacitaciones.certificados import mostrar_certificados
