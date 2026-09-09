@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timezone
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
 import re
 import unicodedata
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import streamlit as st
@@ -30,6 +31,7 @@ from database.db import (
 
 
 COLOR_AZUL = "#1A3A5C"
+ZONA_HORARIA_ECUADOR = ZoneInfo("America/Guayaquil")
 ESTADOS = ["Pendiente", "Sí", "No"]
 OFICINAS = {
     "guayaquil": "Guayaquil",
@@ -296,6 +298,17 @@ def _nombre_oficina(oficina: str | None) -> str:
     return OFICINAS.get(oficina, "Sin asignar")
 
 
+def _fecha_hora_ecuador(valor: Any) -> datetime | None:
+    if valor is None or valor == "":
+        return None
+    fecha = valor.to_pydatetime() if isinstance(valor, pd.Timestamp) else valor
+    if not isinstance(fecha, datetime):
+        fecha = pd.to_datetime(fecha).to_pydatetime()
+    if fecha.tzinfo is None:
+        fecha = fecha.replace(tzinfo=timezone.utc)
+    return fecha.astimezone(ZONA_HORARIA_ECUADOR).replace(tzinfo=None)
+
+
 def _tabla_asistentes(nombres: Any, cargos: Any) -> pd.DataFrame:
     lista_nombres = [linea.strip() for linea in _texto(nombres).splitlines() if linea.strip()]
     lista_cargos = [linea.strip() for linea in _texto(cargos).splitlines()]
@@ -337,22 +350,26 @@ def _datos_exportacion(
         "sitio_web": "Sitio web", "observaciones_seguimiento": "Observaciones",
         "numero_oficio": "N.º Oficio",
         "observaciones_cruce": "Observaciones cruce de listado vs oficios generados",
-        "fecha_actualizacion": "Última actualización",
+        "fecha_actualizacion": "Última actualización (Ecuador)",
     }
     filas_invitados = []
     for item in invitados:
         fila = {etiqueta: item.get(campo) for campo, etiqueta in columnas_invitados.items()}
         fila["Oficina"] = _nombre_oficina(item.get("oficina"))
+        fila["Última actualización (Ecuador)"] = _fecha_hora_ecuador(
+            item.get("fecha_actualizacion")
+        )
         filas_invitados.append(fila)
 
     columnas_historial = {
-        "fecha_cambio": "Fecha", "institucion": "Institución", "oficina": "Oficina",
+        "fecha_cambio": "Fecha (Ecuador)", "institucion": "Institución", "oficina": "Oficina",
         "actor_nombre": "Actualizado por", "accion": "Acción", "campo": "Campo",
         "valor_anterior": "Valor anterior", "valor_nuevo": "Valor nuevo",
     }
     filas_historial = []
     for item in historial:
         fila = {etiqueta: item.get(campo) for campo, etiqueta in columnas_historial.items()}
+        fila["Fecha (Ecuador)"] = _fecha_hora_ecuador(item.get("fecha_cambio"))
         fila["Oficina"] = _nombre_oficina(item.get("oficina"))
         fila["Campo"] = _ETIQUETAS_CAMPOS.get(item.get("campo"), item.get("campo"))
         filas_historial.append(fila)
@@ -700,7 +717,8 @@ def _vista_historial(oficina_id: str, es_master: bool) -> None:
 
     tabla = pd.DataFrame([
         {
-            "Fecha": item["fecha_cambio"], "Institución": item.get("institucion") or "Directorio",
+            "Fecha (Ecuador)": _fecha_hora_ecuador(item["fecha_cambio"]),
+            "Institución": item.get("institucion") or "Directorio",
             "Oficina": _nombre_oficina(item.get("oficina")), "Actualizado por": item["actor_nombre"],
             "Acción": item["accion"],
             "Campo": _ETIQUETAS_CAMPOS.get(item.get("campo"), item.get("campo") or "—"),
@@ -709,10 +727,14 @@ def _vista_historial(oficina_id: str, es_master: bool) -> None:
         }
         for item in historial
     ])
+    st.caption("Fechas y horas mostradas en America/Guayaquil (UTC−5).")
     st.dataframe(tabla, hide_index=True, use_container_width=True, height=480)
     st.download_button(
         "Descargar seguimiento en Excel", data=_datos_exportacion(invitados, historial),
-        file_name=f"seguimiento_congreso_{datetime.now():%Y%m%d_%H%M}.xlsx",
+        file_name=(
+            f"seguimiento_congreso_"
+            f"{datetime.now(ZONA_HORARIA_ECUADOR):%Y%m%d_%H%M}.xlsx"
+        ),
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
