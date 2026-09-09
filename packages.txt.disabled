@@ -1,0 +1,4 @@
+# Dependencia APT suspendida temporalmente el 2026-09-08.
+# Restaurar este archivo con el nombre packages.txt para reactivar la conversión
+# DOCX -> PDF cuando Streamlit Community Cloud resuelva el incidente de Debian.
+libreoffice

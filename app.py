@@ -9,6 +9,7 @@ Flujo:
 import streamlit as st
 
 from database.init_db import init_db
+from utils.feature_flags import CERTIFICATE_GENERATION_ENABLED
 
 
 st.set_page_config(
@@ -114,6 +115,8 @@ es_master      = oficina_rol == "master"
 with st.sidebar:
     st.markdown(f"**Oficina:** {oficina_nombre}")
     st.markdown(f"**Rol:** {'Master (todas las oficinas)' if es_master else 'Regional'}")
+    if not CERTIFICATE_GENERATION_ENABLED:
+        st.warning("Emisión de certificados temporalmente inhabilitada.")
     st.divider()
 
     MODULOS_REGIONAL = {

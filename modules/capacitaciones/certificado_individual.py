@@ -21,6 +21,10 @@ from database.db import (
     reservar_rango_codigos_certificado,
 )
 from utils.docx_generator import generar_certificado_pdf
+from utils.feature_flags import (
+    CERTIFICATE_GENERATION_ENABLED,
+    CERTIFICATE_GENERATION_NOTICE,
+)
 from utils.reporte_helpers import calcular_horas, parsear_fecha_reporte
 from utils.validator import validar_cedula
 
@@ -47,6 +51,8 @@ def mostrar_certificado_individual() -> None:
 
     st.title("📜 Certificado Individual")
     st.markdown(f"**Oficina:** {oficina_nombre}")
+    if not CERTIFICATE_GENERATION_ENABLED:
+        st.warning(f"⚠️ {CERTIFICATE_GENERATION_NOTICE}")
     st.info(
         "⚠️ **Requisito:** La plantilla Word debe contener los marcadores "
         "`«ciudad»`, `«duracion»` y `«texto_participacion»` para que estos campos "
@@ -196,7 +202,16 @@ def mostrar_certificado_individual() -> None:
 
     st.divider()
 
-    if st.button("🖨️ Generar certificado", type="primary"):
+    if st.button(
+        "🖨️ Generar certificado",
+        type="primary",
+        disabled=not CERTIFICATE_GENERATION_ENABLED,
+        help=(
+            None
+            if CERTIFICATE_GENERATION_ENABLED
+            else "Temporalmente inhabilitado: requiere LibreOffice en Streamlit Cloud."
+        ),
+    ):
         cedula_ok, msg_cedula = validar_cedula(cedula.strip())
         if not nombre.strip():
             st.error("El nombre no puede estar vacío.")

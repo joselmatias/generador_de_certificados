@@ -18,6 +18,10 @@ from database.db import (
     reservar_rango_codigos_certificado,
 )
 from utils.docx_generator import generar_certificado_pdf
+from utils.feature_flags import (
+    CERTIFICATE_GENERATION_ENABLED,
+    CERTIFICATE_GENERATION_NOTICE,
+)
 
 
 _KEY_BATCH = "cap_batch_listo"
@@ -28,6 +32,8 @@ _KEY_EXCEL = "cert_excel_descarga"
 def mostrar_certificados() -> None:
     """Renderiza el módulo de generación y el historial de rangos consumidos."""
     st.title("🎓 Generación de Certificados")
+    if not CERTIFICATE_GENERATION_ENABLED:
+        st.warning(f"⚠️ {CERTIFICATE_GENERATION_NOTICE}")
     _mostrar_placa_ultimo_certificado()
     st.divider()
 
@@ -120,6 +126,12 @@ def mostrar_certificados() -> None:
         f"📄 Generar {len(df)} certificados PDF",
         type="primary",
         use_container_width=True,
+        disabled=not CERTIFICATE_GENERATION_ENABLED,
+        help=(
+            None
+            if CERTIFICATE_GENERATION_ENABLED
+            else "Temporalmente inhabilitado: requiere LibreOffice en Streamlit Cloud."
+        ),
     ):
         try:
             batch = _reservar_y_registrar_lote(batch)
