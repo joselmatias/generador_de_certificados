@@ -418,13 +418,17 @@ def _mostrar_indicadores(invitados: list[dict[str, Any]]) -> None:
     valores = (
         len(invitados),
         sum(item["confirmado"] == "Sí" for item in invitados),
+        sum(item["confirmado"] == "No" for item in invitados),
         sum(item["confirmado"] == "Pendiente" for item in invitados),
         sum(item.get("responsable_id") is None for item in invitados),
         sum(item["asistencia_21"] == "Sí" for item in invitados),
         sum(item["asistencia_22"] == "Sí" for item in invitados),
     )
-    cols = st.columns(6)
-    etiquetas = ("Invitados", "Confirmados", "Pendientes", "Sin responsable", "Asisten 21", "Asisten 22")
+    cols = st.columns(7)
+    etiquetas = (
+        "Invitados", "Confirmados", "No asistirán", "Pendientes",
+        "Sin responsable", "Asisten 21", "Asisten 22",
+    )
     for col, etiqueta, valor in zip(cols, etiquetas, valores):
         col.metric(etiqueta, valor)
 
@@ -440,6 +444,7 @@ def _mostrar_avance_oficinas(invitados: list[dict[str, Any]]) -> None:
                 "Oficina": _nombre_oficina(oficina),
                 "Invitados": len(grupo),
                 "Confirmados": sum(item["confirmado"] == "Sí" for item in grupo),
+                "No asistirán": sum(item["confirmado"] == "No" for item in grupo),
                 "Pendientes": sum(item["confirmado"] == "Pendiente" for item in grupo),
                 "Sin responsable": sum(item.get("responsable_id") is None for item in grupo),
                 "Asisten 21": sum(item["asistencia_21"] == "Sí" for item in grupo),
