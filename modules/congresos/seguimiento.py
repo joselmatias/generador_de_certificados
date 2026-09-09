@@ -6,6 +6,7 @@ from collections import Counter
 from datetime import datetime
 from hashlib import sha256
 from io import BytesIO
+from pathlib import Path
 import re
 import unicodedata
 from typing import Any
@@ -44,6 +45,23 @@ MAPEO_RESPONSABLE_OFICINA = {
     "carlos g": "guayaquil",
     "despacho": "guayaquil",
     "intendente regional": "guayaquil",
+}
+
+ARCHIVO_PRECARGA = (
+    Path(__file__).resolve().parents[2]
+    / "data"
+    / "congreso"
+    / "LISTA DE INVITADOS 8sept.xlsx"
+)
+HASH_ARCHIVO_PRECARGA = (
+    "ad7d6cf78428b46c505cd2bf31f77b47bc8f99ed20fb32c450d595f1a3fe3efa"
+)
+DISTRIBUCION_PRECARGA = {
+    "guayaquil": 32,
+    "manabi": 10,
+    "cuenca": 10,
+    "loja": 10,
+    "sin_asignar": 7,
 }
 
 _ETIQUETAS_CAMPOS = {
@@ -221,6 +239,48 @@ def analizar_excel_congreso(contenido: bytes) -> dict[str, Any]:
         "duplicados": list(dict.fromkeys(duplicados)),
         "distribucion": dict(distribucion),
     }
+
+
+def precargar_congreso_desde_repositorio() -> int:
+    """Importa el archivo aprobado una sola vez cuando la base está vacía."""
+    with get_connection() as con:
+        if contar_invitados_congreso(con) > 0:
+            return 0
+
+    contenido = ARCHIVO_PRECARGA.read_bytes()
+    hash_archivo = sha256(contenido).hexdigest()
+    if hash_archivo != HASH_ARCHIVO_PRECARGA:
+        raise ValueError("El archivo de precarga no coincide con la versión aprobada.")
+
+    resultado = analizar_excel_congreso(contenido)
+    if resultado["errores"] or resultado["duplicados"]:
+        detalles = [*resultado["errores"], *resultado["duplicados"]]
+        raise ValueError("La precarga contiene incidencias: " + " | ".join(detalles))
+    if len(resultado["invitados"]) != 69:
+        raise ValueError("La precarga debe contener exactamente 69 invitados.")
+    if len(resultado["responsables"]) != 5:
+        raise ValueError("La precarga debe contener exactamente 5 responsables.")
+    if resultado["distribucion"] != DISTRIBUCION_PRECARGA:
+        raise ValueError(
+            "La distribución de oficinas del archivo de precarga no es la esperada."
+        )
+
+    try:
+        with get_connection() as con:
+            return importar_datos_congreso(
+                con,
+                [dict(item) for item in resultado["invitados"]],
+                resultado["responsables"],
+                ARCHIVO_PRECARGA.name,
+                hash_archivo,
+                "Carga inicial — Guayaquil",
+            )
+    except ValueError:
+        # Otra instancia puede haber terminado la carga mientras esta esperaba el bloqueo.
+        with get_connection() as con:
+            if contar_invitados_congreso(con) > 0:
+                return 0
+        raise
 
 
 def _correo_valido(correo: str) -> bool:

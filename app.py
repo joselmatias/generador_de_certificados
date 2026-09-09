@@ -9,6 +9,7 @@ Flujo:
 import streamlit as st
 
 from database.init_db import init_db
+from modules.congresos.seguimiento import precargar_congreso_desde_repositorio
 from utils.feature_flags import CERTIFICATE_GENERATION_ENABLED
 
 
@@ -21,11 +22,15 @@ st.set_page_config(
 
 
 @st.cache_resource(show_spinner=False)
-def _inicializar_db() -> None:
+def _inicializar_db() -> int:
     init_db()
+    return precargar_congreso_desde_repositorio()
 
 
-_inicializar_db()
+try:
+    _inicializar_db()
+except Exception as exc:
+    st.warning(f"No se pudo completar la precarga del congreso: {exc}")
 
 
 # ---------------------------------------------------------------------------
