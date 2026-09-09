@@ -231,6 +231,7 @@ CREATE TABLE IF NOT EXISTS congreso_invitados (
     oficina             TEXT,
     responsable_id      INTEGER REFERENCES congreso_responsables(id) ON DELETE RESTRICT,
     nombre_asistente_delegado TEXT,
+    cargos_asistentes_delegados TEXT,
     confirmado          TEXT NOT NULL DEFAULT 'Pendiente'
                         CHECK (confirmado IN ('Pendiente', 'Sí', 'No')),
     asistencia_21       TEXT NOT NULL DEFAULT 'Pendiente'
@@ -319,6 +320,10 @@ def init_db() -> None:
                 cur.execute(_DDL_CONGRESO_INVITADOS)
                 cur.execute(_DDL_CONGRESO_HISTORIAL)
                 cur.execute(_DDL_CONGRESO_IMPORTACIONES)
+                cur.execute(
+                    "ALTER TABLE congreso_invitados "
+                    "ADD COLUMN IF NOT EXISTS cargos_asistentes_delegados TEXT"
+                )
                 cur.execute(
                     "INSERT INTO contador_reporte (id, ultimo_numero) VALUES (1, 83) "
                     "ON CONFLICT (id) DO NOTHING"

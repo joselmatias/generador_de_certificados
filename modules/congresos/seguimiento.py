@@ -67,7 +67,8 @@ DISTRIBUCION_PRECARGA = {
 _ETIQUETAS_CAMPOS = {
     "oficina": "Oficina",
     "responsable_id": "Responsable principal",
-    "nombre_asistente_delegado": "Nombre asistente o delegado",
+    "nombre_asistente_delegado": "Asistentes o delegados",
+    "cargos_asistentes_delegados": "Cargos de asistentes o delegados",
     "confirmado": "Confirmado",
     "asistencia_21": "21 de octubre de 2026",
     "asistencia_22": "22 de octubre de 2026",
@@ -295,13 +296,37 @@ def _nombre_oficina(oficina: str | None) -> str:
     return OFICINAS.get(oficina, "Sin asignar")
 
 
+def _tabla_asistentes(nombres: Any, cargos: Any) -> pd.DataFrame:
+    lista_nombres = [linea.strip() for linea in _texto(nombres).splitlines() if linea.strip()]
+    lista_cargos = [linea.strip() for linea in _texto(cargos).splitlines()]
+    cantidad = max(len(lista_nombres), len(lista_cargos), 1)
+    lista_nombres.extend([""] * (cantidad - len(lista_nombres)))
+    lista_cargos.extend([""] * (cantidad - len(lista_cargos)))
+    return pd.DataFrame({"Nombre": lista_nombres, "Cargo": lista_cargos})
+
+
+def _serializar_asistentes(tabla: pd.DataFrame) -> tuple[str, str]:
+    nombres: list[str] = []
+    cargos: list[str] = []
+    for _, fila in tabla.fillna("").iterrows():
+        nombre = _texto(fila.get("Nombre"))
+        cargo = _texto(fila.get("Cargo"))
+        if not nombre and cargo:
+            raise ValueError("Cada cargo debe estar asociado a un nombre.")
+        if nombre:
+            nombres.append(nombre)
+            cargos.append(cargo)
+    return "\n".join(nombres), "\n".join(cargos)
+
+
 def _datos_exportacion(
     invitados: list[dict[str, Any]], historial: list[dict[str, Any]]
 ) -> bytes:
     columnas_invitados = {
         "numero_lista": "No", "institucion": "Institución",
         "tipo_institucion": "Tipo institución", "destinatario_oficio": "Destinatario oficio",
-        "firma": "Firma", "nombre_asistente_delegado": "Nombre asistente o delegado",
+        "firma": "Firma", "nombre_asistente_delegado": "Asistentes o delegados",
+        "cargos_asistentes_delegados": "Cargos de asistentes o delegados",
         "calidad": "Calidad", "oficina": "Oficina",
         "responsable_nombres": "Responsable: Nombres",
         "responsable_celular": "Responsable: celular",
@@ -461,7 +486,10 @@ def _vista_seguimiento(
             "Responsable": item.get("responsable_nombres") or "Sin asignar",
             "Confirmado": item["confirmado"], "21 oct.": item["asistencia_21"],
             "22 oct.": item["asistencia_22"],
-            "Delegado": item.get("nombre_asistente_delegado") or "",
+            "Asistentes o delegados": (
+                item.get("nombre_asistente_delegado") or ""
+            ).replace("\n", "; "),
+            "Cargos": (item.get("cargos_asistentes_delegados") or "").replace("\n", "; "),
             "N.º Oficio": item.get("numero_oficio") or "",
         }
         for item in filtrados
@@ -518,8 +546,21 @@ def _vista_seguimiento(
         if responsable_id:
             responsable = responsables_por_id[responsable_id]
             st.caption(f"{responsable['celular']} · {responsable['correo']}")
-        asistente = st.text_input(
-            "Nombre asistente o delegado", value=invitado.get("nombre_asistente_delegado") or ""
+        st.markdown("**Asistentes o delegados**")
+        st.caption("Agrega una fila por persona e indica su cargo. Puedes añadir o eliminar filas.")
+        tabla_asistentes = st.data_editor(
+            _tabla_asistentes(
+                invitado.get("nombre_asistente_delegado"),
+                invitado.get("cargos_asistentes_delegados"),
+            ),
+            hide_index=True,
+            num_rows="dynamic",
+            use_container_width=True,
+            column_config={
+                "Nombre": st.column_config.TextColumn("Nombre asistente o delegado"),
+                "Cargo": st.column_config.TextColumn("Cargo"),
+            },
+            key=f"congreso_asistentes_{seleccionado_id}",
         )
         c1, c2, c3 = st.columns(3)
         confirmado = c1.selectbox("Confirmado", ESTADOS, index=ESTADOS.index(invitado["confirmado"]))
@@ -541,12 +582,15 @@ def _vista_seguimiento(
 
     if guardar:
         try:
+            asistentes, cargos_asistentes = _serializar_asistentes(tabla_asistentes)
             with get_connection() as con:
                 cantidad = actualizar_invitado_congreso(
                     con, seleccionado_id,
                     {
                         "oficina": oficina_destino, "responsable_id": responsable_id,
-                        "nombre_asistente_delegado": asistente, "confirmado": confirmado,
+                        "nombre_asistente_delegado": asistentes,
+                        "cargos_asistentes_delegados": cargos_asistentes,
+                        "confirmado": confirmado,
                         "asistencia_21": asistencia_21, "asistencia_22": asistencia_22,
                         "observaciones_seguimiento": observaciones,
                         "numero_oficio": numero_oficio,

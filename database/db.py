@@ -501,6 +501,7 @@ _CAMPOS_EDITABLES_CONGRESO = {
     "oficina",
     "responsable_id",
     "nombre_asistente_delegado",
+    "cargos_asistentes_delegados",
     "confirmado",
     "asistencia_21",
     "asistencia_22",
@@ -833,7 +834,8 @@ def importar_datos_congreso(
         "fila_origen", "numero_lista", "institucion", "tipo_institucion",
         "destinatario_oficio", "firma", "calidad", "cargo", "direccion",
         "correo_institucional", "sitio_web", "oficina", "responsable_id",
-        "nombre_asistente_delegado", "confirmado", "asistencia_21",
+        "nombre_asistente_delegado", "cargos_asistentes_delegados",
+        "confirmado", "asistencia_21",
         "asistencia_22", "observaciones_seguimiento", "numero_oficio",
         "observaciones_cruce",
     ]
