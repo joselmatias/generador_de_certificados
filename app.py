@@ -6,12 +6,14 @@ Flujo:
 2. Al seleccionar una oficina, se accede a sus módulos.
 """
 
+import importlib
+
 import streamlit as st
 
 from database.init_db import init_db
 from utils.feature_flags import CERTIFICATE_GENERATION_ENABLED
 
-DB_SCHEMA_VERSION = 3
+DB_SCHEMA_VERSION = 4
 
 
 st.set_page_config(
@@ -26,13 +28,23 @@ st.set_page_config(
 def _inicializar_db(schema_version: int) -> int:
     del schema_version  # Su valor invalida la caché cuando cambia el esquema.
     init_db()
-    from modules.congresos.seguimiento import (
-        precargar_congreso_desde_repositorio,
-        sincronizar_congreso_desde_documentos,
-    )
+    nombre_modulo = "modules.congresos.seguimiento"
+    seguimiento = importlib.import_module(nombre_modulo)
 
-    precargar_congreso_desde_repositorio()
-    return sincronizar_congreso_desde_documentos()
+    # Durante un despliegue Streamlit puede conservar momentáneamente el
+    # módulo anterior mientras app.py ya corresponde al commit nuevo.
+    # Invalidar y recargar evita mezclar ambas versiones en el mismo proceso.
+    if not hasattr(seguimiento, "sincronizar_congreso_desde_documentos"):
+        importlib.invalidate_caches()
+        seguimiento = importlib.reload(seguimiento)
+
+    seguimiento.precargar_congreso_desde_repositorio()
+    sincronizar = getattr(
+        seguimiento, "sincronizar_congreso_desde_documentos", None
+    )
+    # Si el checkout todavía está en curso, la interfaz permanece disponible.
+    # Streamlit volverá a ejecutar este bloque al detectar el módulo actualizado.
+    return sincronizar() if sincronizar is not None else 0
 
 
 try:
