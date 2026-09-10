@@ -292,6 +292,9 @@ _INDICES = [
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_congreso_responsable_oficina_nombre ON congreso_responsables(oficina, LOWER(nombres));",
     "CREATE INDEX IF NOT EXISTS idx_congreso_invitado_oficina ON congreso_invitados(oficina);",
     "CREATE INDEX IF NOT EXISTS idx_congreso_invitado_responsable ON congreso_invitados(responsable_id);",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_congreso_fila_oficio "
+    "ON congreso_invitados(fila_origen, numero_oficio) "
+    "WHERE fila_origen IS NOT NULL AND numero_oficio IS NOT NULL;",
     "CREATE INDEX IF NOT EXISTS idx_congreso_historial_invitado ON congreso_historial(invitado_id);",
     "CREATE INDEX IF NOT EXISTS idx_congreso_historial_fecha ON congreso_historial(fecha_cambio DESC);",
 ]

@@ -919,14 +919,139 @@ def sincronizar_documentos_congreso(
         return re.findall(r"(?<!\d)(?:SCE-(?:IGT-IR-)?2026-)?(\d{3})(?!\d)", str(valor or ""))
 
     cambios_totales = 0
+
+    def aplicar_cambios(actual: Any, cambios: dict[str, Any], accion: str) -> None:
+        nonlocal cambios_totales
+        if not cambios:
+            return
+        asignaciones = ", ".join(f"{campo} = %s" for campo in cambios)
+        con.execute(
+            f"UPDATE congreso_invitados SET {asignaciones}, "
+            "fecha_actualizacion = CURRENT_TIMESTAMP WHERE id = %s",
+            [*cambios.values(), actual["id"]],
+        )
+        for campo, valor_nuevo in cambios.items():
+            _registrar_historial_congreso(
+                con,
+                entidad_tipo="invitado",
+                entidad_id=actual["id"],
+                invitado_id=actual["id"],
+                oficina=actual.get("oficina"),
+                accion=accion,
+                campo=campo,
+                valor_anterior=actual.get(campo),
+                valor_nuevo=valor_nuevo,
+                actor_responsable_id=None,
+                actor_nombre=actor_nombre,
+                actor_oficina="guayaquil",
+            )
+        cambios_totales += len(cambios)
+
+    por_fila: dict[int, list[dict[str, Any]]] = {}
     for item in actualizaciones:
-        actual = con.execute(
-            "SELECT * FROM congreso_invitados WHERE fila_origen = %s",
-            (item["fila_origen"],),
-        ).fetchone()
-        if actual is None:
+        por_fila.setdefault(item["fila_origen"], []).append(item)
+
+    columnas_clon = [
+        "fila_origen", "numero_lista", "institucion", "tipo_institucion",
+        "destinatario_oficio", "firma", "calidad", "cargo", "direccion",
+        "correo_institucional", "telefonos_institucionales", "sitio_web",
+        "tipo_invitacion", "oficina", "responsable_id",
+        "nombre_asistente_delegado", "cargos_asistentes_delegados",
+        "confirmado", "asistencia_21", "asistencia_22",
+        "observaciones_seguimiento", "numero_oficio", "observaciones_cruce",
+    ]
+
+    # Divide filas que en el Excel contenían varios oficios. La primera conserva
+    # el registro y su historial; las demás copian su estado actual para que a
+    # partir de este punto cada invitación tenga seguimiento independiente.
+    for fila_origen, items_fila in por_fila.items():
+        items_unicos = list({item.get("numero_oficio"): item for item in items_fila}.values())
+        if len(items_unicos) < 2:
+            continue
+        filas_db = con.execute(
+            "SELECT * FROM congreso_invitados WHERE fila_origen = %s ORDER BY id",
+            (fila_origen,),
+        ).fetchall()
+        if not filas_db:
+            continue
+        codigos_esperados = [item["numero_oficio"] for item in items_unicos]
+        numeros_esperados = [numero for codigo in codigos_esperados for numero in numeros(codigo)]
+        por_codigo = {fila.get("numero_oficio"): fila for fila in filas_db}
+        fuente = next(
+            (
+                fila for fila in filas_db
+                if numeros(fila.get("numero_oficio")) == numeros_esperados
+            ),
+            por_codigo.get(codigos_esperados[0]),
+        )
+        if fuente is None:
+            # Se preserva una eventual corrección manual que ya no corresponda
+            # a los códigos documentales originales.
             continue
 
+        primer_item = items_unicos[0]
+        if fuente.get("numero_oficio") != primer_item["numero_oficio"]:
+            aplicar_cambios(
+                fuente,
+                {
+                    "numero_oficio": primer_item["numero_oficio"],
+                    "tipo_invitacion": primer_item.get("tipo_invitacion"),
+                },
+                "División por oficio",
+            )
+            fuente = dict(fuente)
+            fuente.update(
+                numero_oficio=primer_item["numero_oficio"],
+                tipo_invitacion=primer_item.get("tipo_invitacion"),
+            )
+            por_codigo[primer_item["numero_oficio"]] = fuente
+
+        for item in items_unicos[1:]:
+            codigo = item["numero_oficio"]
+            if codigo in por_codigo:
+                continue
+            datos_clon = dict(fuente)
+            datos_clon["numero_oficio"] = codigo
+            datos_clon["tipo_invitacion"] = item.get("tipo_invitacion")
+            valores = [datos_clon.get(columna) for columna in columnas_clon]
+            row = con.execute(
+                f"INSERT INTO congreso_invitados ({', '.join(columnas_clon)}) "
+                f"VALUES ({', '.join(['%s'] * len(columnas_clon))}) RETURNING id",
+                valores,
+            ).fetchone()
+            invitado_id = int(row["id"])
+            _registrar_historial_congreso(
+                con,
+                entidad_tipo="invitado",
+                entidad_id=invitado_id,
+                invitado_id=invitado_id,
+                oficina=datos_clon.get("oficina"),
+                accion="División por oficio",
+                campo="numero_oficio",
+                valor_anterior=None,
+                valor_nuevo=codigo,
+                actor_responsable_id=None,
+                actor_nombre=actor_nombre,
+                actor_oficina="guayaquil",
+            )
+            cambios_totales += 1
+
+    for item in actualizaciones:
+        actual = con.execute(
+            """
+            SELECT * FROM congreso_invitados
+            WHERE fila_origen = %s AND numero_oficio IS NOT DISTINCT FROM %s
+            ORDER BY id LIMIT 1
+            """,
+            (item["fila_origen"], item.get("numero_oficio")),
+        ).fetchone()
+        if actual is None and len(por_fila[item["fila_origen"]]) == 1:
+            actual = con.execute(
+                "SELECT * FROM congreso_invitados WHERE fila_origen = %s ORDER BY id LIMIT 1",
+                (item["fila_origen"],),
+            ).fetchone()
+        if actual is None:
+            continue
         cambios: dict[str, Any] = {}
         telefono = item.get("telefonos_institucionales")
         if telefono and not actual.get("telefonos_institucionales"):
@@ -941,31 +1066,7 @@ def sincronizar_documentos_congreso(
             # correcciones manuales con una numeración documental diferente.
             if not oficio_actual or numeros(oficio_actual) == numeros(oficio):
                 cambios["numero_oficio"] = oficio
-        if not cambios:
-            continue
-
-        asignaciones = ", ".join(f"{campo} = %s" for campo in cambios)
-        con.execute(
-            f"UPDATE congreso_invitados SET {asignaciones}, "
-            "fecha_actualizacion = CURRENT_TIMESTAMP WHERE id = %s",
-            [*cambios.values(), actual["id"]],
-        )
-        for campo, valor_nuevo in cambios.items():
-            _registrar_historial_congreso(
-                con,
-                entidad_tipo="invitado",
-                entidad_id=actual["id"],
-                invitado_id=actual["id"],
-                oficina=actual.get("oficina"),
-                accion="Sincronización documental",
-                campo=campo,
-                valor_anterior=actual.get(campo),
-                valor_nuevo=valor_nuevo,
-                actor_responsable_id=None,
-                actor_nombre=actor_nombre,
-                actor_oficina="guayaquil",
-            )
-        cambios_totales += len(cambios)
+        aplicar_cambios(actual, cambios, "Sincronización documental")
 
     for item in nuevos_invitados:
         existente = con.execute(

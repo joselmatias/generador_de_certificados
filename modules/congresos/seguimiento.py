@@ -60,8 +60,8 @@ HASH_ARCHIVO_PRECARGA = (
     "ad7d6cf78428b46c505cd2bf31f77b47bc8f99ed20fb32c450d595f1a3fe3efa"
 )
 DISTRIBUCION_PRECARGA = {
-    "guayaquil": 32,
-    "manabi": 10,
+    "guayaquil": 33,
+    "manabi": 11,
     "cuenca": 10,
     "loja": 10,
     "sin_asignar": 7,
@@ -145,15 +145,16 @@ def _extraer_telefonos(valor: Any) -> str | None:
     return "; ".join(encontrados) or None
 
 
-def _normalizar_oficios_y_categoria(valor: Any) -> tuple[str | None, str | None]:
-    """Convierte la numeración abreviada del Excel en códigos SCE completos."""
+def _separar_oficios_y_categorias(
+    valor: Any,
+) -> list[tuple[str | None, str | None]]:
+    """Devuelve una invitación independiente por cada código de oficio."""
     original = _texto(valor)
     numeros = re.findall(r"(?<!\d)(6(?:4[1-9]|5\d|6\d|7\d|8[0-6]))(?!\d)", original)
     if not numeros:
-        return (original or None), None
+        return [(original or None, None)]
     numeros = list(dict.fromkeys(numeros))
-    codigos = [f"SCE-2026-{numero}" for numero in numeros]
-    categorias: list[str] = []
+    resultado: list[tuple[str, str]] = []
     for numero_texto in numeros:
         numero = int(numero_texto)
         categoria = (
@@ -161,9 +162,8 @@ def _normalizar_oficios_y_categoria(valor: Any) -> tuple[str | None, str | None]
             else "Invitación a universidades" if 645 <= numero <= 663
             else "Invitación general"
         )
-        if categoria not in categorias:
-            categorias.append(categoria)
-    return "; ".join(codigos), "; ".join(categorias)
+        resultado.append((f"SCE-2026-{numero_texto}", categoria))
+    return resultado
 
 
 def analizar_excel_congreso(contenido: bytes) -> dict[str, Any]:
@@ -248,20 +248,10 @@ def analizar_excel_congreso(contenido: bytes) -> dict[str, Any]:
 
         destinatario = _texto(valor(fila, "Destinatario oficio"))
         numero_oficio_original = _texto(valor(fila, "N° Oficio"))
-        numero_oficio, tipo_invitacion = _normalizar_oficios_y_categoria(
+        oficios = _separar_oficios_y_categorias(
             numero_oficio_original
         )
-        clave_invitado = (
-            _normalizar(institucion), _normalizar(destinatario), _normalizar(numero_oficio)
-        )
-        if clave_invitado in claves_invitados:
-            duplicados.append(
-                f"Fila {fila}: {institucion} / {destinatario or 'sin destinatario'}"
-            )
-        claves_invitados.add(clave_invitado)
-
-        invitados.append(
-            {
+        invitado_base = {
                 "fila_origen": fila,
                 "numero_lista": numero_lista,
                 "institucion": institucion,
@@ -276,7 +266,6 @@ def analizar_excel_congreso(contenido: bytes) -> dict[str, Any]:
                     valor(fila, "Correo electrónico")
                 ),
                 "sitio_web": _texto(valor(fila, "Sitio web")) or None,
-                "tipo_invitacion": tipo_invitacion,
                 "oficina": oficina,
                 "_responsable_nombre": nombre_responsable or None,
                 "nombre_asistente_delegado": _texto(
@@ -286,12 +275,25 @@ def analizar_excel_congreso(contenido: bytes) -> dict[str, Any]:
                 "asistencia_21": _estado(valor(fila, "21 de octubre de 2026")),
                 "asistencia_22": _estado(valor(fila, "22 de octubre de 2026")),
                 "observaciones_seguimiento": _texto(valor(fila, "Observaciones")) or None,
-                "numero_oficio": numero_oficio or None,
                 "observaciones_cruce": _texto(
                     valor(fila, "Observaciones cruce de listado vs oficios generados")
                 ) or None,
             }
-        )
+        for numero_oficio, tipo_invitacion in oficios:
+            clave_invitado = (
+                _normalizar(institucion),
+                _normalizar(destinatario),
+                _normalizar(numero_oficio),
+            )
+            if clave_invitado in claves_invitados:
+                duplicados.append(
+                    f"Fila {fila}: {institucion} / {destinatario or 'sin destinatario'}"
+                )
+            claves_invitados.add(clave_invitado)
+            invitado = dict(invitado_base)
+            invitado["numero_oficio"] = numero_oficio
+            invitado["tipo_invitacion"] = tipo_invitacion
+            invitados.append(invitado)
 
     distribucion = Counter(item["oficina"] or "sin_asignar" for item in invitados)
     return {
@@ -318,8 +320,8 @@ def precargar_congreso_desde_repositorio() -> int:
     if resultado["errores"] or resultado["duplicados"]:
         detalles = [*resultado["errores"], *resultado["duplicados"]]
         raise ValueError("La precarga contiene incidencias: " + " | ".join(detalles))
-    if len(resultado["invitados"]) != 69:
-        raise ValueError("La precarga debe contener exactamente 69 invitados.")
+    if len(resultado["invitados"]) != 71:
+        raise ValueError("La precarga debe contener exactamente 71 invitaciones.")
     if len(resultado["responsables"]) != 5:
         raise ValueError("La precarga debe contener exactamente 5 responsables.")
     if resultado["distribucion"] != DISTRIBUCION_PRECARGA:
@@ -653,6 +655,7 @@ def _vista_seguimiento(
         "Selecciona un invitado para actualizar", list(por_id),
         format_func=lambda valor: (
             f"{por_id[valor]['institucion']} — "
+            f"{por_id[valor].get('numero_oficio') or 'sin oficio'} — "
             f"{por_id[valor].get('destinatario_oficio') or 'sin destinatario'}"
         ),
         key="congreso_invitado_editar",
