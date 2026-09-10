@@ -13,7 +13,8 @@ import streamlit as st
 from database.init_db import init_db
 from utils.feature_flags import CERTIFICATE_GENERATION_ENABLED
 
-DB_SCHEMA_VERSION = 5
+DB_SCHEMA_VERSION = 6
+CONGRESO_SYNC_VERSION = 2
 
 
 st.set_page_config(
@@ -34,17 +35,24 @@ def _inicializar_db(schema_version: int) -> int:
     # Durante un despliegue Streamlit puede conservar momentáneamente el
     # módulo anterior mientras app.py ya corresponde al commit nuevo.
     # Invalidar y recargar evita mezclar ambas versiones en el mismo proceso.
-    if not hasattr(seguimiento, "sincronizar_congreso_desde_documentos"):
+    version_modulo = getattr(seguimiento, "CONGRESO_SYNC_VERSION", 0)
+    if version_modulo != CONGRESO_SYNC_VERSION:
         importlib.invalidate_caches()
         seguimiento = importlib.reload(seguimiento)
 
+    version_modulo = getattr(seguimiento, "CONGRESO_SYNC_VERSION", 0)
+    if version_modulo != CONGRESO_SYNC_VERSION:
+        raise RuntimeError(
+            "El módulo de Seguimiento Congreso todavía se está actualizando "
+            f"(versión {version_modulo}; esperada {CONGRESO_SYNC_VERSION}). "
+            "Recarga la aplicación en unos segundos."
+        )
+
     seguimiento.precargar_congreso_desde_repositorio()
-    sincronizar = getattr(
-        seguimiento, "sincronizar_congreso_desde_documentos", None
-    )
-    # Si el checkout todavía está en curso, la interfaz permanece disponible.
-    # Streamlit volverá a ejecutar este bloque al detectar el módulo actualizado.
-    return sincronizar() if sincronizar is not None else 0
+    sincronizar = seguimiento.sincronizar_congreso_desde_documentos
+    # Solo se almacena en caché una inicialización ejecutada con el contrato
+    # completo; las excepciones permiten que Streamlit vuelva a intentarlo.
+    return sincronizar()
 
 
 try:
