@@ -13,6 +13,7 @@ y `dict(row)` siguen funcionando igual que antes.
 """
 
 import contextlib
+import re
 from typing import Any, Generator
 
 import psycopg2
@@ -839,7 +840,8 @@ def importar_datos_congreso(
     columnas = [
         "fila_origen", "numero_lista", "institucion", "tipo_institucion",
         "destinatario_oficio", "firma", "calidad", "cargo", "direccion",
-        "correo_institucional", "sitio_web", "oficina", "responsable_id",
+        "correo_institucional", "telefonos_institucionales", "sitio_web",
+        "tipo_invitacion", "oficina", "responsable_id",
         "nombre_asistente_delegado", "cargos_asistentes_delegados",
         "confirmado", "asistencia_21",
         "asistencia_22", "observaciones_seguimiento", "numero_oficio",
@@ -888,6 +890,125 @@ def importar_datos_congreso(
         (nombre_archivo, hash_archivo, insertados, actor_nombre),
     )
     return insertados
+
+
+def sincronizar_documentos_congreso(
+    con: _Conn,
+    actualizaciones: list[dict[str, Any]],
+    nuevos_invitados: list[dict[str, Any]],
+    actor_nombre: str = "Sincronización documental",
+) -> int:
+    """Completa metadatos documentales e incorpora oficios firmados una sola vez.
+
+    Las filas del Excel se identifican por ``fila_origen``. Los campos ya
+    completados manualmente se conservan, salvo el número abreviado del oficio,
+    que se expande al código documental completo cuando representa los mismos
+    números.
+    """
+    con.execute(
+        "ALTER TABLE congreso_invitados "
+        "ADD COLUMN IF NOT EXISTS telefonos_institucionales TEXT"
+    )
+    con.execute(
+        "ALTER TABLE congreso_invitados "
+        "ADD COLUMN IF NOT EXISTS tipo_invitacion TEXT"
+    )
+    con.execute("LOCK TABLE congreso_invitados IN EXCLUSIVE MODE")
+
+    def numeros(valor: Any) -> list[str]:
+        return re.findall(r"(?<!\d)(?:SCE-(?:IGT-IR-)?2026-)?(\d{3})(?!\d)", str(valor or ""))
+
+    cambios_totales = 0
+    for item in actualizaciones:
+        actual = con.execute(
+            "SELECT * FROM congreso_invitados WHERE fila_origen = %s",
+            (item["fila_origen"],),
+        ).fetchone()
+        if actual is None:
+            continue
+
+        cambios: dict[str, Any] = {}
+        telefono = item.get("telefonos_institucionales")
+        if telefono and not actual.get("telefonos_institucionales"):
+            cambios["telefonos_institucionales"] = telefono
+        tipo = item.get("tipo_invitacion")
+        if tipo and not actual.get("tipo_invitacion"):
+            cambios["tipo_invitacion"] = tipo
+        oficio = item.get("numero_oficio")
+        oficio_actual = actual.get("numero_oficio")
+        if oficio and oficio_actual != oficio:
+            # Solo amplía valores vacíos o abreviados equivalentes; no pisa
+            # correcciones manuales con una numeración documental diferente.
+            if not oficio_actual or numeros(oficio_actual) == numeros(oficio):
+                cambios["numero_oficio"] = oficio
+        if not cambios:
+            continue
+
+        asignaciones = ", ".join(f"{campo} = %s" for campo in cambios)
+        con.execute(
+            f"UPDATE congreso_invitados SET {asignaciones}, "
+            "fecha_actualizacion = CURRENT_TIMESTAMP WHERE id = %s",
+            [*cambios.values(), actual["id"]],
+        )
+        for campo, valor_nuevo in cambios.items():
+            _registrar_historial_congreso(
+                con,
+                entidad_tipo="invitado",
+                entidad_id=actual["id"],
+                invitado_id=actual["id"],
+                oficina=actual.get("oficina"),
+                accion="Sincronización documental",
+                campo=campo,
+                valor_anterior=actual.get(campo),
+                valor_nuevo=valor_nuevo,
+                actor_responsable_id=None,
+                actor_nombre=actor_nombre,
+                actor_oficina="guayaquil",
+            )
+        cambios_totales += len(cambios)
+
+    for item in nuevos_invitados:
+        existente = con.execute(
+            "SELECT id FROM congreso_invitados WHERE numero_oficio = %s",
+            (item["numero_oficio"],),
+        ).fetchone()
+        if existente:
+            continue
+        row = con.execute(
+            """
+            INSERT INTO congreso_invitados (
+                numero_lista, institucion, tipo_institucion, destinatario_oficio,
+                firma, calidad, cargo, direccion, correo_institucional,
+                telefonos_institucionales, sitio_web, tipo_invitacion, oficina,
+                confirmado, asistencia_21, asistencia_22, numero_oficio
+            ) VALUES (
+                %(numero_lista)s, %(institucion)s, %(tipo_institucion)s,
+                %(destinatario_oficio)s, %(firma)s, %(calidad)s, %(cargo)s,
+                %(direccion)s, %(correo_institucional)s,
+                %(telefonos_institucionales)s, %(sitio_web)s,
+                %(tipo_invitacion)s, %(oficina)s, 'Pendiente', 'Pendiente',
+                'Pendiente', %(numero_oficio)s
+            ) RETURNING id
+            """,
+            item,
+        ).fetchone()
+        invitado_id = int(row["id"])
+        _registrar_historial_congreso(
+            con,
+            entidad_tipo="invitado",
+            entidad_id=invitado_id,
+            invitado_id=invitado_id,
+            oficina=item.get("oficina"),
+            accion="Incorporación desde oficio firmado",
+            campo=None,
+            valor_anterior=None,
+            valor_nuevo=f"{item['numero_oficio']} — {item['institucion']}",
+            actor_responsable_id=None,
+            actor_nombre=actor_nombre,
+            actor_oficina="guayaquil",
+        )
+        cambios_totales += 1
+    return cambios_totales
 
 
 def _registrar_historial_congreso(

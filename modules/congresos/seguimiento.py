@@ -27,6 +27,7 @@ from database.db import (
     listar_historial_congreso,
     listar_invitados_congreso,
     listar_responsables_congreso,
+    sincronizar_documentos_congreso,
 )
 
 
@@ -76,6 +77,8 @@ _ETIQUETAS_CAMPOS = {
     "asistencia_22": "22 de octubre de 2026",
     "observaciones_seguimiento": "Observaciones de seguimiento",
     "numero_oficio": "N.º Oficio",
+    "telefonos_institucionales": "Teléfono(s) institucional(es)",
+    "tipo_invitacion": "Tipo de invitación",
     "observaciones_cruce": "Observaciones cruce de listado vs oficios generados",
     "nombres": "Nombres",
     "celular": "Celular",
@@ -112,6 +115,55 @@ def _indice_encabezado(encabezados: list[Any], nombre: str) -> int | None:
         if _normalizar(encabezado) == buscado:
             return indice
     return None
+
+
+_PATRON_TELEFONO = re.compile(
+    r"(?:"
+    r"\(?593(?:-\d)?\)?[\s-]*(?:\d{1,2}[\s-]*)?\d{3}[\s-]\d{4}"
+    r"|\+593[\s-]*(?:\d{1,2}[\s-]*)?\d{3}[\s-]\d{4}"
+    r"|\(0\d\)[\s-]*\d{3}[\s-]\d{4}"
+    r"|0\d[\s-]+\d{3}[\s-]\d{4}"
+    r"|1800[\s-]\d{3}[\s-]\d{3}"
+    r"|(?<![\w@])\d{3}-\d{4}(?![\w.])"
+    r"|\bext\.?\s*\d+\b"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _extraer_telefonos(valor: Any) -> str | None:
+    """Extrae teléfonos de la celda de correo sin modificar el dato original."""
+    texto = _texto(valor)
+    if not texto:
+        return None
+    sin_correos = re.sub(r"[^\s,;|]+@[^\s,;|]+", " ", texto)
+    encontrados: list[str] = []
+    for coincidencia in _PATRON_TELEFONO.finditer(sin_correos):
+        telefono = " ".join(coincidencia.group(0).split()).strip(" |,;")
+        if telefono and telefono.casefold() not in {item.casefold() for item in encontrados}:
+            encontrados.append(telefono)
+    return "; ".join(encontrados) or None
+
+
+def _normalizar_oficios_y_categoria(valor: Any) -> tuple[str | None, str | None]:
+    """Convierte la numeración abreviada del Excel en códigos SCE completos."""
+    original = _texto(valor)
+    numeros = re.findall(r"(?<!\d)(6(?:4[1-9]|5\d|6\d|7\d|8[0-6]))(?!\d)", original)
+    if not numeros:
+        return (original or None), None
+    numeros = list(dict.fromkeys(numeros))
+    codigos = [f"SCE-2026-{numero}" for numero in numeros]
+    categorias: list[str] = []
+    for numero_texto in numeros:
+        numero = int(numero_texto)
+        categoria = (
+            "Expositor" if 641 <= numero <= 644
+            else "Invitación a universidades" if 645 <= numero <= 663
+            else "Invitación general"
+        )
+        if categoria not in categorias:
+            categorias.append(categoria)
+    return "; ".join(codigos), "; ".join(categorias)
 
 
 def analizar_excel_congreso(contenido: bytes) -> dict[str, Any]:
@@ -195,7 +247,10 @@ def analizar_excel_congreso(contenido: bytes) -> dict[str, Any]:
             errores.append(f"Fila {fila}: la asignación no tiene nombre de responsable.")
 
         destinatario = _texto(valor(fila, "Destinatario oficio"))
-        numero_oficio = _texto(valor(fila, "N° Oficio"))
+        numero_oficio_original = _texto(valor(fila, "N° Oficio"))
+        numero_oficio, tipo_invitacion = _normalizar_oficios_y_categoria(
+            numero_oficio_original
+        )
         clave_invitado = (
             _normalizar(institucion), _normalizar(destinatario), _normalizar(numero_oficio)
         )
@@ -217,7 +272,11 @@ def analizar_excel_congreso(contenido: bytes) -> dict[str, Any]:
                 "cargo": _texto(valor(fila, "Cargo")) or None,
                 "direccion": _texto(valor(fila, "Dirección")) or None,
                 "correo_institucional": _texto(valor(fila, "Correo electrónico")) or None,
+                "telefonos_institucionales": _extraer_telefonos(
+                    valor(fila, "Correo electrónico")
+                ),
                 "sitio_web": _texto(valor(fila, "Sitio web")) or None,
+                "tipo_invitacion": tipo_invitacion,
                 "oficina": oficina,
                 "_responsable_nombre": nombre_responsable or None,
                 "nombre_asistente_delegado": _texto(
@@ -286,6 +345,71 @@ def precargar_congreso_desde_repositorio() -> int:
         raise
 
 
+NUEVOS_OFICIOS_FIRMADOS = [
+    {
+        "numero_lista": None,
+        "institucion": "UTEQ — Universidad Técnica Estatal de Quevedo",
+        "tipo_institucion": "Universidad",
+        "destinatario_oficio": "Yenny Torres Navarrete, PhD.",
+        "firma": "Intendente Regional de Guayaquil",
+        "calidad": "Invitación Universidad",
+        "cargo": "Rectora",
+        "direccion": (
+            "Campus Central, Av. Quito Km. 1½ vía a Santo Domingo de los "
+            "Tsáchilas, Quevedo"
+        ),
+        "correo_institucional": "info@uteq.edu.ec",
+        "telefonos_institucionales": None,
+        "sitio_web": None,
+        "tipo_invitacion": "Invitación a universidades",
+        "oficina": "guayaquil",
+        "numero_oficio": "SCE-IGT-IR-2026-154",
+    },
+    {
+        "numero_lista": None,
+        "institucion": (
+            "UNIANDES — Universidad Regional Autónoma de los Andes, Extensión Quevedo"
+        ),
+        "tipo_institucion": "Universidad",
+        "destinatario_oficio": "Danilo Viteri Intriago, PhD.",
+        "firma": "Intendente Regional de Guayaquil",
+        "calidad": "Invitación Universidad",
+        "cargo": "Director",
+        "direccion": (
+            "Vía a Valencia Km. 5½, Campus Universitario Dr. Gustavo Álvarez "
+            "Gavilanes, Quevedo"
+        ),
+        "correo_institucional": (
+            "direccionquevedo@uniandes.edu.ec; uq.rb.secretariader@uniandes.edu.ec; "
+            "uq.derecho@uniandes.edu.ec; uq.asissecretaria@uniandes.edu.ec"
+        ),
+        "telefonos_institucionales": None,
+        "sitio_web": None,
+        "tipo_invitacion": "Invitación a universidades",
+        "oficina": "guayaquil",
+        "numero_oficio": "SCE-IGT-IR-2026-155",
+    },
+]
+
+
+def sincronizar_congreso_desde_documentos() -> int:
+    """Aplica una sola vez teléfonos, códigos completos, categorías y nuevos oficios."""
+    resultado = analizar_excel_congreso(ARCHIVO_PRECARGA.read_bytes())
+    actualizaciones = [
+        {
+            "fila_origen": item["fila_origen"],
+            "telefonos_institucionales": item.get("telefonos_institucionales"),
+            "tipo_invitacion": item.get("tipo_invitacion"),
+            "numero_oficio": item.get("numero_oficio"),
+        }
+        for item in resultado["invitados"]
+    ]
+    with get_connection() as con:
+        return sincronizar_documentos_congreso(
+            con, actualizaciones, NUEVOS_OFICIOS_FIRMADOS
+        )
+
+
 def _correo_valido(correo: str) -> bool:
     return bool(re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", correo.strip()))
 
@@ -347,7 +471,9 @@ def _datos_exportacion(
         "asistencia_21": "21 de octubre de 2026",
         "asistencia_22": "22 de octubre de 2026", "cargo": "Cargo",
         "direccion": "Dirección", "correo_institucional": "Correo electrónico",
+        "telefonos_institucionales": "Teléfono(s) institucional(es)",
         "sitio_web": "Sitio web", "observaciones_seguimiento": "Observaciones",
+        "tipo_invitacion": "Tipo de invitación",
         "numero_oficio": "N.º Oficio",
         "observaciones_cruce": "Observaciones cruce de listado vs oficios generados",
         "fecha_actualizacion": "Última actualización (Ecuador)",
@@ -506,6 +632,7 @@ def _vista_seguimiento(
         {
             "Institución": item["institucion"], "Oficina": _nombre_oficina(item.get("oficina")),
             "Responsable": item.get("responsable_nombres") or "Sin asignar",
+            "Tipo de invitación": item.get("tipo_invitacion") or "",
             "Confirmado": item["confirmado"], "21 oct.": item["asistencia_21"],
             "22 oct.": item["asistencia_22"],
             "Asistentes o delegados": (
@@ -538,6 +665,9 @@ def _vista_seguimiento(
             f"**Destinatario:** {invitado.get('destinatario_oficio') or '—'}  \n"
             f"**Cargo:** {invitado.get('cargo') or '—'}  \n"
             f"**Correo institucional:** {invitado.get('correo_institucional') or '—'}  \n"
+            f"**Teléfono(s):** {invitado.get('telefonos_institucionales') or '—'}  \n"
+            f"**Tipo de invitación:** {invitado.get('tipo_invitacion') or '—'}  \n"
+            f"**N.º Oficio:** {invitado.get('numero_oficio') or '—'}  \n"
             f"**Dirección:** {invitado.get('direccion') or '—'}"
         )
 

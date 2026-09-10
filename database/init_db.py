@@ -227,7 +227,9 @@ CREATE TABLE IF NOT EXISTS congreso_invitados (
     cargo               TEXT,
     direccion           TEXT,
     correo_institucional TEXT,
+    telefonos_institucionales TEXT,
     sitio_web           TEXT,
+    tipo_invitacion     TEXT,
     oficina             TEXT,
     responsable_id      INTEGER REFERENCES congreso_responsables(id) ON DELETE RESTRICT,
     nombre_asistente_delegado TEXT,
@@ -323,6 +325,14 @@ def init_db() -> None:
                 cur.execute(
                     "ALTER TABLE congreso_invitados "
                     "ADD COLUMN IF NOT EXISTS cargos_asistentes_delegados TEXT"
+                )
+                cur.execute(
+                    "ALTER TABLE congreso_invitados "
+                    "ADD COLUMN IF NOT EXISTS telefonos_institucionales TEXT"
+                )
+                cur.execute(
+                    "ALTER TABLE congreso_invitados "
+                    "ADD COLUMN IF NOT EXISTS tipo_invitacion TEXT"
                 )
                 cur.execute(
                     "INSERT INTO contador_reporte (id, ultimo_numero) VALUES (1, 83) "

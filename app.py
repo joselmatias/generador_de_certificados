@@ -11,7 +11,7 @@ import streamlit as st
 from database.init_db import init_db
 from utils.feature_flags import CERTIFICATE_GENERATION_ENABLED
 
-DB_SCHEMA_VERSION = 2
+DB_SCHEMA_VERSION = 3
 
 
 st.set_page_config(
@@ -26,15 +26,19 @@ st.set_page_config(
 def _inicializar_db(schema_version: int) -> int:
     del schema_version  # Su valor invalida la caché cuando cambia el esquema.
     init_db()
-    from modules.congresos.seguimiento import precargar_congreso_desde_repositorio
+    from modules.congresos.seguimiento import (
+        precargar_congreso_desde_repositorio,
+        sincronizar_congreso_desde_documentos,
+    )
 
-    return precargar_congreso_desde_repositorio()
+    precargar_congreso_desde_repositorio()
+    return sincronizar_congreso_desde_documentos()
 
 
 try:
     _inicializar_db(DB_SCHEMA_VERSION)
 except Exception as exc:
-    st.warning(f"No se pudo completar la precarga del congreso: {exc}")
+    st.warning(f"No se pudo completar la actualización documental del congreso: {exc}")
 
 
 # ---------------------------------------------------------------------------
