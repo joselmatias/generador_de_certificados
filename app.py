@@ -13,8 +13,8 @@ import streamlit as st
 from database.init_db import init_db
 from utils.feature_flags import CERTIFICATE_GENERATION_ENABLED
 
-DB_SCHEMA_VERSION = 6
-CONGRESO_SYNC_VERSION = 2
+DB_SCHEMA_VERSION = 7
+CONGRESO_SYNC_VERSION = 3
 
 
 st.set_page_config(
@@ -49,6 +49,7 @@ def _inicializar_db(schema_version: int) -> int:
         )
 
     seguimiento.precargar_congreso_desde_repositorio()
+    seguimiento.precargar_proyeccion_estudiantes_desde_repositorio()
     sincronizar = seguimiento.sincronizar_congreso_desde_documentos
     # Solo se almacena en caché una inicialización ejecutada con el contrato
     # completo; las excepciones permiten que Streamlit vuelva a intentarlo.

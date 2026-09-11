@@ -278,6 +278,27 @@ CREATE TABLE IF NOT EXISTS congreso_importaciones (
 );
 """
 
+_DDL_CONGRESO_PROYECCION_ESTUDIANTES = """
+CREATE TABLE IF NOT EXISTS congreso_proyeccion_estudiantes (
+    id                       SERIAL PRIMARY KEY,
+    clave_precarga           TEXT UNIQUE,
+    orden                    INTEGER NOT NULL,
+    institucion              TEXT NOT NULL,
+    institucion_normalizada  TEXT NOT NULL UNIQUE,
+    proyeccion               INTEGER NOT NULL CHECK (proyeccion >= 0),
+    confirmados              INTEGER NOT NULL DEFAULT 0 CHECK (confirmados >= 0),
+    contacto_nombre          TEXT,
+    contacto_celular         TEXT,
+    nota_original            TEXT,
+    activo                   BOOLEAN NOT NULL DEFAULT TRUE,
+    ultimo_actor_responsable_id INTEGER
+                             REFERENCES congreso_responsables(id) ON DELETE SET NULL,
+    ultimo_actor_nombre      TEXT,
+    fecha_creacion           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
 # Índices para mejorar rendimiento de consultas frecuentes
 _INDICES = [
     "CREATE INDEX IF NOT EXISTS idx_cap_oficina ON capacitaciones(oficina);",
@@ -297,6 +318,11 @@ _INDICES = [
     "WHERE fila_origen IS NOT NULL AND numero_oficio IS NOT NULL;",
     "CREATE INDEX IF NOT EXISTS idx_congreso_historial_invitado ON congreso_historial(invitado_id);",
     "CREATE INDEX IF NOT EXISTS idx_congreso_historial_fecha ON congreso_historial(fecha_cambio DESC);",
+    "CREATE INDEX IF NOT EXISTS idx_congreso_proyeccion_activo_orden "
+    "ON congreso_proyeccion_estudiantes(activo, orden);",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_congreso_proyeccion_clave_precarga "
+    "ON congreso_proyeccion_estudiantes(clave_precarga) "
+    "WHERE clave_precarga IS NOT NULL;",
 ]
 
 
@@ -325,6 +351,11 @@ def init_db() -> None:
                 cur.execute(_DDL_CONGRESO_INVITADOS)
                 cur.execute(_DDL_CONGRESO_HISTORIAL)
                 cur.execute(_DDL_CONGRESO_IMPORTACIONES)
+                cur.execute(_DDL_CONGRESO_PROYECCION_ESTUDIANTES)
+                cur.execute(
+                    "ALTER TABLE congreso_proyeccion_estudiantes "
+                    "ADD COLUMN IF NOT EXISTS clave_precarga TEXT"
+                )
                 cur.execute(
                     "ALTER TABLE congreso_invitados "
                     "ADD COLUMN IF NOT EXISTS cargos_asistentes_delegados TEXT"

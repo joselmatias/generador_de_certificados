@@ -18,15 +18,20 @@ from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
 from database.db import (
+    actualizar_confirmacion_proyeccion,
+    actualizar_institucion_proyeccion,
     actualizar_invitado_congreso,
     actualizar_responsable_congreso,
     contar_invitados_congreso,
+    crear_institucion_proyeccion,
     crear_responsable_congreso,
     get_connection,
     importar_datos_congreso,
     listar_historial_congreso,
     listar_invitados_congreso,
+    listar_proyeccion_estudiantes,
     listar_responsables_congreso,
+    precargar_proyeccion_estudiantes,
     sincronizar_documentos_congreso,
 )
 
@@ -34,7 +39,7 @@ from database.db import (
 COLOR_AZUL = "#1A3A5C"
 # Contrato de compatibilidad con app.py. Se incrementa cuando cambia la
 # sincronización que transforma registros ya existentes.
-CONGRESO_SYNC_VERSION = 2
+CONGRESO_SYNC_VERSION = 3
 ZONA_HORARIA_ECUADOR = ZoneInfo("America/Guayaquil")
 ESTADOS = ["Pendiente", "Sí", "No"]
 OFICINAS = {
@@ -83,11 +88,32 @@ _ETIQUETAS_CAMPOS = {
     "telefonos_institucionales": "Teléfono(s) institucional(es)",
     "tipo_invitacion": "Tipo de invitación",
     "observaciones_cruce": "Observaciones cruce de listado vs oficios generados",
+    "proyeccion": "Proyección estudiantes",
+    "confirmados": "Confirmados estudiantes",
+    "contacto_nombre": "Nombre de contacto",
+    "contacto_celular": "Celular de contacto",
+    "institucion": "Institución",
     "nombres": "Nombres",
     "celular": "Celular",
     "correo": "Correo",
     "activo": "Activo",
 }
+
+PROYECCION_ESTUDIANTES_INICIAL = [
+    ("Autoridades", 15, 0, None),
+    ("UG", 40, 0, "BUS"),
+    ("Tecnológicos Gye", 70, 0, None),
+    ("UNEMI", 50, 0, "BUS"),
+    ("UTEG", 50, 0, None),
+    ("UPSE", 50, 0, "BUS"),
+    ("CEG", 30, 0, None),
+    ("UCSG", 50, 0, None),
+    ("TES", 40, 0, None),
+    ("ESPOL", 40, 60, "BUS"),
+    ("UTPL", 40, 0, "Salomé"),
+    ("UPS", 40, 0, "María Morocho"),
+    ("ECOTEC", 40, 30, None),
+]
 
 
 def _texto(valor: Any) -> str:
@@ -101,6 +127,59 @@ def _texto(valor: Any) -> str:
 def _normalizar(valor: Any) -> str:
     texto = unicodedata.normalize("NFKD", _texto(valor).casefold())
     return " ".join("".join(c for c in texto if not unicodedata.combining(c)).split())
+
+
+def precargar_proyeccion_estudiantes_desde_repositorio() -> int:
+    """Crea las filas aprobadas sin reemplazar registros ya administrados."""
+    filas = [
+        {
+            "clave_precarga": f"proyeccion_2026_{orden:02d}",
+            "orden": orden,
+            "institucion": institucion,
+            "institucion_normalizada": _normalizar(institucion),
+            "proyeccion": proyeccion,
+            "confirmados": confirmados,
+            "nota_original": nota,
+        }
+        for orden, (institucion, proyeccion, confirmados, nota) in enumerate(
+            PROYECCION_ESTUDIANTES_INICIAL, start=1
+        )
+    ]
+    with get_connection() as con:
+        return precargar_proyeccion_estudiantes(con, filas)
+
+
+def _entero_no_negativo(valor: Any, etiqueta: str) -> int:
+    if valor is None or (isinstance(valor, float) and pd.isna(valor)):
+        raise ValueError(f"{etiqueta} debe ser un número entero igual o mayor que cero.")
+    try:
+        numero = float(valor)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{etiqueta} debe ser un número entero igual o mayor que cero."
+        ) from exc
+    if not numero.is_integer() or numero < 0:
+        raise ValueError(f"{etiqueta} debe ser un número entero igual o mayor que cero.")
+    return int(numero)
+
+
+def _texto_editor(valor: Any) -> str:
+    if valor is None or (isinstance(valor, float) and pd.isna(valor)):
+        return ""
+    return str(valor).strip()
+
+
+def _observaciones_proyeccion(item: dict[str, Any]) -> str:
+    partes = []
+    if item.get("nota_original"):
+        partes.append(str(item["nota_original"]))
+    if item.get("ultimo_actor_nombre"):
+        fecha = _fecha_hora_ecuador(item.get("fecha_actualizacion"))
+        detalle = f"Última actualización: {item['ultimo_actor_nombre']}"
+        if fecha is not None:
+            detalle += f" · {fecha:%d/%m/%Y %H:%M}"
+        partes.append(detalle)
+    return " · ".join(partes)
 
 
 def _estado(valor: Any) -> str:
@@ -844,6 +923,204 @@ def _vista_responsables(
             st.error(f"No se pudo actualizar el responsable: {exc}")
 
 
+def _vista_proyeccion_estudiantes(actor_id: int | None) -> None:
+    with get_connection() as con:
+        activos = [dict(item) for item in listar_proyeccion_estudiantes(con, True)]
+        todos = [dict(item) for item in listar_proyeccion_estudiantes(con, None)]
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Instituciones activas", len(activos))
+    col2.metric("Estudiantes proyectados", sum(item["proyeccion"] for item in activos))
+    col3.metric("Estudiantes confirmados", sum(item["confirmados"] for item in activos))
+    st.caption(
+        "Edita confirmados y datos de contacto. Para cambiar confirmados, "
+        "completa primero el nombre y celular del contacto."
+    )
+
+    if activos:
+        tabla = pd.DataFrame(
+            [
+                {
+                    "id": item["id"],
+                    "Institución": item["institucion"],
+                    "Proyección": item["proyeccion"],
+                    "Confirmados": item["confirmados"],
+                    "Nombre de contacto": item.get("contacto_nombre") or "",
+                    "Celular de contacto": item.get("contacto_celular") or "",
+                    "Observaciones": _observaciones_proyeccion(item),
+                }
+                for item in activos
+            ]
+        ).set_index("id")
+        with st.form("form_editar_proyeccion_estudiantes"):
+            editada = st.data_editor(
+                tabla,
+                hide_index=True,
+                use_container_width=True,
+                height=min(560, 38 * (len(tabla) + 1)),
+                disabled=["Institución", "Proyección", "Observaciones"],
+                column_config={
+                    "Institución": st.column_config.TextColumn("Institución", width="large"),
+                    "Proyección": st.column_config.NumberColumn(
+                        "Proyección", min_value=0, step=1, format="%d"
+                    ),
+                    "Confirmados": st.column_config.NumberColumn(
+                        "Confirmados", min_value=0, step=1, format="%d"
+                    ),
+                    "Nombre de contacto": st.column_config.TextColumn(
+                        "Nombre de contacto", width="medium"
+                    ),
+                    "Celular de contacto": st.column_config.TextColumn(
+                        "Celular de contacto", width="medium"
+                    ),
+                    "Observaciones": st.column_config.TextColumn(
+                        "Observaciones", width="large"
+                    ),
+                },
+                key="congreso_editor_proyeccion",
+            )
+            guardar = st.form_submit_button(
+                "Guardar cambios", type="primary", disabled=actor_id is None
+            )
+        if guardar:
+            originales = {item["id"]: item for item in activos}
+            try:
+                cambios_totales = 0
+                with get_connection() as con:
+                    for registro_id, fila in editada.iterrows():
+                        registro_id = int(registro_id)
+                        original = originales[registro_id]
+                        valores_editados = {
+                            "confirmados": _entero_no_negativo(
+                                fila["Confirmados"], "Confirmados"
+                            ),
+                            "contacto_nombre": _texto_editor(fila["Nombre de contacto"]),
+                            "contacto_celular": _texto_editor(fila["Celular de contacto"]),
+                        }
+                        cambios = {}
+                        if valores_editados["confirmados"] != original["confirmados"]:
+                            cambios["confirmados"] = valores_editados["confirmados"]
+                        for campo in ("contacto_nombre", "contacto_celular"):
+                            if valores_editados[campo] != (original.get(campo) or ""):
+                                cambios[campo] = valores_editados[campo]
+                        if not cambios:
+                            continue
+                        cambios_totales += actualizar_confirmacion_proyeccion(
+                            con, registro_id, cambios, actor_id
+                        )
+                if cambios_totales:
+                    st.success(f"Se guardaron {cambios_totales} cambios en el historial.")
+                    st.rerun()
+                else:
+                    st.info("No se detectaron cambios.")
+            except (ValueError, PermissionError) as exc:
+                st.error(str(exc))
+            except Exception as exc:
+                st.error(f"No se pudieron guardar los cambios: {exc}")
+    else:
+        st.info("No hay instituciones activas. Puedes agregar o reactivar una institución.")
+
+    st.divider()
+    with st.expander("Agregar institución"):
+        with st.form("form_agregar_institucion_proyeccion", clear_on_submit=True):
+            nueva_institucion = st.text_input("Universidad o institución")
+            nueva_proyeccion = st.number_input(
+                "Estudiantes proyectados", min_value=0, value=0, step=1
+            )
+            agregar = st.form_submit_button(
+                "Agregar institución", type="primary", disabled=actor_id is None
+            )
+        if agregar:
+            try:
+                proyeccion = _entero_no_negativo(
+                    nueva_proyeccion, "La proyección"
+                )
+                with get_connection() as con:
+                    crear_institucion_proyeccion(
+                        con,
+                        nueva_institucion,
+                        _normalizar(nueva_institucion),
+                        proyeccion,
+                        actor_id,
+                    )
+                st.success("Institución agregada.")
+                st.rerun()
+            except (ValueError, PermissionError) as exc:
+                st.error(str(exc))
+            except Exception as exc:
+                st.error(f"No se pudo agregar la institución: {exc}")
+
+    if todos:
+        por_id = {item["id"]: item for item in todos}
+        with st.expander("Administrar instituciones"):
+            administrar_id = st.selectbox(
+                "Institución que deseas administrar",
+                list(por_id),
+                format_func=lambda valor: (
+                    f"{por_id[valor]['institucion']}"
+                    + (" (inactiva)" if not por_id[valor]["activo"] else "")
+                ),
+                key="congreso_proyeccion_administrar_id",
+            )
+            actual = por_id[administrar_id]
+            with st.form(f"form_administrar_proyeccion_{administrar_id}"):
+                nombre_editar = st.text_input(
+                    "Universidad o institución", value=actual["institucion"]
+                )
+                proyeccion_editar = st.number_input(
+                    "Estudiantes proyectados",
+                    min_value=0,
+                    value=int(actual["proyeccion"]),
+                    step=1,
+                )
+                activo_editar = st.checkbox("Institución activa", value=actual["activo"])
+                guardar_admin = st.form_submit_button(
+                    "Guardar institución", type="primary", disabled=actor_id is None
+                )
+            if guardar_admin:
+                try:
+                    with get_connection() as con:
+                        cantidad = actualizar_institucion_proyeccion(
+                            con,
+                            administrar_id,
+                            nombre_editar,
+                            _normalizar(nombre_editar),
+                            _entero_no_negativo(proyeccion_editar, "La proyección"),
+                            activo_editar,
+                            actor_id,
+                        )
+                    if cantidad:
+                        st.success("Institución actualizada.")
+                        st.rerun()
+                    else:
+                        st.info("No se detectaron cambios.")
+                except (ValueError, PermissionError) as exc:
+                    st.error(str(exc))
+                except Exception as exc:
+                    st.error(f"No se pudo actualizar la institución: {exc}")
+
+            inactivos = [item for item in todos if not item["activo"]]
+            if inactivos:
+                st.markdown("**Instituciones inactivas**")
+                st.dataframe(
+                    pd.DataFrame(
+                        [
+                            {
+                                "Institución": item["institucion"],
+                                "Proyección": item["proyeccion"],
+                                "Confirmados": item["confirmados"],
+                                "Última actualización": _fecha_hora_ecuador(
+                                    item.get("fecha_actualizacion")
+                                ),
+                            }
+                            for item in inactivos
+                        ]
+                    ),
+                    hide_index=True,
+                    use_container_width=True,
+                )
+
+
 def _vista_historial(oficina_id: str, es_master: bool) -> None:
     with get_connection() as con:
         historial = [dict(item) for item in listar_historial_congreso(
@@ -856,6 +1133,28 @@ def _vista_historial(oficina_id: str, es_master: bool) -> None:
         st.info("Aún no hay cambios registrados.")
         return
 
+    tipo_historial = st.selectbox(
+        "Mostrar historial",
+        ["Todos los cambios", "Proyección estudiantes", "Confirmados estudiantes"],
+        key="congreso_tipo_historial",
+    )
+    historial_mostrado = historial
+    if tipo_historial == "Proyección estudiantes":
+        historial_mostrado = [
+            item for item in historial
+            if item.get("entidad_tipo") == "proyeccion_estudiantes"
+        ]
+    elif tipo_historial == "Confirmados estudiantes":
+        historial_mostrado = [
+            item for item in historial
+            if item.get("entidad_tipo") == "proyeccion_estudiantes"
+            and item.get("campo") == "confirmados"
+        ]
+
+    if not historial_mostrado:
+        st.info("No hay cambios registrados para este filtro.")
+        return
+
     tabla = pd.DataFrame([
         {
             "Fecha (Ecuador)": _fecha_hora_ecuador(item["fecha_cambio"]),
@@ -866,7 +1165,7 @@ def _vista_historial(oficina_id: str, es_master: bool) -> None:
             "Valor anterior": item.get("valor_anterior") or "—",
             "Valor nuevo": item.get("valor_nuevo") or "—",
         }
-        for item in historial
+        for item in historial_mostrado
     ])
     st.caption("Fechas y horas mostradas en America/Guayaquil (UTC−5).")
     st.dataframe(tabla, hide_index=True, use_container_width=True, height=480)
@@ -972,7 +1271,7 @@ def mostrar_seguimiento_congreso() -> None:
     actor_id, actor_nombre = _actor_actual(oficina_id)
     etiquetas = ["Seguimiento", "Responsables", "Historial"]
     if es_master:
-        etiquetas.append("Carga inicial")
+        etiquetas.extend(["Proyección estudiantes", "Carga inicial"])
     pestanas = st.tabs(etiquetas)
     with pestanas[0]:
         _vista_seguimiento(oficina_id, es_master, actor_id, actor_nombre)
@@ -982,4 +1281,6 @@ def mostrar_seguimiento_congreso() -> None:
         _vista_historial(oficina_id, es_master)
     if es_master:
         with pestanas[3]:
+            _vista_proyeccion_estudiantes(actor_id)
+        with pestanas[4]:
             _vista_carga_inicial(actor_nombre)

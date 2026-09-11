@@ -511,6 +511,288 @@ _CAMPOS_EDITABLES_CONGRESO = {
     "observaciones_cruce",
 }
 
+_CAMPOS_CONFIRMACION_PROYECCION = {
+    "confirmados",
+    "contacto_nombre",
+    "contacto_celular",
+}
+
+
+def _validar_actor_proyeccion_guayaquil(
+    con: _Conn, actor_responsable_id: int | None
+) -> str:
+    if actor_responsable_id is None:
+        raise ValueError("Selecciona el funcionario de Guayaquil que realiza el cambio.")
+    actor = con.execute(
+        """
+        SELECT nombres
+        FROM congreso_responsables
+        WHERE id = %s AND oficina = 'guayaquil' AND activo = TRUE
+        """,
+        (actor_responsable_id,),
+    ).fetchone()
+    if actor is None:
+        raise PermissionError(
+            "Solo un funcionario activo de Guayaquil puede modificar la proyección."
+        )
+    return str(actor["nombres"])
+
+
+def precargar_proyeccion_estudiantes(
+    con: _Conn, filas: list[dict[str, Any]]
+) -> int:
+    """Inserta únicamente las filas iniciales que todavía no existen."""
+    insertadas = 0
+    for item in filas:
+        row = con.execute(
+            """
+            INSERT INTO congreso_proyeccion_estudiantes (
+                clave_precarga, orden, institucion, institucion_normalizada, proyeccion,
+                confirmados, nota_original
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT DO NOTHING
+            RETURNING id
+            """,
+            (
+                item["clave_precarga"],
+                item["orden"],
+                item["institucion"],
+                item["institucion_normalizada"],
+                item["proyeccion"],
+                item.get("confirmados", 0),
+                item.get("nota_original"),
+            ),
+        ).fetchone()
+        if row is not None:
+            insertadas += 1
+    return insertadas
+
+
+def listar_proyeccion_estudiantes(
+    con: _Conn, solo_activos: bool | None = True
+) -> list[Any]:
+    if solo_activos is None:
+        where = ""
+        params: tuple[Any, ...] = ()
+    else:
+        where = "WHERE activo = %s"
+        params = (solo_activos,)
+    return con.execute(
+        f"""
+        SELECT *
+        FROM congreso_proyeccion_estudiantes
+        {where}
+        ORDER BY orden, institucion
+        """,
+        params,
+    ).fetchall()
+
+
+def crear_institucion_proyeccion(
+    con: _Conn,
+    institucion: str,
+    institucion_normalizada: str,
+    proyeccion: int,
+    actor_responsable_id: int | None,
+) -> int:
+    actor_nombre = _validar_actor_proyeccion_guayaquil(con, actor_responsable_id)
+    institucion = institucion.strip()
+    if not institucion or not institucion_normalizada:
+        raise ValueError("Ingresa el nombre de la institución.")
+    if isinstance(proyeccion, bool) or not isinstance(proyeccion, int) or proyeccion < 0:
+        raise ValueError("La proyección debe ser un número entero igual o mayor que cero.")
+    existente = con.execute(
+        "SELECT id FROM congreso_proyeccion_estudiantes WHERE institucion_normalizada = %s",
+        (institucion_normalizada,),
+    ).fetchone()
+    if existente is not None:
+        raise ValueError("Ya existe una universidad o institución con ese nombre.")
+    con.execute("LOCK TABLE congreso_proyeccion_estudiantes IN SHARE ROW EXCLUSIVE MODE")
+    row = con.execute(
+        """
+        INSERT INTO congreso_proyeccion_estudiantes (
+            orden, institucion, institucion_normalizada, proyeccion,
+            confirmados, ultimo_actor_responsable_id, ultimo_actor_nombre
+        )
+        VALUES (
+            (SELECT COALESCE(MAX(orden), 0) + 1 FROM congreso_proyeccion_estudiantes),
+            %s, %s, %s, 0, %s, %s
+        )
+        RETURNING id
+        """,
+        (
+            institucion,
+            institucion_normalizada,
+            proyeccion,
+            actor_responsable_id,
+            actor_nombre,
+        ),
+    ).fetchone()
+    registro_id = int(row["id"])
+    _registrar_historial_congreso(
+        con,
+        entidad_tipo="proyeccion_estudiantes",
+        entidad_id=registro_id,
+        invitado_id=None,
+        oficina="guayaquil",
+        accion="Creación",
+        campo="institucion",
+        valor_anterior=None,
+        valor_nuevo=institucion,
+        actor_responsable_id=actor_responsable_id,
+        actor_nombre=actor_nombre,
+        actor_oficina="guayaquil",
+    )
+    return registro_id
+
+
+def actualizar_confirmacion_proyeccion(
+    con: _Conn,
+    registro_id: int,
+    cambios: dict[str, Any],
+    actor_responsable_id: int | None,
+) -> int:
+    campos_invalidos = set(cambios) - _CAMPOS_CONFIRMACION_PROYECCION
+    if campos_invalidos:
+        raise ValueError(f"Campos no editables: {', '.join(sorted(campos_invalidos))}")
+    actor_nombre = _validar_actor_proyeccion_guayaquil(con, actor_responsable_id)
+    actual = con.execute(
+        "SELECT * FROM congreso_proyeccion_estudiantes WHERE id = %s FOR UPDATE",
+        (registro_id,),
+    ).fetchone()
+    if actual is None or not actual["activo"]:
+        raise ValueError("La institución seleccionada ya no está activa.")
+
+    nuevos = {
+        "confirmados": cambios.get("confirmados", actual["confirmados"]),
+        "contacto_nombre": cambios.get("contacto_nombre", actual["contacto_nombre"]),
+        "contacto_celular": cambios.get("contacto_celular", actual["contacto_celular"]),
+    }
+    for campo in ("contacto_nombre", "contacto_celular"):
+        valor = nuevos[campo]
+        nuevos[campo] = str(valor).strip() if valor is not None else None
+        if nuevos[campo] == "":
+            nuevos[campo] = None
+    confirmados = nuevos["confirmados"]
+    if isinstance(confirmados, bool) or not isinstance(confirmados, int) or confirmados < 0:
+        raise ValueError("Confirmados debe ser un número entero igual o mayor que cero.")
+    if nuevos["contacto_celular"] and len(re.sub(r"\D", "", nuevos["contacto_celular"])) < 7:
+        raise ValueError("El celular de contacto debe contener al menos siete dígitos.")
+    cambia_confirmados = actual["confirmados"] != confirmados
+    if cambia_confirmados and (
+        not nuevos["contacto_nombre"] or not nuevos["contacto_celular"]
+    ):
+        raise ValueError(
+            f"Completa el nombre y celular de contacto de {actual['institucion']} "
+            "antes de cambiar sus confirmados."
+        )
+    cambios_reales = {
+        campo: valor for campo, valor in nuevos.items() if actual[campo] != valor
+    }
+    if not cambios_reales:
+        return 0
+    asignaciones = ", ".join(f"{campo} = %s" for campo in cambios_reales)
+    con.execute(
+        f"""
+        UPDATE congreso_proyeccion_estudiantes
+        SET {asignaciones}, ultimo_actor_responsable_id = %s,
+            ultimo_actor_nombre = %s, fecha_actualizacion = CURRENT_TIMESTAMP
+        WHERE id = %s
+        """,
+        [*cambios_reales.values(), actor_responsable_id, actor_nombre, registro_id],
+    )
+    for campo, valor_nuevo in cambios_reales.items():
+        _registrar_historial_congreso(
+            con,
+            entidad_tipo="proyeccion_estudiantes",
+            entidad_id=registro_id,
+            invitado_id=None,
+            oficina="guayaquil",
+            accion="Actualización",
+            campo=campo,
+            valor_anterior=actual[campo],
+            valor_nuevo=valor_nuevo,
+            actor_responsable_id=actor_responsable_id,
+            actor_nombre=actor_nombre,
+            actor_oficina="guayaquil",
+        )
+    return len(cambios_reales)
+
+
+def actualizar_institucion_proyeccion(
+    con: _Conn,
+    registro_id: int,
+    institucion: str,
+    institucion_normalizada: str,
+    proyeccion: int,
+    activo: bool,
+    actor_responsable_id: int | None,
+) -> int:
+    actor_nombre = _validar_actor_proyeccion_guayaquil(con, actor_responsable_id)
+    actual = con.execute(
+        "SELECT * FROM congreso_proyeccion_estudiantes WHERE id = %s FOR UPDATE",
+        (registro_id,),
+    ).fetchone()
+    if actual is None:
+        raise ValueError("La institución seleccionada ya no existe.")
+    institucion = institucion.strip()
+    if not institucion or not institucion_normalizada:
+        raise ValueError("Ingresa el nombre de la institución.")
+    if isinstance(proyeccion, bool) or not isinstance(proyeccion, int) or proyeccion < 0:
+        raise ValueError("La proyección debe ser un número entero igual o mayor que cero.")
+    duplicado = con.execute(
+        """
+        SELECT id FROM congreso_proyeccion_estudiantes
+        WHERE institucion_normalizada = %s AND id <> %s
+        """,
+        (institucion_normalizada, registro_id),
+    ).fetchone()
+    if duplicado is not None:
+        raise ValueError("Ya existe una universidad o institución con ese nombre.")
+    nuevos = {
+        "institucion": institucion,
+        "institucion_normalizada": institucion_normalizada,
+        "proyeccion": proyeccion,
+        "activo": bool(activo),
+    }
+    cambios_reales = {
+        campo: valor for campo, valor in nuevos.items() if actual[campo] != valor
+    }
+    if not cambios_reales:
+        return 0
+    asignaciones = ", ".join(f"{campo} = %s" for campo in cambios_reales)
+    con.execute(
+        f"""
+        UPDATE congreso_proyeccion_estudiantes
+        SET {asignaciones}, ultimo_actor_responsable_id = %s,
+            ultimo_actor_nombre = %s, fecha_actualizacion = CURRENT_TIMESTAMP
+        WHERE id = %s
+        """,
+        [*cambios_reales.values(), actor_responsable_id, actor_nombre, registro_id],
+    )
+    for campo, valor_nuevo in cambios_reales.items():
+        if campo == "institucion_normalizada":
+            continue
+        accion = "Actualización"
+        if campo == "activo":
+            accion = "Reactivación" if valor_nuevo else "Desactivación"
+        _registrar_historial_congreso(
+            con,
+            entidad_tipo="proyeccion_estudiantes",
+            entidad_id=registro_id,
+            invitado_id=None,
+            oficina="guayaquil",
+            accion=accion,
+            campo=campo,
+            valor_anterior=actual[campo],
+            valor_nuevo=valor_nuevo,
+            actor_responsable_id=actor_responsable_id,
+            actor_nombre=actor_nombre,
+            actor_oficina="guayaquil",
+        )
+    return len([campo for campo in cambios_reales if campo != "institucion_normalizada"])
+
 
 def contar_invitados_congreso(con: _Conn) -> int:
     row = con.execute("SELECT COUNT(*) AS total FROM congreso_invitados").fetchone()
@@ -797,9 +1079,14 @@ def listar_historial_congreso(
     params.append(limite)
     return con.execute(
         f"""
-        SELECT h.*, i.institucion, i.destinatario_oficio
+        SELECT h.*,
+               COALESCE(i.institucion, p.institucion) AS institucion,
+               i.destinatario_oficio
         FROM congreso_historial h
         LEFT JOIN congreso_invitados i ON i.id = h.invitado_id
+        LEFT JOIN congreso_proyeccion_estudiantes p
+               ON h.entidad_tipo = 'proyeccion_estudiantes'
+              AND p.id = h.entidad_id
         {where}
         ORDER BY h.fecha_cambio DESC, h.id DESC
         LIMIT %s
