@@ -39,7 +39,7 @@ from database.db import (
 COLOR_AZUL = "#1A3A5C"
 # Contrato de compatibilidad con app.py. Se incrementa cuando cambia la
 # sincronización que transforma registros ya existentes.
-CONGRESO_SYNC_VERSION = 5
+CONGRESO_SYNC_VERSION = 6
 ZONA_HORARIA_ECUADOR = ZoneInfo("America/Guayaquil")
 ESTADOS = ["Pendiente", "Sí", "No"]
 OFICINAS = {
@@ -57,6 +57,7 @@ MAPEO_RESPONSABLE_OFICINA = {
     "despacho": "guayaquil",
     "intendente regional": "guayaquil",
 }
+ACTORES_ADICIONALES_GUAYAQUIL = ["José Matías"]
 
 ARCHIVO_PRECARGA = (
     Path(__file__).resolve().parents[2]
@@ -609,17 +610,27 @@ def _actor_actual(oficina_id: str) -> tuple[int | None, str]:
             dict(item)
             for item in listar_responsables_congreso(con, oficina_id, solo_activos=True)
         ]
-    if not responsables:
+    opciones: list[tuple[str, int | str]] = [
+        ("responsable", item["id"]) for item in responsables
+    ]
+    nombres_opciones = {
+        ("responsable", item["id"]): item["nombres"] for item in responsables
+    }
+    if oficina_id == "guayaquil":
+        for nombre in ACTORES_ADICIONALES_GUAYAQUIL:
+            opcion = ("adicional", nombre)
+            opciones.append(opcion)
+            nombres_opciones[opcion] = nombre
+    if not opciones:
         st.info("Agrega un responsable en la pestaña Responsables para registrar cambios.")
         return None, ""
-    opciones = [item["id"] for item in responsables]
-    por_id = {item["id"]: item for item in responsables}
-    actor_id = st.selectbox(
+    opcion_actor = st.selectbox(
         "¿Quién está actualizando la información?", opciones,
-        format_func=lambda valor: por_id[valor]["nombres"],
+        format_func=lambda valor: nombres_opciones[valor],
         key=f"congreso_actor_{oficina_id}",
     )
-    return actor_id, por_id[actor_id]["nombres"]
+    actor_id = int(opcion_actor[1]) if opcion_actor[0] == "responsable" else None
+    return actor_id, nombres_opciones[opcion_actor]
 
 
 def _mostrar_indicadores(invitados: list[dict[str, Any]]) -> None:
@@ -813,7 +824,7 @@ def _vista_seguimiento(
             "Observaciones cruce de listado vs oficios generados",
             value=invitado.get("observaciones_cruce") or "",
         )
-        guardar = st.form_submit_button("Guardar cambios", type="primary", disabled=actor_id is None)
+        guardar = st.form_submit_button("Guardar cambios", type="primary", disabled=not actor_nombre)
 
     if guardar:
         try:
@@ -902,7 +913,7 @@ def _vista_responsables(
         celular_editar = st.text_input("Celular", value=actual["celular"])
         correo_editar = st.text_input("Correo", value=actual["correo"])
         activo = st.checkbox("Responsable activo", value=actual["activo"])
-        guardar = st.form_submit_button("Guardar responsable", type="primary", disabled=actor_id is None)
+        guardar = st.form_submit_button("Guardar responsable", type="primary", disabled=not actor_nombre)
     if guardar:
         if not nombres_editar.strip() or not _celular_valido(celular_editar) or not _correo_valido(correo_editar):
             st.error("Ingresa nombres, un celular válido y un correo válido.")
@@ -921,7 +932,9 @@ def _vista_responsables(
             st.error(f"No se pudo actualizar el responsable: {exc}")
 
 
-def _vista_proyeccion_estudiantes(actor_id: int | None) -> None:
+def _vista_proyeccion_estudiantes(
+    actor_id: int | None, actor_nombre: str
+) -> None:
     with get_connection() as con:
         activos = [dict(item) for item in listar_proyeccion_estudiantes(con, True)]
         todos = [dict(item) for item in listar_proyeccion_estudiantes(con, None)]
@@ -982,7 +995,7 @@ def _vista_proyeccion_estudiantes(actor_id: int | None) -> None:
                 key="congreso_editor_proyeccion",
             )
             guardar = st.form_submit_button(
-                "Guardar cambios", type="primary", disabled=actor_id is None
+                "Guardar cambios", type="primary", disabled=not actor_nombre
             )
         if guardar:
             originales = {item["id"]: item for item in activos}
@@ -1011,7 +1024,7 @@ def _vista_proyeccion_estudiantes(actor_id: int | None) -> None:
                         if not cambios:
                             continue
                         cambios_totales += actualizar_confirmacion_proyeccion(
-                            con, registro_id, cambios, actor_id
+                            con, registro_id, cambios, actor_id, actor_nombre
                         )
                 if cambios_totales:
                     st.success(f"Se guardaron {cambios_totales} cambios en el historial.")
@@ -1033,7 +1046,7 @@ def _vista_proyeccion_estudiantes(actor_id: int | None) -> None:
                 "Estudiantes proyectados", min_value=0, value=0, step=1
             )
             agregar = st.form_submit_button(
-                "Agregar institución", type="primary", disabled=actor_id is None
+                "Agregar institución", type="primary", disabled=not actor_nombre
             )
         if agregar:
             try:
@@ -1047,6 +1060,7 @@ def _vista_proyeccion_estudiantes(actor_id: int | None) -> None:
                         _normalizar(nueva_institucion),
                         proyeccion,
                         actor_id,
+                        actor_nombre,
                     )
                 st.success("Institución agregada.")
                 st.rerun()
@@ -1080,7 +1094,7 @@ def _vista_proyeccion_estudiantes(actor_id: int | None) -> None:
                 )
                 activo_editar = st.checkbox("Institución activa", value=actual["activo"])
                 guardar_admin = st.form_submit_button(
-                    "Guardar institución", type="primary", disabled=actor_id is None
+                    "Guardar institución", type="primary", disabled=not actor_nombre
                 )
             if guardar_admin:
                 try:
@@ -1093,6 +1107,7 @@ def _vista_proyeccion_estudiantes(actor_id: int | None) -> None:
                             _entero_no_negativo(proyeccion_editar, "La proyección"),
                             activo_editar,
                             actor_id,
+                            actor_nombre,
                         )
                     if cantidad:
                         st.success("Institución actualizada.")
@@ -1286,6 +1301,6 @@ def mostrar_seguimiento_congreso() -> None:
         _vista_historial(oficina_id, es_master)
     if es_master:
         with pestanas[3]:
-            _vista_proyeccion_estudiantes(actor_id)
+            _vista_proyeccion_estudiantes(actor_id, actor_nombre)
         with pestanas[4]:
             _vista_carga_inicial(actor_nombre)

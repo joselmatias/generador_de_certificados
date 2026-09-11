@@ -24,7 +24,10 @@ except ModuleNotFoundError:
     sys.modules["psycopg2"] = psycopg2_falso
     sys.modules["psycopg2.extras"] = extras_falso
 
-from database.db import actualizar_confirmacion_proyeccion
+from database.db import (
+    _validar_actor_proyeccion_guayaquil,
+    actualizar_confirmacion_proyeccion,
+)
 from modules.congresos.seguimiento import (
     PROYECCION_ESTUDIANTES_INICIAL,
     _entero_no_negativo,
@@ -88,7 +91,14 @@ class ProyeccionEstudiantesTests(unittest.TestCase):
                     "contacto_celular": "",
                 },
                 1,
+                "Ing. Milka Nazareno",
             )
+
+    def test_jose_matias_es_actor_adicional_de_guayaquil(self):
+        self.assertEqual(
+            _validar_actor_proyeccion_guayaquil(None, None, "José Matías"),
+            "José Matías",
+        )
 
     def test_ultima_actualizacion_muestra_actor_y_hora_ecuador(self):
         texto = _ultima_actualizacion_proyeccion(

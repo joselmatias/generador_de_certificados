@@ -518,11 +518,17 @@ _CAMPOS_CONFIRMACION_PROYECCION = {
     "observaciones",
 }
 
+_ACTORES_ADICIONALES_PROYECCION_GUAYAQUIL = {"José Matías"}
+
 
 def _validar_actor_proyeccion_guayaquil(
-    con: _Conn, actor_responsable_id: int | None
+    con: _Conn,
+    actor_responsable_id: int | None,
+    actor_nombre_declarado: str,
 ) -> str:
     if actor_responsable_id is None:
+        if actor_nombre_declarado in _ACTORES_ADICIONALES_PROYECCION_GUAYAQUIL:
+            return actor_nombre_declarado
         raise ValueError("Selecciona el funcionario de Guayaquil que realiza el cambio.")
     actor = con.execute(
         """
@@ -597,8 +603,11 @@ def crear_institucion_proyeccion(
     institucion_normalizada: str,
     proyeccion: int,
     actor_responsable_id: int | None,
+    actor_nombre_declarado: str,
 ) -> int:
-    actor_nombre = _validar_actor_proyeccion_guayaquil(con, actor_responsable_id)
+    actor_nombre = _validar_actor_proyeccion_guayaquil(
+        con, actor_responsable_id, actor_nombre_declarado
+    )
     institucion = institucion.strip()
     if not institucion or not institucion_normalizada:
         raise ValueError("Ingresa el nombre de la institución.")
@@ -654,11 +663,14 @@ def actualizar_confirmacion_proyeccion(
     registro_id: int,
     cambios: dict[str, Any],
     actor_responsable_id: int | None,
+    actor_nombre_declarado: str,
 ) -> int:
     campos_invalidos = set(cambios) - _CAMPOS_CONFIRMACION_PROYECCION
     if campos_invalidos:
         raise ValueError(f"Campos no editables: {', '.join(sorted(campos_invalidos))}")
-    actor_nombre = _validar_actor_proyeccion_guayaquil(con, actor_responsable_id)
+    actor_nombre = _validar_actor_proyeccion_guayaquil(
+        con, actor_responsable_id, actor_nombre_declarado
+    )
     actual = con.execute(
         "SELECT * FROM congreso_proyeccion_estudiantes WHERE id = %s FOR UPDATE",
         (registro_id,),
@@ -731,8 +743,11 @@ def actualizar_institucion_proyeccion(
     proyeccion: int,
     activo: bool,
     actor_responsable_id: int | None,
+    actor_nombre_declarado: str,
 ) -> int:
-    actor_nombre = _validar_actor_proyeccion_guayaquil(con, actor_responsable_id)
+    actor_nombre = _validar_actor_proyeccion_guayaquil(
+        con, actor_responsable_id, actor_nombre_declarado
+    )
     actual = con.execute(
         "SELECT * FROM congreso_proyeccion_estudiantes WHERE id = %s FOR UPDATE",
         (registro_id,),
