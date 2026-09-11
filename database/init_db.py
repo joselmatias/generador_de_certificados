@@ -290,6 +290,7 @@ CREATE TABLE IF NOT EXISTS congreso_proyeccion_estudiantes (
     contacto_nombre          TEXT,
     contacto_celular         TEXT,
     nota_original            TEXT,
+    observaciones            TEXT,
     activo                   BOOLEAN NOT NULL DEFAULT TRUE,
     ultimo_actor_responsable_id INTEGER
                              REFERENCES congreso_responsables(id) ON DELETE SET NULL,
@@ -355,6 +356,26 @@ def init_db() -> None:
                 cur.execute(
                     "ALTER TABLE congreso_proyeccion_estudiantes "
                     "ADD COLUMN IF NOT EXISTS clave_precarga TEXT"
+                )
+                cur.execute(
+                    """
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1
+                            FROM information_schema.columns
+                            WHERE table_schema = current_schema()
+                              AND table_name = 'congreso_proyeccion_estudiantes'
+                              AND column_name = 'observaciones'
+                        ) THEN
+                            ALTER TABLE congreso_proyeccion_estudiantes
+                            ADD COLUMN observaciones TEXT;
+                            UPDATE congreso_proyeccion_estudiantes
+                            SET observaciones = nota_original
+                            WHERE nota_original IS NOT NULL;
+                        END IF;
+                    END $$;
+                    """
                 )
                 cur.execute(
                     "ALTER TABLE congreso_invitados "

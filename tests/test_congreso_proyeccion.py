@@ -29,7 +29,7 @@ from modules.congresos.seguimiento import (
     PROYECCION_ESTUDIANTES_INICIAL,
     _entero_no_negativo,
     _normalizar,
-    _observaciones_proyeccion,
+    _ultima_actualizacion_proyeccion,
 )
 
 
@@ -76,6 +76,7 @@ class ProyeccionEstudiantesTests(unittest.TestCase):
             "confirmados": 60,
             "contacto_nombre": None,
             "contacto_celular": None,
+            "observaciones": None,
         }
         with self.assertRaisesRegex(ValueError, "Completa el nombre y celular"):
             actualizar_confirmacion_proyeccion(
@@ -89,17 +90,16 @@ class ProyeccionEstudiantesTests(unittest.TestCase):
                 1,
             )
 
-    def test_observaciones_combina_nota_actor_y_hora_ecuador(self):
-        texto = _observaciones_proyeccion(
+    def test_ultima_actualizacion_muestra_actor_y_hora_ecuador(self):
+        texto = _ultima_actualizacion_proyeccion(
             {
-                "nota_original": "BUS",
                 "ultimo_actor_nombre": "Ab. Carlos García",
                 "fecha_actualizacion": datetime(2026, 9, 11, 15, 0, tzinfo=timezone.utc),
             }
         )
         self.assertEqual(
             texto,
-            "BUS · Última actualización: Ab. Carlos García · 11/09/2026 10:00",
+            "Ab. Carlos García · 11/09/2026 10:00",
         )
 
 

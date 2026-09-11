@@ -515,6 +515,7 @@ _CAMPOS_CONFIRMACION_PROYECCION = {
     "confirmados",
     "contacto_nombre",
     "contacto_celular",
+    "observaciones",
 }
 
 
@@ -548,9 +549,9 @@ def precargar_proyeccion_estudiantes(
             """
             INSERT INTO congreso_proyeccion_estudiantes (
                 clave_precarga, orden, institucion, institucion_normalizada, proyeccion,
-                confirmados, nota_original
+                confirmados, nota_original, observaciones
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT DO NOTHING
             RETURNING id
             """,
@@ -561,6 +562,7 @@ def precargar_proyeccion_estudiantes(
                 item["institucion_normalizada"],
                 item["proyeccion"],
                 item.get("confirmados", 0),
+                item.get("nota_original"),
                 item.get("nota_original"),
             ),
         ).fetchone()
@@ -668,8 +670,9 @@ def actualizar_confirmacion_proyeccion(
         "confirmados": cambios.get("confirmados", actual["confirmados"]),
         "contacto_nombre": cambios.get("contacto_nombre", actual["contacto_nombre"]),
         "contacto_celular": cambios.get("contacto_celular", actual["contacto_celular"]),
+        "observaciones": cambios.get("observaciones", actual["observaciones"]),
     }
-    for campo in ("contacto_nombre", "contacto_celular"):
+    for campo in ("contacto_nombre", "contacto_celular", "observaciones"):
         valor = nuevos[campo]
         nuevos[campo] = str(valor).strip() if valor is not None else None
         if nuevos[campo] == "":

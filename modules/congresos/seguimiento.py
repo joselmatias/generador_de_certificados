@@ -39,7 +39,7 @@ from database.db import (
 COLOR_AZUL = "#1A3A5C"
 # Contrato de compatibilidad con app.py. Se incrementa cuando cambia la
 # sincronización que transforma registros ya existentes.
-CONGRESO_SYNC_VERSION = 4
+CONGRESO_SYNC_VERSION = 5
 ZONA_HORARIA_ECUADOR = ZoneInfo("America/Guayaquil")
 ESTADOS = ["Pendiente", "Sí", "No"]
 OFICINAS = {
@@ -92,6 +92,7 @@ _ETIQUETAS_CAMPOS = {
     "confirmados": "Confirmados estudiantes",
     "contacto_nombre": "Nombre de contacto",
     "contacto_celular": "Celular de contacto",
+    "observaciones": "Observaciones",
     "institucion": "Institución",
     "nombres": "Nombres",
     "celular": "Celular",
@@ -169,17 +170,14 @@ def _texto_editor(valor: Any) -> str:
     return str(valor).strip()
 
 
-def _observaciones_proyeccion(item: dict[str, Any]) -> str:
-    partes = []
-    if item.get("nota_original"):
-        partes.append(str(item["nota_original"]))
+def _ultima_actualizacion_proyeccion(item: dict[str, Any]) -> str:
     if item.get("ultimo_actor_nombre"):
         fecha = _fecha_hora_ecuador(item.get("fecha_actualizacion"))
-        detalle = f"Última actualización: {item['ultimo_actor_nombre']}"
+        detalle = str(item["ultimo_actor_nombre"])
         if fecha is not None:
             detalle += f" · {fecha:%d/%m/%Y %H:%M}"
-        partes.append(detalle)
-    return " · ".join(partes)
+        return detalle
+    return ""
 
 
 def _estado(valor: Any) -> str:
@@ -933,8 +931,8 @@ def _vista_proyeccion_estudiantes(actor_id: int | None) -> None:
     col2.metric("Estudiantes proyectados", sum(item["proyeccion"] for item in activos))
     col3.metric("Estudiantes confirmados", sum(item["confirmados"] for item in activos))
     st.caption(
-        "Edita confirmados y datos de contacto. Para cambiar confirmados, "
-        "completa primero el nombre y celular del contacto."
+        "Edita confirmados, datos de contacto y observaciones. Para cambiar "
+        "confirmados, completa primero el nombre y celular del contacto."
     )
 
     if activos:
@@ -947,7 +945,8 @@ def _vista_proyeccion_estudiantes(actor_id: int | None) -> None:
                     "Confirmados": item["confirmados"],
                     "Nombre de contacto": item.get("contacto_nombre") or "",
                     "Celular de contacto": item.get("contacto_celular") or "",
-                    "Observaciones": _observaciones_proyeccion(item),
+                    "Observaciones": item.get("observaciones") or "",
+                    "Última actualización": _ultima_actualizacion_proyeccion(item),
                 }
                 for item in activos
             ]
@@ -958,7 +957,7 @@ def _vista_proyeccion_estudiantes(actor_id: int | None) -> None:
                 hide_index=True,
                 use_container_width=True,
                 height=min(560, 38 * (len(tabla) + 1)),
-                disabled=["Institución", "Proyección", "Observaciones"],
+                disabled=["Institución", "Proyección", "Última actualización"],
                 column_config={
                     "Institución": st.column_config.TextColumn("Institución", width="large"),
                     "Proyección": st.column_config.NumberColumn(
@@ -975,6 +974,9 @@ def _vista_proyeccion_estudiantes(actor_id: int | None) -> None:
                     ),
                     "Observaciones": st.column_config.TextColumn(
                         "Observaciones", width="large"
+                    ),
+                    "Última actualización": st.column_config.TextColumn(
+                        "Última actualización", width="large"
                     ),
                 },
                 key="congreso_editor_proyeccion",
@@ -996,11 +998,14 @@ def _vista_proyeccion_estudiantes(actor_id: int | None) -> None:
                             ),
                             "contacto_nombre": _texto_editor(fila["Nombre de contacto"]),
                             "contacto_celular": _texto_editor(fila["Celular de contacto"]),
+                            "observaciones": _texto_editor(fila["Observaciones"]),
                         }
                         cambios = {}
                         if valores_editados["confirmados"] != original["confirmados"]:
                             cambios["confirmados"] = valores_editados["confirmados"]
-                        for campo in ("contacto_nombre", "contacto_celular"):
+                        for campo in (
+                            "contacto_nombre", "contacto_celular", "observaciones"
+                        ):
                             if valores_editados[campo] != (original.get(campo) or ""):
                                 cambios[campo] = valores_editados[campo]
                         if not cambios:
