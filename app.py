@@ -10,11 +10,10 @@ import importlib
 
 import streamlit as st
 
-from database.init_db import init_db
 from utils.feature_flags import CERTIFICATE_GENERATION_ENABLED
 
-DB_SCHEMA_VERSION = 7
-CONGRESO_SYNC_VERSION = 3
+DB_SCHEMA_VERSION = 8
+CONGRESO_SYNC_VERSION = 4
 
 
 st.set_page_config(
@@ -28,17 +27,17 @@ st.set_page_config(
 @st.cache_resource(show_spinner=False)
 def _inicializar_db(schema_version: int) -> int:
     del schema_version  # Su valor invalida la caché cuando cambia el esquema.
-    init_db()
-    nombre_modulo = "modules.congresos.seguimiento"
-    seguimiento = importlib.import_module(nombre_modulo)
+    # Streamlit puede conservar módulos importados en memoria durante un
+    # despliegue. Recargarlos en orden evita combinar seguimiento.py nuevo
+    # con una capa de datos o una migración de la versión anterior.
+    importlib.invalidate_caches()
+    modulo_init_db = importlib.reload(importlib.import_module("database.init_db"))
+    importlib.reload(importlib.import_module("database.db"))
+    seguimiento = importlib.reload(
+        importlib.import_module("modules.congresos.seguimiento")
+    )
 
-    # Durante un despliegue Streamlit puede conservar momentáneamente el
-    # módulo anterior mientras app.py ya corresponde al commit nuevo.
-    # Invalidar y recargar evita mezclar ambas versiones en el mismo proceso.
-    version_modulo = getattr(seguimiento, "CONGRESO_SYNC_VERSION", 0)
-    if version_modulo != CONGRESO_SYNC_VERSION:
-        importlib.invalidate_caches()
-        seguimiento = importlib.reload(seguimiento)
+    modulo_init_db.init_db()
 
     version_modulo = getattr(seguimiento, "CONGRESO_SYNC_VERSION", 0)
     if version_modulo != CONGRESO_SYNC_VERSION:
@@ -59,7 +58,11 @@ def _inicializar_db(schema_version: int) -> int:
 try:
     _inicializar_db(DB_SCHEMA_VERSION)
 except Exception as exc:
-    st.warning(f"No se pudo completar la actualización documental del congreso: {exc}")
+    st.error(
+        "No se pudo inicializar la información del congreso. "
+        f"Recarga la aplicación en unos segundos. Detalle: {exc}"
+    )
+    st.stop()
 
 
 # ---------------------------------------------------------------------------
