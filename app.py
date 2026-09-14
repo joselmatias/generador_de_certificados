@@ -12,7 +12,7 @@ import streamlit as st
 
 from utils.feature_flags import CERTIFICATE_GENERATION_ENABLED
 
-DB_SCHEMA_VERSION = 12
+DB_SCHEMA_VERSION = 13
 CONGRESO_SYNC_VERSION = 7
 
 

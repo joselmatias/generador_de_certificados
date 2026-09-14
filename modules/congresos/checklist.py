@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import date
 import importlib
 from typing import Any
 
@@ -119,8 +118,6 @@ def _vista_checklist(
                 "Rubro": item["rubro"],
                 "Checklist": item["actividad"],
                 "¿Está listo?": "Sí" if item["listo"] else "No",
-                "Cantidad / meta": item.get("cantidad_meta"),
-                "Fecha límite": item.get("fecha_limite"),
                 "Responsables": item.get("responsables") or "Sin asignar",
                 "Observaciones": item.get("observaciones") or "",
                 "Historial / último cambio": historial_breve,
@@ -155,20 +152,9 @@ def _vista_checklist(
         e1, e2 = st.columns([1, 2])
         rubro = e1.text_input("Rubro", value=item["rubro"])
         actividad = e2.text_input("Checklist", value=item["actividad"])
-        e3, e4, e5 = st.columns(3)
-        listo = e3.selectbox(
+        listo = st.selectbox(
             "¿Está listo?", [False, True], index=1 if item["listo"] else 0,
             format_func=lambda valor: "Sí" if valor else "No",
-        )
-        usa_meta = e4.checkbox("Usar cantidad / meta", value=item.get("cantidad_meta") is not None)
-        cantidad = e4.number_input(
-            "Cantidad / meta", min_value=0, step=1,
-            value=int(item.get("cantidad_meta") or 0), disabled=not usa_meta,
-        )
-        usa_fecha = e5.checkbox("Usar fecha límite", value=item.get("fecha_limite") is not None)
-        fecha = e5.date_input(
-            "Fecha límite", value=item.get("fecha_limite") or date.today(),
-            disabled=not usa_fecha,
         )
         responsables_ids = st.multiselect(
             "Responsables de Guayaquil",
@@ -199,8 +185,6 @@ def _vista_checklist(
                             "rubro": rubro,
                             "actividad": actividad,
                             "listo": listo,
-                            "cantidad_meta": int(cantidad) if usa_meta else None,
-                            "fecha_limite": fecha if usa_fecha else None,
                             "observaciones": observaciones,
                             "responsables_adicionales": (
                                 RESPONSABLE_ADICIONAL_GUAYAQUIL
@@ -223,11 +207,6 @@ def _vista_checklist(
             n1, n2 = st.columns([1, 2])
             nuevo_rubro = n1.text_input("Rubro")
             nueva_actividad = n2.text_input("Nuevo campo o actividad")
-            n3, n4 = st.columns(2)
-            nueva_meta = n3.number_input("Cantidad / meta (opcional)", min_value=0, step=1)
-            usar_nueva_meta = n3.checkbox("Guardar cantidad / meta")
-            nueva_fecha = n4.date_input("Fecha límite (opcional)", value=date.today())
-            usar_nueva_fecha = n4.checkbox("Guardar fecha límite")
             nuevos_responsables = st.multiselect(
                 "Responsables",
                 list(responsables_por_id),
@@ -252,8 +231,7 @@ def _vista_checklist(
                     with get_connection() as con:
                         crear_item_checklist_congreso(
                             con, nuevo_rubro, nueva_actividad,
-                            int(nueva_meta) if usar_nueva_meta else None,
-                            nueva_fecha if usar_nueva_fecha else None,
+                            None, None,
                             nuevas_observaciones, nuevos_responsables,
                             (
                                 RESPONSABLE_ADICIONAL_GUAYAQUIL

@@ -1482,18 +1482,61 @@ _CHECKLIST_INICIAL = (
     ("Protocolo", "Autoridades", None),
     ("Protocolo", "Vocativos", None),
     ("Protocolo", "Maestro de ceremonia", None),
-    ("Impresos y acreditación", "Impresión de tickets para coffee break", 550),
+    ("Impresos y acreditación", "Impresión de 550 tickets para coffee break", None),
     ("Feria de emprendedores", "Asistentes de la feria de emprendedores", None),
-    ("Logística", "Montaje de salón, mobiliario y señalética", None),
-    ("Logística", "Audio, video, iluminación e internet", None),
-    ("Registro", "Acreditación y control de asistencia", None),
-    ("Seguridad", "Primeros auxilios, seguridad y plan de contingencia", None),
-    ("Comunicación", "Fotografía, prensa y difusión", None),
+    ("Seguridad", "Listado de asistentes a garita", None),
+)
+
+_CHECKLIST_ITEMS_RETIRADOS = (
+    "Fotografía, prensa y difusión",
+    "Montaje de salón, mobiliario y señalética",
+    "Audio, video, iluminación e internet",
+    "Acreditación y control de asistencia",
+)
+
+_CHECKLIST_ITEMS_RENOMBRADOS = (
+    (
+        "Impresión de tickets para coffee break",
+        "Impresión de 550 tickets para coffee break",
+    ),
+    (
+        "Primeros auxilios, seguridad y plan de contingencia",
+        "Listado de asistentes a garita",
+    ),
 )
 
 
 def asegurar_checklist_congreso(con: _Conn) -> None:
     """Crea los rubros base y asigna los tres funcionarios de Guayaquil."""
+    con.execute(
+        "DELETE FROM congreso_checklist WHERE actividad = ANY(%s)",
+        (list(_CHECKLIST_ITEMS_RETIRADOS),),
+    )
+    for actividad_anterior, actividad_nueva in _CHECKLIST_ITEMS_RENOMBRADOS:
+        anterior = con.execute(
+            "SELECT id FROM congreso_checklist WHERE actividad = %s",
+            (actividad_anterior,),
+        ).fetchone()
+        if anterior is None:
+            continue
+        existente = con.execute(
+            "SELECT id FROM congreso_checklist WHERE actividad = %s",
+            (actividad_nueva,),
+        ).fetchone()
+        if existente:
+            con.execute(
+                "DELETE FROM congreso_checklist WHERE id = %s", (anterior["id"],)
+            )
+        else:
+            con.execute(
+                """
+                UPDATE congreso_checklist
+                SET actividad = %s, cantidad_meta = NULL,
+                    fecha_actualizacion = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """,
+                (actividad_nueva, anterior["id"]),
+            )
     for rubro, actividad, cantidad in _CHECKLIST_INICIAL:
         con.execute(
             """
