@@ -12,7 +12,7 @@ import streamlit as st
 
 from utils.feature_flags import CERTIFICATE_GENERATION_ENABLED
 
-DB_SCHEMA_VERSION = 11
+DB_SCHEMA_VERSION = 12
 CONGRESO_SYNC_VERSION = 7
 
 
@@ -148,6 +148,7 @@ if "oficina_id" not in st.session_state:
 oficina_nombre = st.session_state["oficina_nombre"]
 oficina_rol    = st.session_state["oficina_rol"]
 es_master      = oficina_rol == "master"
+es_guayaquil   = st.session_state["oficina_id"] == "guayaquil"
 
 with st.sidebar:
     st.markdown(f"**Oficina:** {oficina_nombre}")
@@ -167,7 +168,7 @@ with st.sidebar:
 
     MODULOS_MASTER = {
         **MODULOS_REGIONAL,
-        "✅ Checklist Congreso": "checklist_congreso",
+        **({"✅ Checklist Congreso": "checklist_congreso"} if es_guayaquil else {}),
         "📊 Dashboard DRAC": "dashboard_drac",
     }
 
@@ -201,7 +202,7 @@ elif modulo_id == "seguimiento_congreso":
     from modules.congresos.seguimiento import mostrar_seguimiento_congreso
     mostrar_seguimiento_congreso()
 
-elif modulo_id == "checklist_congreso" and es_master:
+elif modulo_id == "checklist_congreso" and es_master and es_guayaquil:
     from modules.congresos.checklist import mostrar_checklist_congreso
     mostrar_checklist_congreso()
 

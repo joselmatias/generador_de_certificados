@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+import importlib
 from typing import Any
 
 import pandas as pd
@@ -39,7 +40,9 @@ def _texto(valor: Any) -> str:
     return "" if valor is None else str(valor).strip()
 
 
-def _datos() -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+def _consultar_datos() -> tuple[
+    list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]
+]:
     with get_connection() as con:
         asegurar_checklist_congreso(con)
         items = [dict(row) for row in listar_checklist_congreso(con)]
@@ -49,6 +52,19 @@ def _datos() -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str,
             for row in listar_responsables_congreso(con, "guayaquil", solo_activos=True)
         ]
     return items, historial, responsables
+
+
+def _datos() -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    try:
+        return _consultar_datos()
+    except Exception as exc:
+        # Respaldo para instancias de Streamlit que conserven en caché una
+        # inicialización anterior mientras ya sirven este módulo nuevo.
+        if getattr(exc, "pgcode", None) != "42P01":
+            raise
+        modulo_init_db = importlib.reload(importlib.import_module("database.init_db"))
+        modulo_init_db.init_db()
+        return _consultar_datos()
 
 
 def _actor(responsables: list[dict[str, Any]]) -> tuple[int | None, str]:
