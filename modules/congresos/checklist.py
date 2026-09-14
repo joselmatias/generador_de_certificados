@@ -271,18 +271,21 @@ def _vista_checklist(
             )
             eliminar = st.form_submit_button(
                 "Eliminar actividad",
-                disabled=not actor_nombre or not confirmar,
+                disabled=not actor_nombre,
             )
         if eliminar:
-            try:
-                with get_connection() as con:
-                    eliminar_item_checklist_congreso(
-                        con, eliminar_id, actor_id, actor_nombre
-                    )
-                st.success("Actividad eliminada del checklist.")
-                st.rerun()
-            except Exception as exc:
-                st.error(f"No se pudo eliminar la actividad: {exc}")
+            if not confirmar:
+                st.error("Confirma la eliminación antes de continuar.")
+            else:
+                try:
+                    with get_connection() as con:
+                        eliminar_item_checklist_congreso(
+                            con, eliminar_id, actor_id, actor_nombre
+                        )
+                    st.success("Actividad eliminada del checklist.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"No se pudo eliminar la actividad: {exc}")
 
 
 def _vista_historial(historial: list[dict[str, Any]]) -> None:
