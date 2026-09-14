@@ -39,7 +39,7 @@ from database.db import (
 COLOR_AZUL = "#1A3A5C"
 # Contrato de compatibilidad con app.py. Se incrementa cuando cambia la
 # sincronización que transforma registros ya existentes.
-CONGRESO_SYNC_VERSION = 6
+CONGRESO_SYNC_VERSION = 7
 ZONA_HORARIA_ECUADOR = ZoneInfo("America/Guayaquil")
 ESTADOS = ["Pendiente", "Sí", "No"]
 OFICINAS = {
@@ -56,6 +56,19 @@ MAPEO_RESPONSABLE_OFICINA = {
     "carlos g": "guayaquil",
     "despacho": "guayaquil",
     "intendente regional": "guayaquil",
+}
+MAPEO_RESPONSABLE_DATOS = {
+    "milka": ("Ing. Milka Nazareno", "0981768984", "milka.nazareno@sce.gob.ec"),
+    "carlos g": ("Ab. Carlos García", "0996797882", "carlos.garcia@sce.gob.ec"),
+    "despacho": ("Ab. Carlos García", "0996797882", "carlos.garcia@sce.gob.ec"),
+    "intendente regional": (
+        "Ing. Milka Nazareno",
+        "0981768984",
+        "milka.nazareno@sce.gob.ec",
+    ),
+    "otap": ("Ab. Cristian Romero", "0993345666", "cristian.romero@sce.gob.ec"),
+    "otac": ("Ec. Rosa Morales", "0998290196", "rosa.morales@sce.gob.ec"),
+    "otal": ("Ec. Salomé Rosales", "0995041957", "salome.rosales@sce.gob.ec"),
 }
 ACTORES_ADICIONALES_GUAYAQUIL = ["José Matías"]
 
@@ -75,6 +88,38 @@ DISTRIBUCION_PRECARGA = {
     "loja": 10,
     "sin_asignar": 7,
 }
+
+# Nuevos números y asignaciones incorporados en la versión del 13 de septiembre
+# de 2026 de "LISTA DE INVITADOS 8sept con No oficios IR". Se conserva la fila
+# de origen para completar los registros existentes sin duplicarlos.
+ACTUALIZACIONES_OFICIOS_IR = [
+    (3, "SCE-IGT-IR-2026-162", "Invitación general", "Milka"),
+    (7, "SCE-IGT-IR-2026-163", "Invitación general", "OTAP"),
+    (8, "SCE-IGT-IR-2026-164", "Invitación general", "Milka"),
+    (9, "SCE-IGT-IR-2026-165", "Invitación general", "Milka"),
+    (10, "SCE-IGT-IR-2026-166", "Invitación general", "OTAC"),
+    (11, "SCE-IGT-IR-2026-167", "Invitación general", "Milka"),
+    (12, "SCE-IGT-IR-2026-168", "Invitación general", "OTAC"),
+    (13, "SCE-IGT-IR-2026-169", "Invitación general", "Milka"),
+    (14, "SCE-IGT-IR-2026-170", "Invitación general", "Milka"),
+    (15, "SCE-IGT-IR-2026-171", "Invitación general", "Milka"),
+    (16, "SCE-IGT-IR-2026-172", "Invitación general", "Carlos G"),
+    (38, "SCE-IGT-IR-2026-173", "Invitación general", "OTAL"),
+    (40, "SCE-IGT-IR-2026-174", "Invitación a universidades", "Carlos G"),
+    (41, "SCE-IGT-IR-2026-175", "Invitación a universidades", "Carlos G"),
+    (62, "SCE-IGT-IR-2026-176", "Invitación general", "OTAC"),
+    (65, "SCE-IGT-IR-2026-177", "Invitación general", "Carlos G"),
+    (66, "SCE-IGT-IR-2026-178", "Invitación a universidades", "Milka"),
+    (67, "SCE-IGT-IR-2026-179", "Invitación a universidades", "Milka"),
+    (68, "SCE-IGT-IR-2026-180", "Invitación a universidades", "Milka"),
+    (69, "SCE-IGT-IR-2026-181", "Invitación a universidades", "Carlos G"),
+    (70, "SCE-IGT-IR-2026-182", "Invitación a universidades", "Carlos G"),
+]
+
+# La fila 71 recibió asignación de seguimiento, aunque conserva el oficio 643.
+ACTUALIZACIONES_ASIGNACION = [
+    (71, "SCE-2026-643", "Expositor", "Milka"),
+]
 
 _ETIQUETAS_CAMPOS = {
     "oficina": "Oficina",
@@ -231,6 +276,9 @@ def _separar_oficios_y_categorias(
 ) -> list[tuple[str | None, str | None]]:
     """Devuelve una invitación independiente por cada código de oficio."""
     original = _texto(valor)
+    codigos_ir = re.findall(r"SCE-IGT-IR-2026-\d{3}", original, re.IGNORECASE)
+    if codigos_ir:
+        return [(codigo.upper(), None) for codigo in dict.fromkeys(codigos_ir)]
     numeros = re.findall(r"(?<!\d)(6(?:4[1-9]|5\d|6\d|7\d|8[0-6]))(?!\d)", original)
     if not numeros:
         return [(original or None, None)]
@@ -251,6 +299,12 @@ def analizar_excel_congreso(contenido: bytes) -> dict[str, Any]:
     """Valida y transforma el Excel sin escribir en la base de datos."""
     libro = load_workbook(BytesIO(contenido), read_only=True, data_only=True)
     hoja = libro["Invitados"] if "Invitados" in libro.sheetnames else libro.active
+    libro_formulas = load_workbook(BytesIO(contenido), read_only=True, data_only=False)
+    hoja_formulas = (
+        libro_formulas["Invitados"]
+        if "Invitados" in libro_formulas.sheetnames
+        else libro_formulas.active
+    )
     encabezados = [hoja.cell(2, col).value for col in range(1, hoja.max_column + 1)]
 
     nombres_requeridos = [
@@ -289,8 +343,16 @@ def analizar_excel_congreso(contenido: bytes) -> dict[str, Any]:
                 "Responsable seguimiento", "N° Oficio",
             )
         )
-        if not numero_lista or not institucion or not tiene_datos_lista:
+        if not institucion or not tiene_datos_lista:
             continue
+        # Algunos editores no guardan el resultado calculado de la fórmula de
+        # numeración. Solo en ese caso la posición conserva el valor estable;
+        # filas auxiliares realmente vacías continúan excluidas.
+        if not numero_lista:
+            formula_numero = hoja_formulas.cell(fila, columnas["No"]).value
+            if not (isinstance(formula_numero, str) and formula_numero.startswith("=")):
+                continue
+            numero_lista = str(fila - 2)
 
         etiqueta_responsable = _normalizar(valor(fila, "Responsable seguimiento"))
         oficina = MAPEO_RESPONSABLE_OFICINA.get(etiqueta_responsable)
@@ -303,6 +365,11 @@ def analizar_excel_congreso(contenido: bytes) -> dict[str, Any]:
         nombre_responsable = _texto(valor(fila, "Responsable: Nombres"))
         celular_responsable = _texto(valor(fila, "Responsable: celular"))
         correo_responsable = _texto(valor(fila, "Responsable: Correo")).lower()
+        datos_responsable = MAPEO_RESPONSABLE_DATOS.get(etiqueta_responsable)
+        if oficina and datos_responsable:
+            nombre_responsable = nombre_responsable or datos_responsable[0]
+            celular_responsable = celular_responsable or datos_responsable[1]
+            correo_responsable = correo_responsable or datos_responsable[2]
         if oficina and nombre_responsable:
             clave_responsable = (oficina, nombre_responsable.casefold())
             responsable = {
@@ -332,6 +399,12 @@ def analizar_excel_congreso(contenido: bytes) -> dict[str, Any]:
         oficios = _separar_oficios_y_categorias(
             numero_oficio_original
         )
+        calidad = _texto(valor(fila, "Calidad"))
+        tipo_desde_calidad = {
+            "invitacion general": "Invitación general",
+            "invitacion universidad": "Invitación a universidades",
+            "expositor": "Expositor",
+        }.get(_normalizar(calidad))
         invitado_base = {
                 "fila_origen": fila,
                 "numero_lista": numero_lista,
@@ -339,7 +412,7 @@ def analizar_excel_congreso(contenido: bytes) -> dict[str, Any]:
                 "tipo_institucion": _texto(valor(fila, "Tipo institución")) or None,
                 "destinatario_oficio": destinatario or None,
                 "firma": _texto(valor(fila, "Firma")) or None,
-                "calidad": _texto(valor(fila, "Calidad")) or None,
+                "calidad": calidad or None,
                 "cargo": _texto(valor(fila, "Cargo")) or None,
                 "direccion": _texto(valor(fila, "Dirección")) or None,
                 "correo_institucional": _texto(valor(fila, "Correo electrónico")) or None,
@@ -361,6 +434,7 @@ def analizar_excel_congreso(contenido: bytes) -> dict[str, Any]:
                 ) or None,
             }
         for numero_oficio, tipo_invitacion in oficios:
+            tipo_invitacion = tipo_invitacion or tipo_desde_calidad
             clave_invitado = (
                 _normalizar(institucion),
                 _normalizar(destinatario),
@@ -487,6 +561,20 @@ def sincronizar_congreso_desde_documentos() -> int:
         }
         for item in resultado["invitados"]
     ]
+    por_fila = {item["fila_origen"]: item for item in actualizaciones}
+    for fila, numero_oficio, tipo_invitacion, etiqueta_responsable in [
+        *ACTUALIZACIONES_OFICIOS_IR,
+        *ACTUALIZACIONES_ASIGNACION,
+    ]:
+        item = por_fila[fila]
+        item.update(
+            numero_oficio=numero_oficio,
+            tipo_invitacion=tipo_invitacion,
+            oficina=MAPEO_RESPONSABLE_OFICINA[etiqueta_responsable.casefold()],
+            responsable_nombre=MAPEO_RESPONSABLE_DATOS[
+                etiqueta_responsable.casefold()
+            ][0],
+        )
     with get_connection() as con:
         return sincronizar_documentos_congreso(
             con, actualizaciones, NUEVOS_OFICIOS_FIRMADOS
@@ -503,6 +591,15 @@ def _celular_valido(celular: str) -> bool:
 
 def _nombre_oficina(oficina: str | None) -> str:
     return OFICINAS.get(oficina, "Sin asignar")
+
+
+def _firmado_por(valor: Any) -> str:
+    firma = _normalizar(valor)
+    if firma == "ir" or "intendente regional" in firma:
+        return "IR"
+    if "superintendente" in firma:
+        return "Superintendente"
+    return ""
 
 
 def _fecha_hora_ecuador(valor: Any) -> datetime | None:
@@ -545,7 +642,7 @@ def _datos_exportacion(
     columnas_invitados = {
         "numero_lista": "No", "institucion": "Institución",
         "tipo_institucion": "Tipo institución", "destinatario_oficio": "Destinatario oficio",
-        "firma": "Firma", "nombre_asistente_delegado": "Asistentes o delegados",
+        "firma": "Firmado por", "nombre_asistente_delegado": "Asistentes o delegados",
         "cargos_asistentes_delegados": "Cargos de asistentes o delegados",
         "calidad": "Calidad", "oficina": "Oficina",
         "responsable_nombres": "Responsable: Nombres",
@@ -565,6 +662,7 @@ def _datos_exportacion(
     for item in invitados:
         fila = {etiqueta: item.get(campo) for campo, etiqueta in columnas_invitados.items()}
         fila["Oficina"] = _nombre_oficina(item.get("oficina"))
+        fila["Firmado por"] = _firmado_por(item.get("firma"))
         fila["Última actualización (Ecuador)"] = _fecha_hora_ecuador(
             item.get("fecha_actualizacion")
         )
@@ -732,6 +830,7 @@ def _vista_seguimiento(
                 item.get("nombre_asistente_delegado") or ""
             ).replace("\n", "; "),
             "Cargos": (item.get("cargos_asistentes_delegados") or "").replace("\n", "; "),
+            "Firmado por": _firmado_por(item.get("firma")),
             "N.º Oficio": item.get("numero_oficio") or "",
         }
         for item in filtrados
@@ -761,6 +860,7 @@ def _vista_seguimiento(
             f"**Correo institucional:** {invitado.get('correo_institucional') or '—'}  \n"
             f"**Teléfono(s):** {invitado.get('telefonos_institucionales') or '—'}  \n"
             f"**Tipo de invitación:** {invitado.get('tipo_invitacion') or '—'}  \n"
+            f"**Firmado por:** {_firmado_por(invitado.get('firma')) or '—'}  \n"
             f"**N.º Oficio:** {invitado.get('numero_oficio') or '—'}  \n"
             f"**Dirección:** {invitado.get('direccion') or '—'}"
         )

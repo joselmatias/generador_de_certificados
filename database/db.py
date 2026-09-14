@@ -1241,7 +1241,7 @@ def sincronizar_documentos_congreso(
                 entidad_tipo="invitado",
                 entidad_id=actual["id"],
                 invitado_id=actual["id"],
-                oficina=actual.get("oficina"),
+                oficina=cambios.get("oficina", actual.get("oficina")),
                 accion=accion,
                 campo=campo,
                 valor_anterior=actual.get(campo),
@@ -1364,6 +1364,20 @@ def sincronizar_documentos_congreso(
         tipo = item.get("tipo_invitacion")
         if tipo and not actual.get("tipo_invitacion"):
             cambios["tipo_invitacion"] = tipo
+        oficina = item.get("oficina")
+        if oficina and not actual.get("oficina"):
+            cambios["oficina"] = oficina
+        responsable_nombre = item.get("responsable_nombre")
+        if responsable_nombre and actual.get("responsable_id") is None:
+            responsable = con.execute(
+                """
+                SELECT id FROM congreso_responsables
+                WHERE oficina = %s AND LOWER(nombres) = LOWER(%s) AND activo = TRUE
+                """,
+                (oficina or actual.get("oficina"), responsable_nombre),
+            ).fetchone()
+            if responsable is not None:
+                cambios["responsable_id"] = int(responsable["id"])
         oficio = item.get("numero_oficio")
         oficio_actual = actual.get("numero_oficio")
         if oficio and oficio_actual != oficio:
