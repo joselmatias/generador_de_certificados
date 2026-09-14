@@ -1468,3 +1468,233 @@ def _registrar_historial_congreso(
             actor_oficina,
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# Checklist y proyección de estudiantes del Congreso
+# ---------------------------------------------------------------------------
+
+_CHECKLIST_INICIAL = (
+    ("Alimentación", "Coffee break — día 1", None),
+    ("Alimentación", "Coffee break — día 2", None),
+    ("Alimentación", "Almuerzos — día 1", None),
+    ("Alimentación", "Almuerzos — día 2", None),
+    ("Protocolo", "Autoridades", None),
+    ("Protocolo", "Vocativos", None),
+    ("Protocolo", "Maestro de ceremonia", None),
+    ("Impresos y acreditación", "Impresión de tickets para coffee break", 550),
+    ("Feria de emprendedores", "Asistentes de la feria de emprendedores", None),
+    ("Logística", "Montaje de salón, mobiliario y señalética", None),
+    ("Logística", "Audio, video, iluminación e internet", None),
+    ("Registro", "Acreditación y control de asistencia", None),
+    ("Seguridad", "Primeros auxilios, seguridad y plan de contingencia", None),
+    ("Comunicación", "Fotografía, prensa y difusión", None),
+)
+
+
+def asegurar_checklist_congreso(con: _Conn) -> None:
+    """Crea los rubros base y asigna los tres funcionarios de Guayaquil."""
+    for rubro, actividad, cantidad in _CHECKLIST_INICIAL:
+        con.execute(
+            """
+            INSERT INTO congreso_checklist
+                (rubro, actividad, cantidad_meta, responsables_adicionales)
+            VALUES (%s, %s, %s, 'José Matías')
+            ON CONFLICT (rubro, actividad) DO NOTHING
+            """,
+            (rubro, actividad, cantidad),
+        )
+
+    responsables = con.execute(
+        """
+        SELECT id FROM congreso_responsables
+        WHERE oficina = 'guayaquil' AND activo = TRUE
+          AND LOWER(nombres) IN ('ing. milka nazareno', 'ab. carlos garcía')
+        ORDER BY nombres
+        """
+    ).fetchall()
+    if not responsables:
+        return
+    items = con.execute("SELECT id FROM congreso_checklist").fetchall()
+    for item in items:
+        tiene_asignados = con.execute(
+            "SELECT 1 FROM congreso_checklist_responsables WHERE checklist_id = %s LIMIT 1",
+            (item["id"],),
+        ).fetchone()
+        if tiene_asignados:
+            continue
+        for responsable in responsables:
+            con.execute(
+                """
+                INSERT INTO congreso_checklist_responsables (checklist_id, responsable_id)
+                VALUES (%s, %s) ON CONFLICT DO NOTHING
+                """,
+                (item["id"], responsable["id"]),
+            )
+
+
+def listar_checklist_congreso(con: _Conn) -> list[Any]:
+    return con.execute(
+        """
+        SELECT c.*,
+               concat_ws(
+                   ', ',
+                   NULLIF(string_agg(r.nombres, ', ' ORDER BY r.nombres), ''),
+                   NULLIF(c.responsables_adicionales, '')
+               ) AS responsables,
+               COALESCE(array_agg(r.id ORDER BY r.nombres)
+                        FILTER (WHERE r.id IS NOT NULL), ARRAY[]::integer[]) AS responsables_ids
+        FROM congreso_checklist c
+        LEFT JOIN congreso_checklist_responsables cr ON cr.checklist_id = c.id
+        LEFT JOIN congreso_responsables r ON r.id = cr.responsable_id
+        GROUP BY c.id
+        ORDER BY c.rubro, c.id
+        """
+    ).fetchall()
+
+
+def crear_item_checklist_congreso(
+    con: _Conn,
+    rubro: str,
+    actividad: str,
+    cantidad_meta: int | None,
+    fecha_limite: Any,
+    observaciones: str,
+    responsables_ids: list[int],
+    responsables_adicionales: str,
+    actor_responsable_id: int | None,
+    actor_nombre: str,
+) -> int:
+    row = con.execute(
+        """
+        INSERT INTO congreso_checklist
+            (rubro, actividad, cantidad_meta, fecha_limite, observaciones,
+             responsables_adicionales, actualizado_por)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
+        """,
+        (
+            rubro.strip(), actividad.strip(), cantidad_meta, fecha_limite,
+            observaciones.strip() or None, responsables_adicionales.strip() or None,
+            actor_nombre,
+        ),
+    ).fetchone()
+    item_id = int(row["id"])
+    for responsable_id in responsables_ids:
+        con.execute(
+            "INSERT INTO congreso_checklist_responsables VALUES (%s, %s)",
+            (item_id, responsable_id),
+        )
+    _registrar_historial_checklist(
+        con, item_id, rubro.strip(), actividad.strip(), "Creación", None,
+        actividad.strip(), actor_responsable_id, actor_nombre,
+    )
+    return item_id
+
+
+def actualizar_item_checklist_congreso(
+    con: _Conn,
+    item_id: int,
+    cambios: dict[str, Any],
+    responsables_ids: list[int],
+    actor_responsable_id: int | None,
+    actor_nombre: str,
+) -> int:
+    actual = con.execute("SELECT * FROM congreso_checklist WHERE id = %s", (item_id,)).fetchone()
+    if actual is None:
+        raise ValueError("El ítem seleccionado ya no existe.")
+    permitidos = {
+        "rubro", "actividad", "listo", "cantidad_meta", "fecha_limite",
+        "observaciones", "responsables_adicionales",
+    }
+    if set(cambios) - permitidos:
+        raise ValueError("Se intentó modificar un campo no permitido.")
+
+    normalizados: dict[str, Any] = {}
+    for campo, valor in cambios.items():
+        if isinstance(valor, str):
+            valor = valor.strip() or None
+        if actual[campo] != valor:
+            normalizados[campo] = valor
+    if normalizados:
+        asignaciones = ", ".join(f"{campo} = %s" for campo in normalizados)
+        con.execute(
+            f"UPDATE congreso_checklist SET {asignaciones}, actualizado_por = %s, "
+            "fecha_actualizacion = CURRENT_TIMESTAMP WHERE id = %s",
+            [*normalizados.values(), actor_nombre, item_id],
+        )
+        for campo, nuevo in normalizados.items():
+            _registrar_historial_checklist(
+                con, item_id, cambios.get("rubro", actual["rubro"]),
+                cambios.get("actividad", actual["actividad"]), campo,
+                actual[campo], nuevo, actor_responsable_id, actor_nombre,
+            )
+
+    actuales = {
+        row["responsable_id"] for row in con.execute(
+            "SELECT responsable_id FROM congreso_checklist_responsables WHERE checklist_id = %s",
+            (item_id,),
+        ).fetchall()
+    }
+    nuevos = set(responsables_ids)
+    if actuales != nuevos:
+        nombres_antes = con.execute(
+            "SELECT nombres FROM congreso_responsables WHERE id = ANY(%s) ORDER BY nombres",
+            (list(actuales),),
+        ).fetchall() if actuales else []
+        nombres_despues = con.execute(
+            "SELECT nombres FROM congreso_responsables WHERE id = ANY(%s) ORDER BY nombres",
+            (list(nuevos),),
+        ).fetchall() if nuevos else []
+        con.execute("DELETE FROM congreso_checklist_responsables WHERE checklist_id = %s", (item_id,))
+        for responsable_id in nuevos:
+            con.execute(
+                "INSERT INTO congreso_checklist_responsables VALUES (%s, %s)",
+                (item_id, responsable_id),
+            )
+        _registrar_historial_checklist(
+            con, item_id, cambios.get("rubro", actual["rubro"]),
+            cambios.get("actividad", actual["actividad"]), "responsables",
+            ", ".join(row["nombres"] for row in nombres_antes),
+            ", ".join(row["nombres"] for row in nombres_despues),
+            actor_responsable_id, actor_nombre,
+        )
+        normalizados["responsables"] = responsables_ids
+    return len(normalizados)
+
+
+def _registrar_historial_checklist(
+    con: _Conn,
+    item_id: int,
+    rubro: str,
+    actividad: str,
+    campo: str,
+    anterior: Any,
+    nuevo: Any,
+    actor_responsable_id: int | None,
+    actor_nombre: str,
+) -> None:
+    con.execute(
+        """
+        INSERT INTO congreso_checklist_historial
+            (checklist_id, rubro, actividad, campo, valor_anterior, valor_nuevo,
+             actor_responsable_id, actor_nombre)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """,
+        (
+            item_id, rubro, actividad, campo,
+            None if anterior is None else str(anterior),
+            None if nuevo is None else str(nuevo),
+            actor_responsable_id, actor_nombre,
+        ),
+    )
+
+
+def listar_historial_checklist_congreso(con: _Conn, limite: int = 1000) -> list[Any]:
+    return con.execute(
+        """
+        SELECT * FROM congreso_checklist_historial
+        ORDER BY fecha_cambio DESC, id DESC LIMIT %s
+        """,
+        (limite,),
+    ).fetchall()

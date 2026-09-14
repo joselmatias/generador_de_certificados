@@ -167,6 +167,7 @@ with st.sidebar:
 
     MODULOS_MASTER = {
         **MODULOS_REGIONAL,
+        "✅ Checklist Congreso": "checklist_congreso",
         "📊 Dashboard DRAC": "dashboard_drac",
     }
 
@@ -199,6 +200,10 @@ if modulo_id == "cap_carga":
 elif modulo_id == "seguimiento_congreso":
     from modules.congresos.seguimiento import mostrar_seguimiento_congreso
     mostrar_seguimiento_congreso()
+
+elif modulo_id == "checklist_congreso" and es_master:
+    from modules.congresos.checklist import mostrar_checklist_congreso
+    mostrar_checklist_congreso()
 
 elif modulo_id == "cap_certificados":
     from modules.capacitaciones.certificados import mostrar_certificados

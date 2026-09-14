@@ -819,6 +819,72 @@ def _vista_seguimiento(
             or busqueda in _texto(item.get("destinatario_oficio")).casefold()
         ]
 
+    # La lista maestra se conserva intacta. En la tabla de trabajo solo se
+    # muestran casos que ya cuentan con número de oficio.
+    filtrados = [item for item in filtrados if _texto(item.get("numero_oficio"))]
+
+    with st.expander("Filtros por columna", expanded=False):
+        st.caption("Combina los filtros para acotar los casos que deseas revisar.")
+        f1, f2, f3, f4 = st.columns(4)
+        filtro_institucion = f1.text_input("Institución", key="congreso_col_institucion")
+        filtro_responsable = f2.multiselect(
+            "Responsable",
+            sorted({_texto(item.get("responsable_nombres") or "Sin asignar") for item in filtrados}),
+            key="congreso_col_responsable",
+        )
+        filtro_confirmado = f3.multiselect(
+            "Confirmado", ESTADOS, key="congreso_col_confirmado"
+        )
+        filtro_oficio = f4.text_input("N.º Oficio", key="congreso_col_oficio")
+        f5, f6, f7, f8 = st.columns(4)
+        filtro_oficina_col = f5.multiselect(
+            "Oficina",
+            sorted({_nombre_oficina(item.get("oficina")) for item in filtrados}),
+            key="congreso_col_oficina",
+        )
+        filtro_21 = f6.multiselect("21 oct.", ESTADOS, key="congreso_col_21")
+        filtro_22 = f7.multiselect("22 oct.", ESTADOS, key="congreso_col_22")
+        filtro_delegado = f8.text_input("Asistentes o delegados", key="congreso_col_delegado")
+        f9, f10, f11 = st.columns(3)
+        filtro_tipo = f9.multiselect(
+            "Tipo de invitación",
+            sorted({_texto(item.get("tipo_invitacion")) for item in filtrados if _texto(item.get("tipo_invitacion"))}),
+            key="congreso_col_tipo_invitacion",
+        )
+        filtro_cargo = f10.text_input("Cargos", key="congreso_col_cargos")
+        filtro_firma = f11.multiselect(
+            "Firmado por",
+            sorted({_firmado_por(item.get("firma")) for item in filtrados if _firmado_por(item.get("firma"))}),
+            key="congreso_col_firmado_por",
+        )
+
+    if filtro_institucion.strip():
+        valor = filtro_institucion.strip().casefold()
+        filtrados = [item for item in filtrados if valor in _texto(item.get("institucion")).casefold()]
+    if filtro_responsable:
+        filtrados = [item for item in filtrados if _texto(item.get("responsable_nombres") or "Sin asignar") in filtro_responsable]
+    if filtro_confirmado:
+        filtrados = [item for item in filtrados if item.get("confirmado") in filtro_confirmado]
+    if filtro_oficio.strip():
+        valor = filtro_oficio.strip().casefold()
+        filtrados = [item for item in filtrados if valor in _texto(item.get("numero_oficio")).casefold()]
+    if filtro_oficina_col:
+        filtrados = [item for item in filtrados if _nombre_oficina(item.get("oficina")) in filtro_oficina_col]
+    if filtro_21:
+        filtrados = [item for item in filtrados if item.get("asistencia_21") in filtro_21]
+    if filtro_22:
+        filtrados = [item for item in filtrados if item.get("asistencia_22") in filtro_22]
+    if filtro_delegado.strip():
+        valor = filtro_delegado.strip().casefold()
+        filtrados = [item for item in filtrados if valor in _texto(item.get("nombre_asistente_delegado")).casefold()]
+    if filtro_tipo:
+        filtrados = [item for item in filtrados if _texto(item.get("tipo_invitacion")) in filtro_tipo]
+    if filtro_cargo.strip():
+        valor = filtro_cargo.strip().casefold()
+        filtrados = [item for item in filtrados if valor in _texto(item.get("cargos_asistentes_delegados")).casefold()]
+    if filtro_firma:
+        filtrados = [item for item in filtrados if _firmado_por(item.get("firma")) in filtro_firma]
+
     tabla = pd.DataFrame([
         {
             "Institución": item["institucion"], "Oficina": _nombre_oficina(item.get("oficina")),
@@ -836,6 +902,7 @@ def _vista_seguimiento(
         for item in filtrados
     ])
     st.dataframe(tabla, hide_index=True, use_container_width=True, height=330)
+    st.caption(f"{len(filtrados)} casos visibles. Los casos sin número de oficio permanecen guardados, pero no aparecen en esta tabla.")
     if not filtrados:
         st.info("No hay invitados que coincidan con los filtros.")
         return
@@ -1239,6 +1306,47 @@ def _vista_proyeccion_estudiantes(
                     hide_index=True,
                     use_container_width=True,
                 )
+
+        if activos:
+            activos_por_id = {item["id"]: item for item in activos}
+            with st.expander("Eliminar fila de la proyección"):
+                st.caption(
+                    "La fila dejará de mostrarse, pero conservará su historial y podrá "
+                    "reactivarse desde Administrar instituciones."
+                )
+                with st.form("form_eliminar_fila_proyeccion"):
+                    eliminar_id = st.selectbox(
+                        "Institución que deseas retirar",
+                        list(activos_por_id),
+                        format_func=lambda valor: activos_por_id[valor]["institucion"],
+                    )
+                    confirmar_eliminacion = st.checkbox(
+                        "Confirmo que deseo eliminar esta fila de la proyección"
+                    )
+                    eliminar_fila = st.form_submit_button(
+                        "Eliminar fila",
+                        disabled=not actor_nombre or not confirmar_eliminacion,
+                    )
+                if eliminar_fila:
+                    fila = activos_por_id[eliminar_id]
+                    try:
+                        with get_connection() as con:
+                            actualizar_institucion_proyeccion(
+                                con,
+                                eliminar_id,
+                                fila["institucion"],
+                                fila["institucion_normalizada"],
+                                int(fila["proyeccion"]),
+                                False,
+                                actor_id,
+                                actor_nombre,
+                            )
+                        st.success("Fila eliminada de la proyección.")
+                        st.rerun()
+                    except (ValueError, PermissionError) as exc:
+                        st.error(str(exc))
+                    except Exception as exc:
+                        st.error(f"No se pudo eliminar la fila: {exc}")
 
 
 def _vista_historial(oficina_id: str, es_master: bool) -> None:

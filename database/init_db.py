@@ -300,6 +300,46 @@ CREATE TABLE IF NOT EXISTS congreso_proyeccion_estudiantes (
 );
 """
 
+_DDL_CONGRESO_CHECKLIST = """
+CREATE TABLE IF NOT EXISTS congreso_checklist (
+    id                  SERIAL PRIMARY KEY,
+    rubro               TEXT NOT NULL,
+    actividad           TEXT NOT NULL,
+    listo               BOOLEAN NOT NULL DEFAULT FALSE,
+    cantidad_meta       INTEGER,
+    fecha_limite        DATE,
+    observaciones       TEXT,
+    responsables_adicionales TEXT,
+    actualizado_por     TEXT NOT NULL DEFAULT 'Sistema',
+    fecha_creacion      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (rubro, actividad)
+);
+"""
+
+_DDL_CONGRESO_CHECKLIST_RESPONSABLES = """
+CREATE TABLE IF NOT EXISTS congreso_checklist_responsables (
+    checklist_id    INTEGER NOT NULL REFERENCES congreso_checklist(id) ON DELETE CASCADE,
+    responsable_id INTEGER NOT NULL REFERENCES congreso_responsables(id) ON DELETE RESTRICT,
+    PRIMARY KEY (checklist_id, responsable_id)
+);
+"""
+
+_DDL_CONGRESO_CHECKLIST_HISTORIAL = """
+CREATE TABLE IF NOT EXISTS congreso_checklist_historial (
+    id                  SERIAL PRIMARY KEY,
+    checklist_id        INTEGER REFERENCES congreso_checklist(id) ON DELETE SET NULL,
+    rubro                TEXT NOT NULL,
+    actividad            TEXT NOT NULL,
+    campo                TEXT,
+    valor_anterior       TEXT,
+    valor_nuevo          TEXT,
+    actor_responsable_id INTEGER REFERENCES congreso_responsables(id) ON DELETE SET NULL,
+    actor_nombre         TEXT NOT NULL,
+    fecha_cambio         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
 # Índices para mejorar rendimiento de consultas frecuentes
 _INDICES = [
     "CREATE INDEX IF NOT EXISTS idx_cap_oficina ON capacitaciones(oficina);",
@@ -324,6 +364,8 @@ _INDICES = [
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_congreso_proyeccion_clave_precarga "
     "ON congreso_proyeccion_estudiantes(clave_precarga) "
     "WHERE clave_precarga IS NOT NULL;",
+    "CREATE INDEX IF NOT EXISTS idx_congreso_checklist_rubro ON congreso_checklist(rubro);",
+    "CREATE INDEX IF NOT EXISTS idx_congreso_checklist_historial_fecha ON congreso_checklist_historial(fecha_cambio DESC);",
 ]
 
 
@@ -388,6 +430,13 @@ def init_db() -> None:
                 cur.execute(
                     "ALTER TABLE congreso_invitados "
                     "ADD COLUMN IF NOT EXISTS tipo_invitacion TEXT"
+                )
+                cur.execute(_DDL_CONGRESO_CHECKLIST)
+                cur.execute(_DDL_CONGRESO_CHECKLIST_RESPONSABLES)
+                cur.execute(_DDL_CONGRESO_CHECKLIST_HISTORIAL)
+                cur.execute(
+                    "ALTER TABLE congreso_checklist "
+                    "ADD COLUMN IF NOT EXISTS responsables_adicionales TEXT"
                 )
                 cur.execute(
                     "INSERT INTO contador_reporte (id, ultimo_numero) VALUES (1, 83) "
