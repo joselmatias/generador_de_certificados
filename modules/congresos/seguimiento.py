@@ -613,6 +613,20 @@ def _fecha_hora_ecuador(valor: Any) -> datetime | None:
     return fecha.astimezone(ZONA_HORARIA_ECUADOR).replace(tzinfo=None)
 
 
+def _ultimo_cambio_invitado(item: dict[str, Any]) -> str:
+    fecha = _fecha_hora_ecuador(item.get("ultimo_cambio_fecha"))
+    if fecha is None:
+        return "Sin cambios"
+    actor = item.get("ultimo_cambio_actor") or "Sistema"
+    campo = _ETIQUETAS_CAMPOS.get(
+        item.get("ultimo_cambio_campo"),
+        item.get("ultimo_cambio_campo") or item.get("ultimo_cambio_accion") or "Cambio",
+    )
+    valor = _texto(item.get("ultimo_cambio_valor"))
+    detalle = f"{campo}: {valor}" if valor else campo
+    return f"{fecha:%d/%m/%Y %H:%M} · {actor} · {detalle}"
+
+
 def _tabla_asistentes(nombres: Any, cargos: Any) -> pd.DataFrame:
     lista_nombres = [linea.strip() for linea in _texto(nombres).splitlines() if linea.strip()]
     lista_cargos = [linea.strip() for linea in _texto(cargos).splitlines()]
@@ -845,7 +859,7 @@ def _vista_seguimiento(
         filtro_21 = f6.multiselect("21 oct.", ESTADOS, key="congreso_col_21")
         filtro_22 = f7.multiselect("22 oct.", ESTADOS, key="congreso_col_22")
         filtro_delegado = f8.text_input("Asistentes o delegados", key="congreso_col_delegado")
-        f9, f10, f11 = st.columns(3)
+        f9, f10, f11, f12 = st.columns(4)
         filtro_tipo = f9.multiselect(
             "Tipo de invitación",
             sorted({_texto(item.get("tipo_invitacion")) for item in filtrados if _texto(item.get("tipo_invitacion"))}),
@@ -856,6 +870,9 @@ def _vista_seguimiento(
             "Firmado por",
             sorted({_firmado_por(item.get("firma")) for item in filtrados if _firmado_por(item.get("firma"))}),
             key="congreso_col_firmado_por",
+        )
+        filtro_historial = f12.text_input(
+            "Historial/último cambio", key="congreso_col_historial"
         )
 
     if filtro_institucion.strip():
@@ -884,6 +901,12 @@ def _vista_seguimiento(
         filtrados = [item for item in filtrados if valor in _texto(item.get("cargos_asistentes_delegados")).casefold()]
     if filtro_firma:
         filtrados = [item for item in filtrados if _firmado_por(item.get("firma")) in filtro_firma]
+    if filtro_historial.strip():
+        valor = filtro_historial.strip().casefold()
+        filtrados = [
+            item for item in filtrados
+            if valor in _ultimo_cambio_invitado(item).casefold()
+        ]
 
     tabla = pd.DataFrame([
         {
@@ -898,10 +921,19 @@ def _vista_seguimiento(
             "Cargos": (item.get("cargos_asistentes_delegados") or "").replace("\n", "; "),
             "Firmado por": _firmado_por(item.get("firma")),
             "N.º Oficio": item.get("numero_oficio") or "",
+            "Historial/último cambio": _ultimo_cambio_invitado(item),
         }
         for item in filtrados
     ])
-    st.dataframe(tabla, hide_index=True, use_container_width=True, height=330)
+    st.dataframe(
+        tabla,
+        hide_index=True,
+        use_container_width=True,
+        height=330,
+        column_config={
+            "Historial/último cambio": st.column_config.TextColumn(width="large")
+        },
+    )
     st.caption(f"{len(filtrados)} casos visibles. Los casos sin número de oficio permanecen guardados, pero no aparecen en esta tabla.")
     if not filtrados:
         st.info("No hay invitados que coincidan con los filtros.")

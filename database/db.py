@@ -959,9 +959,21 @@ def listar_invitados_congreso(
         SELECT i.*, r.nombres AS responsable_nombres,
                r.celular AS responsable_celular,
                r.correo AS responsable_correo,
-               r.activo AS responsable_activo
+               r.activo AS responsable_activo,
+               uh.fecha_cambio AS ultimo_cambio_fecha,
+               uh.actor_nombre AS ultimo_cambio_actor,
+               uh.accion AS ultimo_cambio_accion,
+               uh.campo AS ultimo_cambio_campo,
+               uh.valor_nuevo AS ultimo_cambio_valor
         FROM congreso_invitados i
         LEFT JOIN congreso_responsables r ON r.id = i.responsable_id
+        LEFT JOIN LATERAL (
+            SELECT h.fecha_cambio, h.actor_nombre, h.accion, h.campo, h.valor_nuevo
+            FROM congreso_historial h
+            WHERE h.invitado_id = i.id
+            ORDER BY h.fecha_cambio DESC, h.id DESC
+            LIMIT 1
+        ) uh ON TRUE
         {where}
         ORDER BY i.oficina NULLS FIRST, i.institucion, i.destinatario_oficio
         """,
@@ -1590,6 +1602,7 @@ def listar_checklist_congreso(con: _Conn) -> list[Any]:
         FROM congreso_checklist c
         LEFT JOIN congreso_checklist_responsables cr ON cr.checklist_id = c.id
         LEFT JOIN congreso_responsables r ON r.id = cr.responsable_id
+        WHERE c.activo = TRUE
         GROUP BY c.id
         ORDER BY c.rubro, c.id
         """
@@ -1643,7 +1656,10 @@ def actualizar_item_checklist_congreso(
     actor_responsable_id: int | None,
     actor_nombre: str,
 ) -> int:
-    actual = con.execute("SELECT * FROM congreso_checklist WHERE id = %s", (item_id,)).fetchone()
+    actual = con.execute(
+        "SELECT * FROM congreso_checklist WHERE id = %s AND activo = TRUE",
+        (item_id,),
+    ).fetchone()
     if actual is None:
         raise ValueError("El ítem seleccionado ya no existe.")
     permitidos = {
@@ -1704,6 +1720,40 @@ def actualizar_item_checklist_congreso(
         )
         normalizados["responsables"] = responsables_ids
     return len(normalizados)
+
+
+def eliminar_item_checklist_congreso(
+    con: _Conn,
+    item_id: int,
+    actor_responsable_id: int | None,
+    actor_nombre: str,
+) -> None:
+    actual = con.execute(
+        "SELECT * FROM congreso_checklist WHERE id = %s AND activo = TRUE FOR UPDATE",
+        (item_id,),
+    ).fetchone()
+    if actual is None:
+        raise ValueError("La actividad seleccionada ya no existe.")
+    _registrar_historial_checklist(
+        con,
+        item_id,
+        actual["rubro"],
+        actual["actividad"],
+        "Eliminación",
+        actual["actividad"],
+        None,
+        actor_responsable_id,
+        actor_nombre,
+    )
+    con.execute(
+        """
+        UPDATE congreso_checklist
+        SET activo = FALSE, actualizado_por = %s,
+            fecha_actualizacion = CURRENT_TIMESTAMP
+        WHERE id = %s
+        """,
+        (actor_nombre, item_id),
+    )
 
 
 def _registrar_historial_checklist(

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import importlib
+from datetime import datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import streamlit as st
@@ -12,6 +14,7 @@ from database.db import (
     actualizar_item_checklist_congreso,
     asegurar_checklist_congreso,
     crear_item_checklist_congreso,
+    eliminar_item_checklist_congreso,
     get_connection,
     listar_checklist_congreso,
     listar_historial_checklist_congreso,
@@ -33,10 +36,22 @@ ETIQUETAS_CAMPOS = {
 
 RESPONSABLE_ADICIONAL_GUAYAQUIL = "José Matías"
 RESPONSABLES_BASE_GUAYAQUIL = {"Ing. Milka Nazareno", "Ab. Carlos García"}
+ZONA_HORARIA_ECUADOR = ZoneInfo("America/Guayaquil")
 
 
 def _texto(valor: Any) -> str:
     return "" if valor is None else str(valor).strip()
+
+
+def _fecha_hora_ecuador(valor: Any) -> datetime | None:
+    if valor is None or valor == "":
+        return None
+    fecha = valor.to_pydatetime() if isinstance(valor, pd.Timestamp) else valor
+    if not isinstance(fecha, datetime):
+        fecha = pd.to_datetime(fecha).to_pydatetime()
+    if fecha.tzinfo is None:
+        fecha = fecha.replace(tzinfo=timezone.utc)
+    return fecha.astimezone(ZONA_HORARIA_ECUADOR).replace(tzinfo=None)
 
 
 def _consultar_datos() -> tuple[
@@ -99,19 +114,14 @@ def _vista_checklist(
         if cambio.get("checklist_id") is not None:
             ultimo_cambio.setdefault(cambio["checklist_id"], cambio)
 
-    total = len(items)
-    listos = sum(bool(item["listo"]) for item in items)
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Actividades", total)
-    c2.metric("Listas", listos)
-    c3.metric("Avance", f"{round(listos / total * 100) if total else 0}%")
+    st.metric("Actividades", len(items))
 
     filas = []
     for item in items:
         cambio = ultimo_cambio.get(item["id"], {})
         historial_breve = "Sin cambios"
         if cambio:
-            fecha = cambio["fecha_cambio"]
+            fecha = _fecha_hora_ecuador(cambio["fecha_cambio"])
             historial_breve = f"{fecha:%d/%m/%Y %H:%M} · {cambio['actor_nombre']}"
         filas.append(
             {
@@ -244,6 +254,36 @@ def _vista_checklist(
                 except Exception as exc:
                     st.error(f"No se pudo agregar la actividad: {exc}")
 
+    with st.expander("Eliminar actividad del checklist"):
+        st.caption(
+            "La actividad dejará de mostrarse. Su historial permanecerá disponible."
+        )
+        with st.form("form_eliminar_item_checklist"):
+            eliminar_id = st.selectbox(
+                "Actividad que deseas eliminar",
+                list(por_id),
+                format_func=lambda valor: (
+                    f"{por_id[valor]['rubro']} — {por_id[valor]['actividad']}"
+                ),
+            )
+            confirmar = st.checkbox(
+                "Confirmo que deseo eliminar esta actividad del checklist"
+            )
+            eliminar = st.form_submit_button(
+                "Eliminar actividad",
+                disabled=not actor_nombre or not confirmar,
+            )
+        if eliminar:
+            try:
+                with get_connection() as con:
+                    eliminar_item_checklist_congreso(
+                        con, eliminar_id, actor_id, actor_nombre
+                    )
+                st.success("Actividad eliminada del checklist.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"No se pudo eliminar la actividad: {exc}")
+
 
 def _vista_historial(historial: list[dict[str, Any]]) -> None:
     if not historial:
@@ -252,7 +292,7 @@ def _vista_historial(historial: list[dict[str, Any]]) -> None:
     tabla = pd.DataFrame(
         [
             {
-                "Fecha": row["fecha_cambio"],
+                "Fecha (Ecuador)": _fecha_hora_ecuador(row["fecha_cambio"]),
                 "Rubro": row["rubro"],
                 "Checklist": row["actividad"],
                 "Campo": ETIQUETAS_CAMPOS.get(row.get("campo"), row.get("campo") or "—"),
@@ -263,6 +303,7 @@ def _vista_historial(historial: list[dict[str, Any]]) -> None:
             for row in historial
         ]
     )
+    st.caption("Fechas y horas mostradas en America/Guayaquil (UTC−5).")
     st.dataframe(tabla, hide_index=True, use_container_width=True, height=520)
 
 

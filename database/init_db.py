@@ -306,6 +306,7 @@ CREATE TABLE IF NOT EXISTS congreso_checklist (
     rubro               TEXT NOT NULL,
     actividad           TEXT NOT NULL,
     listo               BOOLEAN NOT NULL DEFAULT FALSE,
+    activo              BOOLEAN NOT NULL DEFAULT TRUE,
     cantidad_meta       INTEGER,
     fecha_limite        DATE,
     observaciones       TEXT,
@@ -437,6 +438,10 @@ def init_db() -> None:
                 cur.execute(
                     "ALTER TABLE congreso_checklist "
                     "ADD COLUMN IF NOT EXISTS responsables_adicionales TEXT"
+                )
+                cur.execute(
+                    "ALTER TABLE congreso_checklist "
+                    "ADD COLUMN IF NOT EXISTS activo BOOLEAN NOT NULL DEFAULT TRUE"
                 )
                 cur.execute(
                     "INSERT INTO contador_reporte (id, ultimo_numero) VALUES (1, 83) "
