@@ -351,7 +351,10 @@ CREATE TABLE IF NOT EXISTS proyectos_vinculacion (
     convenio_institucion TEXT NOT NULL,
     convenio_tipo       TEXT,
     fecha_inicio        DATE NOT NULL,
-    fecha_fin           DATE NOT NULL,
+    fecha_fin           DATE,
+    duracion_anios      INTEGER NOT NULL DEFAULT 0 CHECK (duracion_anios >= 0),
+    duracion_meses      INTEGER NOT NULL DEFAULT 0 CHECK (duracion_meses BETWEEN 0 AND 11),
+    estado              TEXT NOT NULL DEFAULT 'En proceso',
     resumen             TEXT NOT NULL,
     provincia           TEXT NOT NULL,
     canton              TEXT NOT NULL,
@@ -359,7 +362,16 @@ CREATE TABLE IF NOT EXISTS proyectos_vinculacion (
     registrado_por      TEXT,
     fecha_registro      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_actualizacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CHECK (fecha_fin >= fecha_inicio)
+    CHECK (fecha_fin IS NULL OR fecha_fin >= fecha_inicio)
+);
+"""
+
+_DDL_PROYECTOS_VINCULACION_RESPONSABLES = """
+CREATE TABLE IF NOT EXISTS proyectos_vinculacion_responsables (
+    id          SERIAL PRIMARY KEY,
+    proyecto_id INTEGER NOT NULL REFERENCES proyectos_vinculacion(id) ON DELETE CASCADE,
+    nombre      TEXT NOT NULL,
+    UNIQUE (proyecto_id, nombre)
 );
 """
 
@@ -411,6 +423,21 @@ CREATE TABLE IF NOT EXISTS actividades_vinculacion (
 );
 """
 
+_DDL_PROYECTOS_VINCULACION_POR_APERTURAR = """
+CREATE TABLE IF NOT EXISTS proyectos_vinculacion_por_aperturar (
+    id                  SERIAL PRIMARY KEY,
+    oficina             TEXT NOT NULL,
+    universidad         TEXT NOT NULL,
+    facultad            TEXT NOT NULL,
+    fecha_tentativa     DATE NOT NULL,
+    observaciones       TEXT,
+    activo              BOOLEAN NOT NULL DEFAULT TRUE,
+    registrado_por      TEXT,
+    fecha_registro      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
 # Índices para mejorar rendimiento de consultas frecuentes
 _INDICES = [
     "CREATE INDEX IF NOT EXISTS idx_cap_oficina ON capacitaciones(oficina);",
@@ -441,6 +468,12 @@ _INDICES = [
     "CREATE INDEX IF NOT EXISTS idx_proyecto_vinculacion_fechas ON proyectos_vinculacion(fecha_inicio, fecha_fin);",
     "CREATE INDEX IF NOT EXISTS idx_actividad_vinculacion_proyecto ON actividades_vinculacion(proyecto_id, activo);",
     "CREATE INDEX IF NOT EXISTS idx_actividad_vinculacion_fecha ON actividades_vinculacion(fecha);",
+    "CREATE INDEX IF NOT EXISTS idx_vinculacion_por_aperturar_oficina ON proyectos_vinculacion_por_aperturar(oficina, activo);",
+    "CREATE INDEX IF NOT EXISTS idx_vinculacion_por_aperturar_fecha ON proyectos_vinculacion_por_aperturar(fecha_tentativa);",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_vinc_responsable_normalizado ON proyectos_vinculacion_responsables(proyecto_id, LOWER(BTRIM(nombre)));",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_vinc_facultad_normalizada ON proyectos_vinculacion_facultades(proyecto_id, LOWER(BTRIM(nombre)));",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_vinc_sector_normalizado ON proyectos_vinculacion_sectores(proyecto_id, LOWER(BTRIM(nombre)));",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_vinc_asociacion_normalizada ON proyectos_vinculacion_asociaciones(proyecto_id, LOWER(BTRIM(nombre)));",
 ]
 
 
@@ -510,10 +543,98 @@ def init_db() -> None:
                 cur.execute(_DDL_CONGRESO_CHECKLIST_RESPONSABLES)
                 cur.execute(_DDL_CONGRESO_CHECKLIST_HISTORIAL)
                 cur.execute(_DDL_PROYECTOS_VINCULACION)
+                cur.execute(
+                    "ALTER TABLE proyectos_vinculacion ALTER COLUMN fecha_fin DROP NOT NULL"
+                )
+                cur.execute(
+                    "ALTER TABLE proyectos_vinculacion ADD COLUMN IF NOT EXISTS duracion_anios INTEGER NOT NULL DEFAULT 0"
+                )
+                cur.execute(
+                    "ALTER TABLE proyectos_vinculacion ADD COLUMN IF NOT EXISTS duracion_meses INTEGER NOT NULL DEFAULT 0"
+                )
+                cur.execute(
+                    """
+                    UPDATE proyectos_vinculacion
+                    SET duracion_anios = EXTRACT(YEAR FROM age(fecha_fin, fecha_inicio))::integer,
+                        duracion_meses = EXTRACT(MONTH FROM age(fecha_fin, fecha_inicio))::integer
+                    WHERE fecha_fin IS NOT NULL
+                      AND duracion_anios = 0 AND duracion_meses = 0
+                    """
+                )
+                cur.execute(
+                    """
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = current_schema()
+                              AND table_name = 'proyectos_vinculacion'
+                              AND column_name = 'estado'
+                        ) THEN
+                            ALTER TABLE proyectos_vinculacion
+                            ADD COLUMN estado TEXT NOT NULL DEFAULT 'En proceso';
+                            UPDATE proyectos_vinculacion
+                            SET estado = CASE
+                                WHEN fecha_fin IS NOT NULL AND fecha_fin <= CURRENT_DATE
+                                THEN 'Finalizado' ELSE 'En proceso' END;
+                            UPDATE proyectos_vinculacion
+                            SET fecha_fin = NULL WHERE estado = 'En proceso';
+                        END IF;
+                    END $$;
+                    """
+                )
+                cur.execute(_DDL_PROYECTOS_VINCULACION_RESPONSABLES)
                 cur.execute(_DDL_PROYECTOS_VINCULACION_FACULTADES)
                 cur.execute(_DDL_PROYECTOS_VINCULACION_SECTORES)
                 cur.execute(_DDL_PROYECTOS_VINCULACION_ASOCIACIONES)
                 cur.execute(_DDL_ACTIVIDADES_VINCULACION)
+                cur.execute(_DDL_PROYECTOS_VINCULACION_POR_APERTURAR)
+                cur.execute(
+                    """
+                    INSERT INTO proyectos_vinculacion_responsables (proyecto_id, nombre)
+                    SELECT id, responsable FROM proyectos_vinculacion
+                    WHERE NULLIF(BTRIM(responsable), '') IS NOT NULL
+                    ON CONFLICT DO NOTHING
+                    """
+                )
+                for tabla, columna_actividad in (
+                    ("proyectos_vinculacion_facultades", "facultad_id"),
+                    ("proyectos_vinculacion_asociaciones", "asociacion_id"),
+                ):
+                    cur.execute(
+                        f"""
+                        WITH repetidos AS (
+                            SELECT id,
+                                   MIN(id) OVER (
+                                       PARTITION BY proyecto_id, LOWER(BTRIM(nombre))
+                                   ) AS conservar
+                            FROM {tabla}
+                        )
+                        UPDATE actividades_vinculacion a
+                        SET {columna_actividad} = r.conservar
+                        FROM repetidos r
+                        WHERE a.{columna_actividad} = r.id AND r.id <> r.conservar
+                        """
+                    )
+                for tabla in (
+                    "proyectos_vinculacion_responsables",
+                    "proyectos_vinculacion_facultades",
+                    "proyectos_vinculacion_sectores",
+                    "proyectos_vinculacion_asociaciones",
+                ):
+                    cur.execute(
+                        f"""
+                        DELETE FROM {tabla} t
+                        USING (
+                            SELECT id, ROW_NUMBER() OVER (
+                                PARTITION BY proyecto_id, LOWER(BTRIM(nombre))
+                                ORDER BY id
+                            ) AS posicion
+                            FROM {tabla}
+                        ) repetido
+                        WHERE t.id = repetido.id AND repetido.posicion > 1
+                        """
+                    )
                 cur.execute(
                     "ALTER TABLE congreso_checklist "
                     "ADD COLUMN IF NOT EXISTS responsables_adicionales TEXT"

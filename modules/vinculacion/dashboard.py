@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -12,14 +12,18 @@ import streamlit as st
 from database.db import (
     actualizar_actividad_vinculacion,
     actualizar_proyecto_vinculacion,
+    actualizar_proyecto_vinculacion_por_aperturar,
     crear_actividad_vinculacion,
     crear_proyecto_vinculacion,
+    crear_proyecto_vinculacion_por_aperturar,
     desactivar_actividad_vinculacion,
     desactivar_proyecto_vinculacion,
+    desactivar_proyecto_vinculacion_por_aperturar,
     get_connection,
     listar_actividades_vinculacion,
     listar_opciones_proyecto_vinculacion,
     listar_proyectos_vinculacion,
+    listar_proyectos_vinculacion_por_aperturar,
 )
 from utils.convenios import CONVENIOS_DATA, CONTRAPARTES
 from utils.ubicaciones_ec import PROVINCIAS_CANTONES
@@ -39,13 +43,8 @@ MESES = {
 }
 
 
-def estado_proyecto(fecha_inicio: date, fecha_fin: date, hoy: date | None = None) -> str:
-    hoy = hoy or date.today()
-    if hoy < fecha_inicio:
-        return "Planificado"
-    if hoy <= fecha_fin:
-        return "En ejecución"
-    return "Finalizado"
+def estado_proyecto(estado: str | None) -> str:
+    return estado if estado in {"En proceso", "Finalizado"} else "En proceso"
 
 
 def _filas_editor(valores: list[str] | None = None) -> pd.DataFrame:
@@ -80,12 +79,18 @@ def _nombre_oficina(oficina: str) -> str:
     return OFICINAS.get(oficina, oficina.title())
 
 
-def _cargar_datos(es_master: bool, oficina_id: str) -> tuple[list[dict], list[dict]]:
+def _cargar_datos(
+    es_master: bool, oficina_id: str
+) -> tuple[list[dict], list[dict], list[dict]]:
     oficina_consulta = None if es_master else oficina_id
     with get_connection() as con:
         proyectos = [dict(row) for row in listar_proyectos_vinculacion(con, oficina_consulta)]
         actividades = [dict(row) for row in listar_actividades_vinculacion(con, oficina_consulta)]
-    return proyectos, actividades
+        por_aperturar = [
+            dict(row)
+            for row in listar_proyectos_vinculacion_por_aperturar(con, oficina_consulta)
+        ]
+    return proyectos, actividades, por_aperturar
 
 
 def _cabecera() -> None:
@@ -111,10 +116,12 @@ def _tabla_proyectos(proyectos: list[dict]) -> None:
         {
             "Proyecto": p["nombre"],
             "Institución": p["convenio_institucion"],
+            "Responsables": ", ".join(p.get("responsables") or [p["responsable"]]),
             "Oficina": _nombre_oficina(p["oficina"]),
             "Inicio": p["fecha_inicio"],
             "Fin": p["fecha_fin"],
-            "Estado": estado_proyecto(p["fecha_inicio"], p["fecha_fin"]),
+            "Duración": f"{p.get('duracion_anios', 0)} años, {p.get('duracion_meses', 0)} meses",
+            "Estado": estado_proyecto(p.get("estado")),
             "Cantón": p["canton"],
             "Actividades": int(p["total_actividades"]),
             "Estudiantes": int(p["total_estudiantes"]),
@@ -145,7 +152,7 @@ def _filtros_proyectos(proyectos: list[dict], es_master: bool) -> list[dict]:
     )
     anios = sorted({p["fecha_inicio"].year for p in proyectos}, reverse=True)
     anio = c2.selectbox("Año", [None, *anios], format_func=lambda v: "Todos" if v is None else str(v))
-    estado = c3.selectbox("Estado", [None, "Planificado", "En ejecución", "Finalizado"], format_func=lambda v: v or "Todos")
+    estado = c3.selectbox("Estado", [None, "En proceso", "Finalizado"], format_func=lambda v: v or "Todos")
     instituciones = sorted({p["convenio_institucion"] for p in proyectos})
     institucion = c4.selectbox("Institución", [None, *instituciones], format_func=lambda v: v or "Todas")
     cantones = sorted({p["canton"] for p in proyectos})
@@ -154,7 +161,7 @@ def _filtros_proyectos(proyectos: list[dict], es_master: bool) -> list[dict]:
         p for p in proyectos
         if (oficina is None or p["oficina"] == oficina)
         and (anio is None or p["fecha_inicio"].year == anio)
-        and (estado is None or estado_proyecto(p["fecha_inicio"], p["fecha_fin"]) == estado)
+        and (estado is None or estado_proyecto(p.get("estado")) == estado)
         and (institucion is None or p["convenio_institucion"] == institucion)
         and (canton is None or p["canton"] == canton)
     ]
@@ -175,15 +182,21 @@ def _selector_convenio(prefijo: str, actual: dict | None = None) -> tuple[str, d
     return institucion, _convenio_por_numero(numero)
 
 
-def _editor_catalogos(prefijo: str, actual: dict | None = None) -> tuple[Any, Any, Any]:
+def _editor_catalogos(prefijo: str, actual: dict | None = None) -> tuple[Any, Any, Any, Any]:
     st.markdown('<h4 class="vinculacion-seccion">Intervinientes</h4>', unsafe_allow_html=True)
-    st.caption("Agrega una fila por cada facultad, sector económico o asociación.")
-    c1, c2, c3 = st.columns(3)
+    st.caption("Agrega una fila por cada responsable, facultad, sector económico o asociación.")
+    c0, c1 = st.columns(2)
+    responsables = c0.data_editor(
+        _filas_editor(actual.get("responsables") if actual else None), num_rows="dynamic",
+        hide_index=True, use_container_width=True, key=f"{prefijo}_responsables",
+        column_config={"Nombre": st.column_config.TextColumn("Responsables")},
+    )
     facultades = c1.data_editor(
         _filas_editor(actual.get("facultades") if actual else None), num_rows="dynamic",
         hide_index=True, use_container_width=True, key=f"{prefijo}_facultades",
         column_config={"Nombre": st.column_config.TextColumn("Facultades")},
     )
+    c2, c3 = st.columns(2)
     sectores = c2.data_editor(
         _filas_editor(actual.get("sectores") if actual else None), num_rows="dynamic",
         hide_index=True, use_container_width=True, key=f"{prefijo}_sectores",
@@ -194,28 +207,48 @@ def _editor_catalogos(prefijo: str, actual: dict | None = None) -> tuple[Any, An
         hide_index=True, use_container_width=True, key=f"{prefijo}_asociaciones",
         column_config={"Nombre": st.column_config.TextColumn("Asociaciones")},
     )
-    return facultades, sectores, asociaciones
+    return responsables, facultades, sectores, asociaciones
 
 
-def _campos_proyecto(prefijo: str, oficina_id: str, actual: dict | None = None) -> tuple[dict, list, list, list]:
+def _campos_proyecto(
+    prefijo: str, oficina_id: str, actual: dict | None = None
+) -> tuple[dict, list, list, list, list]:
     st.markdown('<h4 class="vinculacion-seccion">Información general</h4>', unsafe_allow_html=True)
+    nombre = st.text_input("Nombre del proyecto", value=actual["nombre"] if actual else "", key=f"{prefijo}_nombre")
     c1, c2 = st.columns(2)
-    nombre = c1.text_input("Nombre del proyecto", value=actual["nombre"] if actual else "", key=f"{prefijo}_nombre")
-    responsable = c2.text_input("Responsable del proyecto", value=actual["responsable"] if actual else "", key=f"{prefijo}_responsable")
-    c3, c4 = st.columns(2)
-    with c3:
+    with c1:
         institucion, convenio = _selector_convenio(prefijo, actual)
     inicio_defecto = actual["fecha_inicio"] if actual else date.today()
-    fin_defecto = actual["fecha_fin"] if actual else date.today()
-    with c4:
-        f1, f2 = st.columns(2)
-        fecha_inicio = f1.date_input("Fecha de inicio", value=inicio_defecto, format="DD/MM/YYYY", key=f"{prefijo}_inicio")
-        fecha_fin = f2.date_input("Fecha de fin", value=fin_defecto, format="DD/MM/YYYY", key=f"{prefijo}_fin")
+    with c2:
+        fecha_inicio = st.date_input(
+            "Fecha de inicio", value=inicio_defecto, format="DD/MM/YYYY", key=f"{prefijo}_inicio"
+        )
+        estado_actual = estado_proyecto(actual.get("estado")) if actual else "En proceso"
+        estado = st.radio(
+            "Estado", ["En proceso", "Finalizado"], horizontal=True,
+            index=0 if estado_actual == "En proceso" else 1, key=f"{prefijo}_estado",
+        )
+    d1, d2 = st.columns(2)
+    duracion_anios = d1.number_input(
+        "Duración — años", min_value=0, step=1,
+        value=int(actual.get("duracion_anios", 0)) if actual else 0, key=f"{prefijo}_duracion_anios",
+    )
+    duracion_meses = d2.number_input(
+        "Duración — meses", min_value=0, max_value=11, step=1,
+        value=int(actual.get("duracion_meses", 0)) if actual else 1, key=f"{prefijo}_duracion_meses",
+    )
+    fecha_fin = None
+    if estado == "Finalizado":
+        fin_defecto = actual.get("fecha_fin") if actual else None
+        fecha_fin = st.date_input(
+            "Fecha de finalización", value=fin_defecto or fecha_inicio,
+            min_value=fecha_inicio, format="DD/MM/YYYY", key=f"{prefijo}_fin",
+        )
     resumen = st.text_area(
         "Resumen del proyecto", value=actual["resumen"] if actual else "", height=150,
         help="Campo de texto libre, sin límite funcional de caracteres.", key=f"{prefijo}_resumen",
     )
-    facultades, sectores, asociaciones = _editor_catalogos(prefijo, actual)
+    responsables, facultades, sectores, asociaciones = _editor_catalogos(prefijo, actual)
     st.markdown('<h4 class="vinculacion-seccion">Territorio principal</h4>', unsafe_allow_html=True)
     provincias = sorted(PROVINCIAS_CANTONES)
     provincia_actual = actual["provincia"] if actual and actual["provincia"] in provincias else provincias[0]
@@ -228,22 +261,29 @@ def _campos_proyecto(prefijo: str, oficina_id: str, actual: dict | None = None) 
         key=f"{prefijo}_canton_{provincias.index(provincia)}",
     )
     datos = {
-        "oficina": oficina_id, "nombre": nombre, "responsable": responsable,
+        "oficina": oficina_id, "nombre": nombre,
         "convenio_numero": convenio["numero"], "convenio_institucion": institucion,
         "convenio_tipo": convenio["tipo"], "fecha_inicio": fecha_inicio,
-        "fecha_fin": fecha_fin, "resumen": resumen, "provincia": provincia,
+        "fecha_fin": fecha_fin, "duracion_anios": int(duracion_anios),
+        "duracion_meses": int(duracion_meses), "estado": estado,
+        "resumen": resumen, "provincia": provincia,
         "canton": canton, "registrado_por": f"Perfil {_nombre_oficina(oficina_id)}",
     }
-    return datos, _leer_editor(facultades), _leer_editor(sectores), _leer_editor(asociaciones)
+    return (
+        datos, _leer_editor(responsables), _leer_editor(facultades),
+        _leer_editor(sectores), _leer_editor(asociaciones),
+    )
 
 
 def _crear_proyecto(oficina_id: str) -> None:
     with st.expander("Crear nuevo proyecto"):
-        datos, facultades, sectores, asociaciones = _campos_proyecto("vinc_nuevo", oficina_id)
+        datos, responsables, facultades, sectores, asociaciones = _campos_proyecto("vinc_nuevo", oficina_id)
         if st.button("Guardar proyecto", type="primary", key="vinc_guardar_nuevo"):
             try:
                 with get_connection() as con:
-                    crear_proyecto_vinculacion(con, datos, facultades, sectores, asociaciones)
+                    crear_proyecto_vinculacion(
+                        con, datos, responsables, facultades, sectores, asociaciones
+                    )
                 st.success("Proyecto guardado.")
                 st.rerun()
             except (ValueError, PermissionError) as exc:
@@ -262,12 +302,17 @@ def _editar_proyecto(proyectos: list[dict], oficina_id: str) -> None:
             "Proyecto", list(por_id), format_func=lambda i: por_id[i]["nombre"], key="vinc_proyecto_editar",
         )
         actual = por_id[proyecto_id]
-        datos, facultades, sectores, asociaciones = _campos_proyecto(f"vinc_editar_{proyecto_id}", oficina_id, actual)
+        datos, responsables, facultades, sectores, asociaciones = _campos_proyecto(
+            f"vinc_editar_{proyecto_id}", oficina_id, actual
+        )
         b1, b2 = st.columns([2, 1])
         if b1.button("Guardar cambios", type="primary", key=f"vinc_actualizar_{proyecto_id}"):
             try:
                 with get_connection() as con:
-                    actualizar_proyecto_vinculacion(con, proyecto_id, oficina_id, datos, facultades, sectores, asociaciones)
+                    actualizar_proyecto_vinculacion(
+                        con, proyecto_id, oficina_id, datos, responsables,
+                        facultades, sectores, asociaciones,
+                    )
                 st.success("Proyecto actualizado.")
                 st.rerun()
             except (ValueError, PermissionError) as exc:
@@ -289,7 +334,7 @@ def _vista_proyectos(proyectos: list[dict], oficina_id: str, es_master: bool) ->
     filtrados = _filtros_proyectos(proyectos, es_master)
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Proyectos", len(filtrados))
-    m2.metric("En ejecución", sum(estado_proyecto(p["fecha_inicio"], p["fecha_fin"]) == "En ejecución" for p in filtrados))
+    m2.metric("En proceso", sum(estado_proyecto(p.get("estado")) == "En proceso" for p in filtrados))
     m3.metric("Estudiantes", sum(int(p["total_estudiantes"]) for p in filtrados))
     m4.metric("Asistentes de asociaciones", sum(int(p["total_asistentes"]) for p in filtrados))
     _tabla_proyectos(filtrados)
@@ -310,11 +355,14 @@ def _campos_actividad(prefijo: str, proyecto: dict, actual: dict | None = None) 
     facultades, asociaciones = _opciones_actividad(proyecto["id"])
     nombre = st.text_input("Actividad", value=actual["nombre"] if actual else "", key=f"{prefijo}_nombre")
     c1, c2 = st.columns(2)
-    fecha = c1.date_input(
-        "Fecha", value=actual["fecha"] if actual else proyecto["fecha_inicio"],
-        min_value=proyecto["fecha_inicio"], max_value=proyecto["fecha_fin"],
-        format="DD/MM/YYYY", key=f"{prefijo}_fecha",
-    )
+    fecha_kwargs: dict[str, Any] = {
+        "value": actual["fecha"] if actual else proyecto["fecha_inicio"],
+        "min_value": proyecto["fecha_inicio"], "format": "DD/MM/YYYY",
+        "key": f"{prefijo}_fecha",
+    }
+    if proyecto.get("fecha_fin") is not None:
+        fecha_kwargs["max_value"] = proyecto["fecha_fin"]
+    fecha = c1.date_input("Fecha", **fecha_kwargs)
     duracion = c2.number_input(
         "Duración (horas)", min_value=0.25, step=0.25,
         value=float(actual["duracion_horas"]) if actual else 1.0, key=f"{prefijo}_duracion",
@@ -462,7 +510,7 @@ def _vista_consolidado(actividades: list[dict], es_master: bool) -> None:
     territorios = sorted({f"{a['provincia']} / {a['canton']}" for a in actividades})
     territorio = c7.selectbox("Territorio", [None, *territorios], format_func=lambda v: v or "Todos")
     estado = c8.selectbox(
-        "Estado del proyecto", [None, "Planificado", "En ejecución", "Finalizado"],
+        "Estado del proyecto", [None, "En proceso", "Finalizado"],
         format_func=lambda v: v or "Todos", key="vinc_consol_estado",
     )
     filtradas = [
@@ -476,7 +524,7 @@ def _vista_consolidado(actividades: list[dict], es_master: bool) -> None:
         and (territorio is None or f"{a['provincia']} / {a['canton']}" == territorio)
         and (
             estado is None
-            or estado_proyecto(a["proyecto_fecha_inicio"], a["proyecto_fecha_fin"]) == estado
+            or estado_proyecto(a.get("proyecto_estado")) == estado
         )
     ]
     m1, m2, m3, m4 = st.columns(4)
@@ -502,17 +550,169 @@ def _vista_consolidado(actividades: list[dict], es_master: bool) -> None:
         st.info("No hay actividades que coincidan con los filtros.")
 
 
+def _campos_por_aperturar(
+    prefijo: str, oficina_id: str, actual: dict | None = None
+) -> dict[str, Any]:
+    universidad_actual = actual["universidad"] if actual else CONTRAPARTES[0]
+    indice = CONTRAPARTES.index(universidad_actual) if universidad_actual in CONTRAPARTES else 0
+    c1, c2 = st.columns(2)
+    universidad = c1.selectbox(
+        "Universidad o institución", CONTRAPARTES, index=indice,
+        key=f"{prefijo}_universidad",
+    )
+    facultad = c2.text_input(
+        "Facultad", value=actual["facultad"] if actual else "", key=f"{prefijo}_facultad",
+    )
+    fecha_tentativa = st.date_input(
+        "Fecha tentativa de inicio",
+        value=actual["fecha_tentativa"] if actual else date.today(),
+        format="DD/MM/YYYY", key=f"{prefijo}_fecha",
+    )
+    observaciones = st.text_area(
+        "Observaciones", value=(actual.get("observaciones") or "") if actual else "",
+        height=130, help="Campo de texto libre.", key=f"{prefijo}_observaciones",
+    )
+    return {
+        "oficina": oficina_id, "universidad": universidad, "facultad": facultad,
+        "fecha_tentativa": fecha_tentativa, "observaciones": observaciones,
+        "registrado_por": f"Perfil {_nombre_oficina(oficina_id)}",
+    }
+
+
+def _vista_por_aperturar(
+    registros: list[dict], oficina_id: str, es_master: bool
+) -> None:
+    st.caption(
+        "Registra iniciativas preliminares antes de completar la ficha formal del proyecto."
+    )
+    f1, f2 = st.columns(2)
+    oficinas = sorted({r["oficina"] for r in registros})
+    oficina = f1.selectbox(
+        "Oficina", [None, *oficinas],
+        format_func=lambda v: "Todas" if v is None else _nombre_oficina(v),
+        disabled=not es_master, key="vinc_apertura_filtro_oficina",
+    )
+    universidades = sorted({r["universidad"] for r in registros})
+    universidad = f2.selectbox(
+        "Universidad o institución", [None, *universidades],
+        format_func=lambda v: v or "Todas", key="vinc_apertura_filtro_universidad",
+    )
+    filtrados = [
+        r for r in registros
+        if (oficina is None or r["oficina"] == oficina)
+        and (universidad is None or r["universidad"] == universidad)
+    ]
+    hoy = date.today()
+    proximos_90 = sum(
+        hoy <= r["fecha_tentativa"] <= hoy + timedelta(days=90) for r in filtrados
+    )
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Por aperturar", len(filtrados))
+    m2.metric("Próximos 90 días", proximos_90)
+    m3.metric("Instituciones", len({r["universidad"] for r in filtrados}))
+    m4.metric("Facultades", len({r["facultad"].casefold() for r in filtrados}))
+    if filtrados:
+        st.dataframe(
+            pd.DataFrame([
+                {
+                    "Oficina": _nombre_oficina(r["oficina"]),
+                    "Universidad o institución": r["universidad"],
+                    "Facultad": r["facultad"],
+                    "Fecha tentativa": r["fecha_tentativa"],
+                    "Observaciones": r.get("observaciones") or "",
+                }
+                for r in filtrados
+            ]),
+            hide_index=True, use_container_width=True,
+            column_config={
+                "Fecha tentativa": st.column_config.DateColumn(format="DD/MM/YYYY"),
+                "Observaciones": st.column_config.TextColumn(width="large"),
+            },
+        )
+        resumen = (
+            pd.DataFrame(filtrados)
+            .groupby("universidad", as_index=False)
+            .size()
+            .rename(columns={"universidad": "Universidad o institución", "size": "Proyectos"})
+            .sort_values("Proyectos", ascending=False)
+        )
+        st.markdown("#### Resumen por institución")
+        st.dataframe(resumen, hide_index=True, use_container_width=True)
+    else:
+        st.info("No hay proyectos por aperturar que coincidan con los filtros.")
+
+    with st.expander("Agregar proyecto por aperturar"):
+        datos = _campos_por_aperturar("vinc_apertura_nuevo", oficina_id)
+        if st.button("Guardar proyecto por aperturar", type="primary", key="vinc_apertura_guardar"):
+            try:
+                with get_connection() as con:
+                    crear_proyecto_vinculacion_por_aperturar(con, datos)
+                st.success("Proyecto por aperturar guardado.")
+                st.rerun()
+            except (ValueError, PermissionError) as exc:
+                st.error(str(exc))
+            except Exception as exc:
+                st.error(f"No se pudo guardar el registro: {exc}")
+
+    propios = [r for r in registros if r["oficina"] == oficina_id]
+    if not propios:
+        return
+    por_id = {r["id"]: r for r in propios}
+    with st.expander("Editar o desactivar un proyecto por aperturar"):
+        registro_id = st.selectbox(
+            "Registro", list(por_id),
+            format_func=lambda i: (
+                f"{por_id[i]['universidad']} — {por_id[i]['facultad']} — "
+                f"{por_id[i]['fecha_tentativa']:%d/%m/%Y}"
+            ),
+            key="vinc_apertura_editar",
+        )
+        actual = por_id[registro_id]
+        datos = _campos_por_aperturar(f"vinc_apertura_editar_{registro_id}", oficina_id, actual)
+        b1, b2 = st.columns([2, 1])
+        if b1.button("Guardar cambios", type="primary", key=f"vinc_apertura_actualizar_{registro_id}"):
+            try:
+                with get_connection() as con:
+                    actualizar_proyecto_vinculacion_por_aperturar(
+                        con, registro_id, oficina_id, datos
+                    )
+                st.success("Proyecto por aperturar actualizado.")
+                st.rerun()
+            except (ValueError, PermissionError) as exc:
+                st.error(str(exc))
+            except Exception as exc:
+                st.error(f"No se pudo actualizar el registro: {exc}")
+        confirmar = b2.checkbox(
+            "Confirmo la desactivación", key=f"vinc_apertura_confirmar_{registro_id}"
+        )
+        if b2.button(
+            "Desactivar", disabled=not confirmar, key=f"vinc_apertura_desactivar_{registro_id}"
+        ):
+            try:
+                with get_connection() as con:
+                    desactivar_proyecto_vinculacion_por_aperturar(
+                        con, registro_id, oficina_id
+                    )
+                st.success("Registro desactivado; sus datos se conservaron.")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+
+
 def mostrar_proyectos_vinculacion() -> None:
     _cabecera()
     oficina_id = st.session_state.get("oficina_id", "")
     es_master = st.session_state.get("oficina_rol") == "master"
     try:
-        proyectos, actividades = _cargar_datos(es_master, oficina_id)
+        proyectos, actividades, por_aperturar = _cargar_datos(es_master, oficina_id)
     except Exception as exc:
         st.error(f"No se pudo cargar el módulo de vinculación: {exc}")
         return
-    tab_proyectos, tab_actividades, tab_consolidado = st.tabs(
-        ["Proyectos", "Actividades mensuales", "Consolidado"]
+    tab_proyectos, tab_actividades, tab_consolidado, tab_por_aperturar = st.tabs(
+        [
+            "Proyectos", "Actividades mensuales", "Consolidado",
+            "Proyectos de vinculación por aperturar",
+        ]
     )
     with tab_proyectos:
         _vista_proyectos(proyectos, oficina_id, es_master)
@@ -520,3 +720,5 @@ def mostrar_proyectos_vinculacion() -> None:
         _vista_actividades(proyectos, actividades, oficina_id)
     with tab_consolidado:
         _vista_consolidado(actividades, es_master)
+    with tab_por_aperturar:
+        _vista_por_aperturar(por_aperturar, oficina_id, es_master)
