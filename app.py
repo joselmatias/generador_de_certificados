@@ -12,7 +12,7 @@ import streamlit as st
 
 from utils.feature_flags import CERTIFICATE_GENERATION_ENABLED
 
-DB_SCHEMA_VERSION = 14
+DB_SCHEMA_VERSION = 15
 CONGRESO_SYNC_VERSION = 7
 
 
@@ -158,6 +158,7 @@ with st.sidebar:
     st.divider()
 
     MODULOS_REGIONAL = {
+        "🤝 Proyectos de vinculación":                    "proyectos_vinculacion",
         "📌 Seguimiento Congreso":                         "seguimiento_congreso",
         "📋 Capacitaciones — Carga":                    "cap_carga",
         "🎓 Capacitaciones — Certificados":             "cap_certificados",
@@ -197,6 +198,10 @@ modulo_id = modulos_disponibles[seleccion]
 if modulo_id == "cap_carga":
     from modules.capacitaciones.upload import mostrar_carga
     mostrar_carga()
+
+elif modulo_id == "proyectos_vinculacion":
+    from modules.vinculacion.dashboard import mostrar_proyectos_vinculacion
+    mostrar_proyectos_vinculacion()
 
 elif modulo_id == "seguimiento_congreso":
     from modules.congresos.seguimiento import mostrar_seguimiento_congreso

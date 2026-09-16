@@ -1791,3 +1791,352 @@ def listar_historial_checklist_congreso(con: _Conn, limite: int = 1000) -> list[
         """,
         (limite,),
     ).fetchall()
+
+
+# ---------------------------------------------------------------------------
+# Proyectos de vinculación
+# ---------------------------------------------------------------------------
+
+def _lista_textos_unicos(valores: list[str], etiqueta: str) -> list[str]:
+    limpios: list[str] = []
+    vistos: set[str] = set()
+    for valor in valores:
+        texto = str(valor or "").strip()
+        clave = texto.casefold()
+        if texto and clave not in vistos:
+            limpios.append(texto)
+            vistos.add(clave)
+    if not limpios:
+        raise ValueError(f"Agrega al menos un valor en {etiqueta}.")
+    return limpios
+
+
+def _validar_datos_proyecto(datos: dict[str, Any]) -> dict[str, Any]:
+    requeridos = (
+        "oficina", "nombre", "responsable", "convenio_numero",
+        "convenio_institucion", "fecha_inicio", "fecha_fin", "resumen",
+        "provincia", "canton",
+    )
+    normalizados = dict(datos)
+    for campo in requeridos:
+        valor = normalizados.get(campo)
+        if isinstance(valor, str):
+            valor = valor.strip()
+            normalizados[campo] = valor
+        if valor is None or valor == "":
+            raise ValueError(f"El campo {campo.replace('_', ' ')} es obligatorio.")
+    if normalizados["fecha_fin"] < normalizados["fecha_inicio"]:
+        raise ValueError("La fecha de finalización no puede ser anterior a la fecha de inicio.")
+    return normalizados
+
+
+def _insertar_lista_proyecto(
+    con: _Conn, tabla: str, proyecto_id: int, valores: list[str]
+) -> None:
+    tablas = {
+        "proyectos_vinculacion_facultades",
+        "proyectos_vinculacion_sectores",
+        "proyectos_vinculacion_asociaciones",
+    }
+    if tabla not in tablas:
+        raise ValueError("Catálogo de proyecto no permitido.")
+    for valor in valores:
+        con.execute(
+            f"INSERT INTO {tabla} (proyecto_id, nombre) VALUES (%s, %s) "
+            "ON CONFLICT (proyecto_id, nombre) DO NOTHING",
+            (proyecto_id, valor),
+        )
+
+
+def crear_proyecto_vinculacion(
+    con: _Conn,
+    datos: dict[str, Any],
+    facultades: list[str],
+    sectores: list[str],
+    asociaciones: list[str],
+) -> int:
+    datos = _validar_datos_proyecto(datos)
+    facultades = _lista_textos_unicos(facultades, "facultades")
+    sectores = _lista_textos_unicos(sectores, "sectores económicos")
+    asociaciones = _lista_textos_unicos(asociaciones, "asociaciones")
+    row = con.execute(
+        """
+        INSERT INTO proyectos_vinculacion (
+            oficina, nombre, responsable, convenio_numero, convenio_institucion,
+            convenio_tipo, fecha_inicio, fecha_fin, resumen, provincia, canton,
+            registrado_por
+        ) VALUES (
+            %(oficina)s, %(nombre)s, %(responsable)s, %(convenio_numero)s,
+            %(convenio_institucion)s, %(convenio_tipo)s, %(fecha_inicio)s,
+            %(fecha_fin)s, %(resumen)s, %(provincia)s, %(canton)s,
+            %(registrado_por)s
+        ) RETURNING id
+        """,
+        datos,
+    ).fetchone()
+    proyecto_id = int(row["id"])
+    _insertar_lista_proyecto(con, "proyectos_vinculacion_facultades", proyecto_id, facultades)
+    _insertar_lista_proyecto(con, "proyectos_vinculacion_sectores", proyecto_id, sectores)
+    _insertar_lista_proyecto(con, "proyectos_vinculacion_asociaciones", proyecto_id, asociaciones)
+    return proyecto_id
+
+
+def listar_proyectos_vinculacion(
+    con: _Conn, oficina: str | None = None, incluir_inactivos: bool = False
+) -> list[Any]:
+    condiciones = [] if incluir_inactivos else ["p.activo = TRUE"]
+    params: list[Any] = []
+    if oficina:
+        condiciones.append("p.oficina = %s")
+        params.append(oficina)
+    where = "WHERE " + " AND ".join(condiciones) if condiciones else ""
+    return con.execute(
+        f"""
+        SELECT p.*,
+            COALESCE(ARRAY(SELECT f.nombre FROM proyectos_vinculacion_facultades f
+                           WHERE f.proyecto_id = p.id ORDER BY f.nombre), ARRAY[]::text[]) AS facultades,
+            COALESCE(ARRAY(SELECT s.nombre FROM proyectos_vinculacion_sectores s
+                           WHERE s.proyecto_id = p.id ORDER BY s.nombre), ARRAY[]::text[]) AS sectores,
+            COALESCE(ARRAY(SELECT a.nombre FROM proyectos_vinculacion_asociaciones a
+                           WHERE a.proyecto_id = p.id ORDER BY a.nombre), ARRAY[]::text[]) AS asociaciones,
+            (SELECT COUNT(*) FROM actividades_vinculacion av
+             WHERE av.proyecto_id = p.id AND av.activo = TRUE) AS total_actividades,
+            COALESCE((SELECT SUM(av.estudiantes_capacitados) FROM actividades_vinculacion av
+                      WHERE av.proyecto_id = p.id AND av.activo = TRUE), 0) AS total_estudiantes,
+            COALESCE((SELECT SUM(av.asistentes_asociaciones) FROM actividades_vinculacion av
+                      WHERE av.proyecto_id = p.id AND av.activo = TRUE), 0) AS total_asistentes,
+            COALESCE((SELECT SUM(av.duracion_horas) FROM actividades_vinculacion av
+                      WHERE av.proyecto_id = p.id AND av.activo = TRUE), 0) AS total_horas
+        FROM proyectos_vinculacion p
+        {where}
+        ORDER BY p.fecha_inicio DESC, p.id DESC
+        """,
+        params,
+    ).fetchall()
+
+
+def _reemplazar_lista_proyecto(
+    con: _Conn, tabla: str, proyecto_id: int, valores: list[str]
+) -> None:
+    actuales = con.execute(
+        f"SELECT id, nombre FROM {tabla} WHERE proyecto_id = %s", (proyecto_id,)
+    ).fetchall()
+    nuevas_claves = {valor.casefold() for valor in valores}
+    for item in actuales:
+        if item["nombre"].casefold() in nuevas_claves:
+            continue
+        if tabla == "proyectos_vinculacion_facultades":
+            uso = con.execute(
+                "SELECT 1 FROM actividades_vinculacion WHERE facultad_id = %s AND activo = TRUE LIMIT 1",
+                (item["id"],),
+            ).fetchone()
+        elif tabla == "proyectos_vinculacion_asociaciones":
+            uso = con.execute(
+                "SELECT 1 FROM actividades_vinculacion WHERE asociacion_id = %s AND activo = TRUE LIMIT 1",
+                (item["id"],),
+            ).fetchone()
+        else:
+            uso = None
+        if uso:
+            raise ValueError(
+                f"No se puede retirar '{item['nombre']}' porque está usado en una actividad activa."
+            )
+        con.execute(f"DELETE FROM {tabla} WHERE id = %s", (item["id"],))
+    _insertar_lista_proyecto(con, tabla, proyecto_id, valores)
+
+
+def actualizar_proyecto_vinculacion(
+    con: _Conn,
+    proyecto_id: int,
+    oficina_autorizada: str,
+    datos: dict[str, Any],
+    facultades: list[str],
+    sectores: list[str],
+    asociaciones: list[str],
+) -> None:
+    datos = _validar_datos_proyecto({**datos, "oficina": oficina_autorizada})
+    actual = con.execute(
+        "SELECT id FROM proyectos_vinculacion WHERE id = %s AND oficina = %s AND activo = TRUE FOR UPDATE",
+        (proyecto_id, oficina_autorizada),
+    ).fetchone()
+    if actual is None:
+        raise PermissionError("Solo la oficina propietaria puede editar este proyecto.")
+    facultades = _lista_textos_unicos(facultades, "facultades")
+    sectores = _lista_textos_unicos(sectores, "sectores económicos")
+    asociaciones = _lista_textos_unicos(asociaciones, "asociaciones")
+    con.execute(
+        """
+        UPDATE proyectos_vinculacion SET
+            nombre = %(nombre)s, responsable = %(responsable)s,
+            convenio_numero = %(convenio_numero)s,
+            convenio_institucion = %(convenio_institucion)s,
+            convenio_tipo = %(convenio_tipo)s, fecha_inicio = %(fecha_inicio)s,
+            fecha_fin = %(fecha_fin)s, resumen = %(resumen)s,
+            provincia = %(provincia)s, canton = %(canton)s,
+            fecha_actualizacion = CURRENT_TIMESTAMP
+        WHERE id = %(id)s
+        """,
+        {**datos, "id": proyecto_id},
+    )
+    _reemplazar_lista_proyecto(con, "proyectos_vinculacion_facultades", proyecto_id, facultades)
+    _reemplazar_lista_proyecto(con, "proyectos_vinculacion_sectores", proyecto_id, sectores)
+    _reemplazar_lista_proyecto(con, "proyectos_vinculacion_asociaciones", proyecto_id, asociaciones)
+
+
+def desactivar_proyecto_vinculacion(
+    con: _Conn, proyecto_id: int, oficina_autorizada: str
+) -> None:
+    cur = con.execute(
+        "UPDATE proyectos_vinculacion SET activo = FALSE, fecha_actualizacion = CURRENT_TIMESTAMP "
+        "WHERE id = %s AND oficina = %s AND activo = TRUE",
+        (proyecto_id, oficina_autorizada),
+    )
+    if cur.rowcount != 1:
+        raise PermissionError("Solo la oficina propietaria puede desactivar este proyecto.")
+
+
+def listar_opciones_proyecto_vinculacion(con: _Conn, proyecto_id: int) -> dict[str, list[Any]]:
+    return {
+        "facultades": con.execute(
+            "SELECT id, nombre FROM proyectos_vinculacion_facultades WHERE proyecto_id = %s ORDER BY nombre",
+            (proyecto_id,),
+        ).fetchall(),
+        "asociaciones": con.execute(
+            "SELECT id, nombre FROM proyectos_vinculacion_asociaciones WHERE proyecto_id = %s ORDER BY nombre",
+            (proyecto_id,),
+        ).fetchall(),
+    }
+
+
+def _validar_actividad_vinculacion(
+    con: _Conn, datos: dict[str, Any], oficina_autorizada: str
+) -> tuple[dict[str, Any], Any]:
+    proyecto = con.execute(
+        "SELECT * FROM proyectos_vinculacion WHERE id = %s AND oficina = %s AND activo = TRUE",
+        (datos.get("proyecto_id"), oficina_autorizada),
+    ).fetchone()
+    if proyecto is None:
+        raise PermissionError("Solo la oficina propietaria puede modificar actividades del proyecto.")
+    normalizados = dict(datos)
+    for campo in ("nombre", "provincia", "canton"):
+        normalizados[campo] = str(normalizados.get(campo) or "").strip()
+        if not normalizados[campo]:
+            raise ValueError(f"El campo {campo} es obligatorio.")
+    fecha = normalizados.get("fecha")
+    if fecha is None or fecha < proyecto["fecha_inicio"] or fecha > proyecto["fecha_fin"]:
+        raise ValueError("La fecha de la actividad debe estar dentro del período del proyecto.")
+    for campo in ("estudiantes_capacitados", "asistentes_asociaciones"):
+        valor = normalizados.get(campo)
+        if isinstance(valor, bool) or not isinstance(valor, int) or valor < 0:
+            raise ValueError("Las cantidades de asistencia deben ser enteros no negativos.")
+    if float(normalizados.get("duracion_horas") or 0) <= 0:
+        raise ValueError("La duración debe ser mayor que cero.")
+    for campo, tabla in (
+        ("facultad_id", "proyectos_vinculacion_facultades"),
+        ("asociacion_id", "proyectos_vinculacion_asociaciones"),
+    ):
+        valor = normalizados.get(campo)
+        if valor is not None and con.execute(
+            f"SELECT 1 FROM {tabla} WHERE id = %s AND proyecto_id = %s",
+            (valor, proyecto["id"]),
+        ).fetchone() is None:
+            raise ValueError("La facultad o asociación no pertenece al proyecto seleccionado.")
+    normalizados["observaciones"] = str(normalizados.get("observaciones") or "").strip() or None
+    return normalizados, proyecto
+
+
+def crear_actividad_vinculacion(
+    con: _Conn, datos: dict[str, Any], oficina_autorizada: str
+) -> int:
+    datos, _ = _validar_actividad_vinculacion(con, datos, oficina_autorizada)
+    row = con.execute(
+        """
+        INSERT INTO actividades_vinculacion (
+            proyecto_id, nombre, fecha, provincia, canton, facultad_id,
+            asociacion_id, estudiantes_capacitados, asistentes_asociaciones,
+            duracion_horas, observaciones, registrado_por
+        ) VALUES (
+            %(proyecto_id)s, %(nombre)s, %(fecha)s, %(provincia)s, %(canton)s,
+            %(facultad_id)s, %(asociacion_id)s, %(estudiantes_capacitados)s,
+            %(asistentes_asociaciones)s, %(duracion_horas)s, %(observaciones)s,
+            %(registrado_por)s
+        ) RETURNING id
+        """,
+        datos,
+    ).fetchone()
+    return int(row["id"])
+
+
+def listar_actividades_vinculacion(
+    con: _Conn, oficina: str | None = None, proyecto_id: int | None = None
+) -> list[Any]:
+    condiciones = ["a.activo = TRUE", "p.activo = TRUE"]
+    params: list[Any] = []
+    if oficina:
+        condiciones.append("p.oficina = %s")
+        params.append(oficina)
+    if proyecto_id:
+        condiciones.append("a.proyecto_id = %s")
+        params.append(proyecto_id)
+    return con.execute(
+        f"""
+        SELECT a.*, p.nombre AS proyecto_nombre, p.oficina,
+               p.convenio_institucion, p.convenio_numero,
+               p.fecha_inicio AS proyecto_fecha_inicio, p.fecha_fin AS proyecto_fecha_fin,
+               p.sectores, f.nombre AS facultad, aso.nombre AS asociacion
+        FROM actividades_vinculacion a
+        JOIN (
+            SELECT pv.*,
+                array_to_string(ARRAY(SELECT s.nombre FROM proyectos_vinculacion_sectores s
+                                      WHERE s.proyecto_id = pv.id ORDER BY s.nombre), ', ') AS sectores
+            FROM proyectos_vinculacion pv
+        ) p ON p.id = a.proyecto_id
+        LEFT JOIN proyectos_vinculacion_facultades f ON f.id = a.facultad_id
+        LEFT JOIN proyectos_vinculacion_asociaciones aso ON aso.id = a.asociacion_id
+        WHERE {' AND '.join(condiciones)}
+        ORDER BY a.fecha DESC, a.id DESC
+        """,
+        params,
+    ).fetchall()
+
+
+def actualizar_actividad_vinculacion(
+    con: _Conn, actividad_id: int, datos: dict[str, Any], oficina_autorizada: str
+) -> None:
+    datos, _ = _validar_actividad_vinculacion(con, datos, oficina_autorizada)
+    actual = con.execute(
+        """SELECT a.id FROM actividades_vinculacion a
+           JOIN proyectos_vinculacion p ON p.id = a.proyecto_id
+           WHERE a.id = %s AND a.activo = TRUE AND p.oficina = %s""",
+        (actividad_id, oficina_autorizada),
+    ).fetchone()
+    if actual is None:
+        raise PermissionError("Solo la oficina propietaria puede editar esta actividad.")
+    con.execute(
+        """
+        UPDATE actividades_vinculacion SET
+            nombre = %(nombre)s, fecha = %(fecha)s, provincia = %(provincia)s,
+            canton = %(canton)s, facultad_id = %(facultad_id)s,
+            asociacion_id = %(asociacion_id)s,
+            estudiantes_capacitados = %(estudiantes_capacitados)s,
+            asistentes_asociaciones = %(asistentes_asociaciones)s,
+            duracion_horas = %(duracion_horas)s, observaciones = %(observaciones)s,
+            fecha_actualizacion = CURRENT_TIMESTAMP
+        WHERE id = %(id)s
+        """,
+        {**datos, "id": actividad_id},
+    )
+
+
+def desactivar_actividad_vinculacion(
+    con: _Conn, actividad_id: int, oficina_autorizada: str
+) -> None:
+    cur = con.execute(
+        """UPDATE actividades_vinculacion a SET activo = FALSE,
+               fecha_actualizacion = CURRENT_TIMESTAMP
+           FROM proyectos_vinculacion p
+           WHERE a.id = %s AND a.proyecto_id = p.id AND p.oficina = %s AND a.activo = TRUE""",
+        (actividad_id, oficina_autorizada),
+    )
+    if cur.rowcount != 1:
+        raise PermissionError("Solo la oficina propietaria puede desactivar esta actividad.")

@@ -341,6 +341,76 @@ CREATE TABLE IF NOT EXISTS congreso_checklist_historial (
 );
 """
 
+_DDL_PROYECTOS_VINCULACION = """
+CREATE TABLE IF NOT EXISTS proyectos_vinculacion (
+    id                  SERIAL PRIMARY KEY,
+    oficina             TEXT NOT NULL,
+    nombre              TEXT NOT NULL,
+    responsable         TEXT NOT NULL,
+    convenio_numero     TEXT NOT NULL,
+    convenio_institucion TEXT NOT NULL,
+    convenio_tipo       TEXT,
+    fecha_inicio        DATE NOT NULL,
+    fecha_fin           DATE NOT NULL,
+    resumen             TEXT NOT NULL,
+    provincia           TEXT NOT NULL,
+    canton              TEXT NOT NULL,
+    activo              BOOLEAN NOT NULL DEFAULT TRUE,
+    registrado_por      TEXT,
+    fecha_registro      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (fecha_fin >= fecha_inicio)
+);
+"""
+
+_DDL_PROYECTOS_VINCULACION_FACULTADES = """
+CREATE TABLE IF NOT EXISTS proyectos_vinculacion_facultades (
+    id          SERIAL PRIMARY KEY,
+    proyecto_id INTEGER NOT NULL REFERENCES proyectos_vinculacion(id) ON DELETE CASCADE,
+    nombre      TEXT NOT NULL,
+    UNIQUE (proyecto_id, nombre)
+);
+"""
+
+_DDL_PROYECTOS_VINCULACION_SECTORES = """
+CREATE TABLE IF NOT EXISTS proyectos_vinculacion_sectores (
+    id          SERIAL PRIMARY KEY,
+    proyecto_id INTEGER NOT NULL REFERENCES proyectos_vinculacion(id) ON DELETE CASCADE,
+    nombre      TEXT NOT NULL,
+    UNIQUE (proyecto_id, nombre)
+);
+"""
+
+_DDL_PROYECTOS_VINCULACION_ASOCIACIONES = """
+CREATE TABLE IF NOT EXISTS proyectos_vinculacion_asociaciones (
+    id          SERIAL PRIMARY KEY,
+    proyecto_id INTEGER NOT NULL REFERENCES proyectos_vinculacion(id) ON DELETE CASCADE,
+    nombre      TEXT NOT NULL,
+    UNIQUE (proyecto_id, nombre)
+);
+"""
+
+_DDL_ACTIVIDADES_VINCULACION = """
+CREATE TABLE IF NOT EXISTS actividades_vinculacion (
+    id                      SERIAL PRIMARY KEY,
+    proyecto_id             INTEGER NOT NULL REFERENCES proyectos_vinculacion(id) ON DELETE RESTRICT,
+    nombre                  TEXT NOT NULL,
+    fecha                   DATE NOT NULL,
+    provincia               TEXT NOT NULL,
+    canton                  TEXT NOT NULL,
+    facultad_id             INTEGER REFERENCES proyectos_vinculacion_facultades(id) ON DELETE RESTRICT,
+    asociacion_id           INTEGER REFERENCES proyectos_vinculacion_asociaciones(id) ON DELETE RESTRICT,
+    estudiantes_capacitados INTEGER NOT NULL DEFAULT 0 CHECK (estudiantes_capacitados >= 0),
+    asistentes_asociaciones INTEGER NOT NULL DEFAULT 0 CHECK (asistentes_asociaciones >= 0),
+    duracion_horas          NUMERIC(7,2) NOT NULL CHECK (duracion_horas > 0),
+    observaciones           TEXT,
+    activo                  BOOLEAN NOT NULL DEFAULT TRUE,
+    registrado_por          TEXT,
+    fecha_registro          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
 # Índices para mejorar rendimiento de consultas frecuentes
 _INDICES = [
     "CREATE INDEX IF NOT EXISTS idx_cap_oficina ON capacitaciones(oficina);",
@@ -367,6 +437,10 @@ _INDICES = [
     "WHERE clave_precarga IS NOT NULL;",
     "CREATE INDEX IF NOT EXISTS idx_congreso_checklist_rubro ON congreso_checklist(rubro);",
     "CREATE INDEX IF NOT EXISTS idx_congreso_checklist_historial_fecha ON congreso_checklist_historial(fecha_cambio DESC);",
+    "CREATE INDEX IF NOT EXISTS idx_proyecto_vinculacion_oficina ON proyectos_vinculacion(oficina, activo);",
+    "CREATE INDEX IF NOT EXISTS idx_proyecto_vinculacion_fechas ON proyectos_vinculacion(fecha_inicio, fecha_fin);",
+    "CREATE INDEX IF NOT EXISTS idx_actividad_vinculacion_proyecto ON actividades_vinculacion(proyecto_id, activo);",
+    "CREATE INDEX IF NOT EXISTS idx_actividad_vinculacion_fecha ON actividades_vinculacion(fecha);",
 ]
 
 
@@ -435,6 +509,11 @@ def init_db() -> None:
                 cur.execute(_DDL_CONGRESO_CHECKLIST)
                 cur.execute(_DDL_CONGRESO_CHECKLIST_RESPONSABLES)
                 cur.execute(_DDL_CONGRESO_CHECKLIST_HISTORIAL)
+                cur.execute(_DDL_PROYECTOS_VINCULACION)
+                cur.execute(_DDL_PROYECTOS_VINCULACION_FACULTADES)
+                cur.execute(_DDL_PROYECTOS_VINCULACION_SECTORES)
+                cur.execute(_DDL_PROYECTOS_VINCULACION_ASOCIACIONES)
+                cur.execute(_DDL_ACTIVIDADES_VINCULACION)
                 cur.execute(
                     "ALTER TABLE congreso_checklist "
                     "ADD COLUMN IF NOT EXISTS responsables_adicionales TEXT"
