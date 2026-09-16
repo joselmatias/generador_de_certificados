@@ -297,7 +297,7 @@ def _editar_proyecto(proyectos: list[dict], oficina_id: str) -> None:
     if not propios:
         return
     por_id = {p["id"]: p for p in propios}
-    st.markdown("#### Editar o eliminar un proyecto")
+    st.markdown("#### Editar un proyecto")
     proyecto_id = st.selectbox(
         "Proyecto seleccionado", list(por_id),
         format_func=lambda i: (
@@ -329,24 +329,39 @@ def _editar_proyecto(proyectos: list[dict], oficina_id: str) -> None:
             except Exception as exc:
                 st.error(f"No se pudo actualizar el proyecto: {exc}")
 
-    with st.expander("Eliminar definitivamente el proyecto seleccionado"):
+    st.markdown("#### Eliminar un proyecto")
+    with st.expander("Eliminar definitivamente un proyecto activo"):
         st.error(
             "Esta acción elimina el proyecto, todas sus actividades, responsables, "
             "facultades, sectores y asociaciones. No se puede deshacer."
         )
-        confirmacion = st.text_input(
-            f"Escribe exactamente: {actual['nombre']}",
-            key=f"vinc_confirmar_eliminar_{proyecto_id}",
+        proyecto_eliminar_id = st.selectbox(
+            "Proyecto activo que deseas eliminar",
+            list(por_id),
+            format_func=lambda i: (
+                f"ID {i} · {por_id[i]['nombre']} · "
+                f"{por_id[i]['convenio_numero']}"
+            ),
+            key="vinc_proyecto_eliminar",
         )
-        coincide = confirmacion.strip() == actual["nombre"].strip()
+        proyecto_eliminar = por_id[proyecto_eliminar_id]
+        st.caption(
+            f"Se eliminará el **ID {proyecto_eliminar_id}**: "
+            f"{proyecto_eliminar['nombre']}"
+        )
+        confirmacion = st.text_input(
+            f"Escribe exactamente: {proyecto_eliminar['nombre']}",
+            key=f"vinc_confirmar_eliminar_{proyecto_eliminar_id}",
+        )
+        coincide = confirmacion.strip() == proyecto_eliminar["nombre"].strip()
         if st.button(
             "Eliminar proyecto definitivamente", disabled=not coincide,
-            key=f"vinc_eliminar_proy_{proyecto_id}",
+            key=f"vinc_eliminar_proy_{proyecto_eliminar_id}",
         ):
             try:
                 with get_connection() as con:
                     resultado = eliminar_proyecto_vinculacion(
-                        con, proyecto_id, oficina_id
+                        con, proyecto_eliminar_id, oficina_id
                     )
                 st.success(
                     "Proyecto eliminado definitivamente. "
