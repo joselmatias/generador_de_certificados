@@ -349,13 +349,8 @@ def _editar_proyecto(proyectos: list[dict], oficina_id: str) -> None:
             f"Se eliminará el **ID {proyecto_eliminar_id}**: "
             f"{proyecto_eliminar['nombre']}"
         )
-        confirmacion = st.text_input(
-            f"Escribe exactamente: {proyecto_eliminar['nombre']}",
-            key=f"vinc_confirmar_eliminar_{proyecto_eliminar_id}",
-        )
-        coincide = confirmacion.strip() == proyecto_eliminar["nombre"].strip()
         if st.button(
-            "Eliminar proyecto definitivamente", disabled=not coincide,
+            "Eliminar proyecto definitivamente",
             key=f"vinc_eliminar_proy_{proyecto_eliminar_id}",
         ):
             try:
