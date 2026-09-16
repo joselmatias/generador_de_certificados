@@ -2077,6 +2077,30 @@ def desactivar_proyecto_vinculacion(
         raise PermissionError("Solo la oficina propietaria puede desactivar este proyecto.")
 
 
+def eliminar_proyecto_vinculacion(
+    con: _Conn, proyecto_id: int, oficina_autorizada: str
+) -> dict[str, int]:
+    """Elimina definitivamente un proyecto y todo su detalle relacionado."""
+    proyecto = con.execute(
+        """SELECT id FROM proyectos_vinculacion
+           WHERE id = %s AND oficina = %s FOR UPDATE""",
+        (proyecto_id, oficina_autorizada),
+    ).fetchone()
+    if proyecto is None:
+        raise PermissionError("Solo la oficina propietaria puede eliminar este proyecto.")
+    actividades = con.execute(
+        "DELETE FROM actividades_vinculacion WHERE proyecto_id = %s",
+        (proyecto_id,),
+    ).rowcount
+    eliminado = con.execute(
+        "DELETE FROM proyectos_vinculacion WHERE id = %s AND oficina = %s",
+        (proyecto_id, oficina_autorizada),
+    ).rowcount
+    if eliminado != 1:
+        raise RuntimeError("El proyecto no pudo eliminarse completamente.")
+    return {"proyectos": eliminado, "actividades": actividades}
+
+
 def listar_opciones_proyecto_vinculacion(con: _Conn, proyecto_id: int) -> dict[str, list[Any]]:
     return {
         "facultades": con.execute(

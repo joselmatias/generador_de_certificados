@@ -17,7 +17,7 @@ from database.db import (
     crear_proyecto_vinculacion,
     crear_proyecto_vinculacion_por_aperturar,
     desactivar_actividad_vinculacion,
-    desactivar_proyecto_vinculacion,
+    eliminar_proyecto_vinculacion,
     desactivar_proyecto_vinculacion_por_aperturar,
     get_connection,
     listar_actividades_vinculacion,
@@ -297,16 +297,25 @@ def _editar_proyecto(proyectos: list[dict], oficina_id: str) -> None:
     if not propios:
         return
     por_id = {p["id"]: p for p in propios}
-    with st.expander("Editar o desactivar un proyecto"):
-        proyecto_id = st.selectbox(
-            "Proyecto", list(por_id), format_func=lambda i: por_id[i]["nombre"], key="vinc_proyecto_editar",
-        )
-        actual = por_id[proyecto_id]
+    st.markdown("#### Editar o eliminar un proyecto")
+    proyecto_id = st.selectbox(
+        "Proyecto seleccionado", list(por_id),
+        format_func=lambda i: (
+            f"ID {i} · {por_id[i]['nombre']} · {por_id[i]['convenio_numero']} · "
+            f"{por_id[i]['fecha_inicio']:%d/%m/%Y}"
+        ),
+        key="vinc_proyecto_editar",
+    )
+    actual = por_id[proyecto_id]
+    st.caption(
+        f"Seleccionado: **{actual['nombre']}** · "
+        f"{actual['convenio_institucion']} · {_nombre_oficina(actual['oficina'])}"
+    )
+    with st.expander("Editar el proyecto seleccionado", expanded=True):
         datos, responsables, facultades, sectores, asociaciones = _campos_proyecto(
             f"vinc_editar_{proyecto_id}", oficina_id, actual
         )
-        b1, b2 = st.columns([2, 1])
-        if b1.button("Guardar cambios", type="primary", key=f"vinc_actualizar_{proyecto_id}"):
+        if st.button("Guardar cambios", type="primary", key=f"vinc_actualizar_{proyecto_id}"):
             try:
                 with get_connection() as con:
                     actualizar_proyecto_vinculacion(
@@ -319,15 +328,35 @@ def _editar_proyecto(proyectos: list[dict], oficina_id: str) -> None:
                 st.error(str(exc))
             except Exception as exc:
                 st.error(f"No se pudo actualizar el proyecto: {exc}")
-        confirmar = b2.checkbox("Confirmo la desactivación", key=f"vinc_confirma_proy_{proyecto_id}")
-        if b2.button("Desactivar proyecto", disabled=not confirmar, key=f"vinc_desactivar_proy_{proyecto_id}"):
+
+    with st.expander("Eliminar definitivamente el proyecto seleccionado"):
+        st.error(
+            "Esta acción elimina el proyecto, todas sus actividades, responsables, "
+            "facultades, sectores y asociaciones. No se puede deshacer."
+        )
+        confirmacion = st.text_input(
+            f"Escribe exactamente: {actual['nombre']}",
+            key=f"vinc_confirmar_eliminar_{proyecto_id}",
+        )
+        coincide = confirmacion.strip() == actual["nombre"].strip()
+        if st.button(
+            "Eliminar proyecto definitivamente", disabled=not coincide,
+            key=f"vinc_eliminar_proy_{proyecto_id}",
+        ):
             try:
                 with get_connection() as con:
-                    desactivar_proyecto_vinculacion(con, proyecto_id, oficina_id)
-                st.success("Proyecto desactivado; sus datos se conservaron.")
+                    resultado = eliminar_proyecto_vinculacion(
+                        con, proyecto_id, oficina_id
+                    )
+                st.success(
+                    "Proyecto eliminado definitivamente. "
+                    f"También se eliminaron {resultado['actividades']} actividades."
+                )
                 st.rerun()
-            except Exception as exc:
+            except (ValueError, PermissionError) as exc:
                 st.error(str(exc))
+            except Exception as exc:
+                st.error(f"No se pudo eliminar el proyecto: {exc}")
 
 
 def _vista_proyectos(proyectos: list[dict], oficina_id: str, es_master: bool) -> None:

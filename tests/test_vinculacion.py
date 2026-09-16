@@ -9,13 +9,15 @@ from database.db import (
     _validar_actividad_vinculacion,
     _validar_datos_proyecto,
     _validar_proyecto_por_aperturar,
+    eliminar_proyecto_vinculacion,
 )
 from modules.vinculacion.dashboard import estado_proyecto
 
 
 class _Cursor:
-    def __init__(self, fila=None):
+    def __init__(self, fila=None, rowcount=0):
         self.fila = fila
+        self.rowcount = rowcount
 
     def fetchone(self):
         return self.fila
@@ -57,6 +59,23 @@ class _ConexionListas:
                 {"id": 2, "nombre": "economía"},
             ])
         return _Cursor()
+
+
+class _ConexionEliminar:
+    def __init__(self, autorizado=True):
+        self.autorizado = autorizado
+        self.consultas = []
+
+    def execute(self, sql, params=None):
+        sql_limpio = " ".join(sql.split())
+        self.consultas.append((sql_limpio, params))
+        if sql_limpio.startswith("SELECT id FROM proyectos_vinculacion"):
+            return _Cursor({"id": 7} if self.autorizado else None)
+        if sql_limpio.startswith("DELETE FROM actividades_vinculacion"):
+            return _Cursor(rowcount=3)
+        if sql_limpio.startswith("DELETE FROM proyectos_vinculacion"):
+            return _Cursor(rowcount=1)
+        raise AssertionError(f"Consulta inesperada: {sql_limpio}")
 
 
 def _datos_proyecto(**cambios):
@@ -153,6 +172,18 @@ class VinculacionTests(unittest.TestCase):
         self.assertTrue(any(op.startswith("DELETE FROM") for op in operaciones))
         self.assertTrue(any(op.startswith("UPDATE proyectos_vinculacion_sectores") for op in operaciones))
         self.assertFalse(any(op.startswith("INSERT INTO") for op in operaciones))
+
+    def test_eliminar_proyecto_borra_primero_sus_actividades(self):
+        conexion = _ConexionEliminar()
+        resultado = eliminar_proyecto_vinculacion(conexion, 7, "loja")
+        self.assertEqual(resultado, {"proyectos": 1, "actividades": 3})
+        borrados = [sql for sql, _ in conexion.consultas if sql.startswith("DELETE")]
+        self.assertIn("actividades_vinculacion", borrados[0])
+        self.assertIn("proyectos_vinculacion", borrados[1])
+
+    def test_otra_oficina_no_puede_eliminar_proyecto(self):
+        with self.assertRaisesRegex(PermissionError, "oficina propietaria"):
+            eliminar_proyecto_vinculacion(_ConexionEliminar(False), 7, "cuenca")
 
     def test_actividad_valida_pertenencia_y_periodo(self):
         normalizados, proyecto = _validar_actividad_vinculacion(

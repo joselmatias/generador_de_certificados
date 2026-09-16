@@ -589,6 +589,37 @@ def init_db() -> None:
                 cur.execute(_DDL_PROYECTOS_VINCULACION_ASOCIACIONES)
                 cur.execute(_DDL_ACTIVIDADES_VINCULACION)
                 cur.execute(_DDL_PROYECTOS_VINCULACION_POR_APERTURAR)
+                # Limpieza puntual solicitada: la edición inicial generó dos filas
+                # del mismo proyecto de Portoviejo. Se conserva la que tenga
+                # actividades y, en empate, la actualizada más recientemente.
+                cur.execute(
+                    """
+                    WITH base AS (
+                        SELECT p.id, p.fecha_actualizacion,
+                               (SELECT COUNT(*) FROM actividades_vinculacion a
+                                WHERE a.proyecto_id = p.id) AS actividades
+                        FROM proyectos_vinculacion p
+                        WHERE p.oficina = 'manabi'
+                          AND LOWER(BTRIM(p.nombre)) = LOWER(BTRIM(%s))
+                    ), ordenados AS (
+                        SELECT id, actividades,
+                               ROW_NUMBER() OVER (
+                                   ORDER BY actividades DESC,
+                                            fecha_actualizacion DESC NULLS LAST,
+                                            id DESC
+                               ) AS posicion
+                        FROM base
+                    )
+                    DELETE FROM proyectos_vinculacion p
+                    USING ordenados o
+                    WHERE p.id = o.id AND o.posicion > 1 AND o.actividades = 0
+                    """,
+                    (
+                        "Mantenimiento de equipos de refrigeración ,estructuras "
+                        "metálicas y bienes muebles de la UTM y en los sectores "
+                        "vulnerables de la provincia de Manabí",
+                    ),
+                )
                 cur.execute(
                     """
                     INSERT INTO proyectos_vinculacion_responsables (proyecto_id, nombre)
