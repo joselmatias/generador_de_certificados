@@ -2,11 +2,20 @@
 
 ## Estado actual
 
-- Inicio: 8 de septiembre de 2026.
-- Motivo: Streamlit Community Cloud no puede procesar `packages.txt` porque el
-  índice `bullseye-security` de Debian aparece vencido durante `apt-get`.
-- Objetivo: permitir que la aplicación inicie sin eliminar módulos ni consumir
-  códigos de certificados que no puedan convertirse a PDF.
+- Inicio: 8 de septiembre de 2026. **Revertida: 21 de septiembre de 2026.**
+- Motivo: Streamlit Community Cloud no podía procesar `packages.txt` porque el
+  índice `bullseye-security` de Debian aparecía vencido durante `apt-get`.
+  Streamlit confirmó en su foro que publicó el fix a producción el 9 de
+  septiembre de 2026.
+- Objetivo (mientras estuvo activa): permitir que la aplicación iniciara sin
+  eliminar módulos ni consumir códigos de certificados que no pudieran
+  convertirse a PDF.
+- Verificación previa a revertir: generación local de certificado (relleno de
+  plantilla + conversión a PDF con LibreOffice) confirmada visualmente
+  correcta (placeholders, tildes, autoajuste de fuente y firma).
+  **Pendiente:** confirmar en el primer despliegue de Streamlit Cloud que
+  `packages.txt` instala LibreOffice sin error y que un certificado masivo,
+  uno individual y uno de capacitación virtual generan PDF correctamente.
 
 ## Inhabilitaciones temporales
 

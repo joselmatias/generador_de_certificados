@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 
-# Contingencia iniciada el 2026-09-08.
-# Streamlit Community Cloud no puede instalar paquetes APT porque uno de sus
-# repositorios Debian publica un índice vencido. La generación de certificados
-# usa LibreOffice y debe permanecer deshabilitada hasta restaurar packages.txt.
-CERTIFICATE_GENERATION_ENABLED = False
+# Contingencia iniciada el 2026-09-08 y revertida el 2026-09-21: Streamlit
+# confirmó el fix del índice Debian vencido el 2026-09-09. Se reactiva la
+# generación de certificados; verificar el primer despliegue en Streamlit Cloud.
+CERTIFICATE_GENERATION_ENABLED = True
 
 CERTIFICATE_GENERATION_NOTICE = (
     "La generación y descarga de certificados está temporalmente inhabilitada "
