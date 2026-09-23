@@ -1406,23 +1406,26 @@ def sincronizar_documentos_congreso(
         ).fetchone()
         if existente:
             continue
+        datos_item = dict(item)
+        datos_item.setdefault("observaciones_seguimiento", None)
         row = con.execute(
             """
             INSERT INTO congreso_invitados (
                 numero_lista, institucion, tipo_institucion, destinatario_oficio,
                 firma, calidad, cargo, direccion, correo_institucional,
                 telefonos_institucionales, sitio_web, tipo_invitacion, oficina,
-                confirmado, asistencia_21, asistencia_22, numero_oficio
+                confirmado, asistencia_21, asistencia_22, numero_oficio,
+                observaciones_seguimiento
             ) VALUES (
                 %(numero_lista)s, %(institucion)s, %(tipo_institucion)s,
                 %(destinatario_oficio)s, %(firma)s, %(calidad)s, %(cargo)s,
                 %(direccion)s, %(correo_institucional)s,
                 %(telefonos_institucionales)s, %(sitio_web)s,
                 %(tipo_invitacion)s, %(oficina)s, 'Pendiente', 'Pendiente',
-                'Pendiente', %(numero_oficio)s
+                'Pendiente', %(numero_oficio)s, %(observaciones_seguimiento)s
             ) RETURNING id
             """,
-            item,
+            datos_item,
         ).fetchone()
         invitado_id = int(row["id"])
         _registrar_historial_congreso(

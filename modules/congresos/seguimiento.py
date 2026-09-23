@@ -39,7 +39,7 @@ from database.db import (
 COLOR_AZUL = "#1A3A5C"
 # Contrato de compatibilidad con app.py. Se incrementa cuando cambia la
 # sincronización que transforma registros ya existentes.
-CONGRESO_SYNC_VERSION = 7
+CONGRESO_SYNC_VERSION = 8
 ZONA_HORARIA_ECUADOR = ZoneInfo("America/Guayaquil")
 ESTADOS = ["Pendiente", "Sí", "No"]
 OFICINAS = {
@@ -545,6 +545,63 @@ NUEVOS_OFICIOS_FIRMADOS = [
         "tipo_invitacion": "Invitación a universidades",
         "oficina": "guayaquil",
         "numero_oficio": "SCE-IGT-IR-2026-155",
+    },
+    {
+        "numero_lista": None,
+        "institucion": "Universidad Tecnológica Empresarial de Guayaquil (UTEG)",
+        "tipo_institucion": "Universidad",
+        "destinatario_oficio": "Ing. Mara Cabanilla Guerra, Ph.D.",
+        "firma": "Intendente Regional de Guayaquil",
+        "calidad": "Invitación Universidad",
+        "cargo": "Rectora",
+        "direccion": "Av. del Bombero, km 6 1/2",
+        "correo_institucional": (
+            "relacionesinternacionales@uteg.edu.ec; "
+            "info.relacionesinternacionales@uteg.edu.ec"
+        ),
+        "telefonos_institucionales": None,
+        "sitio_web": "https://www.uteg.edu.ec/",
+        "tipo_invitacion": "Invitación a universidades",
+        "oficina": "guayaquil",
+        "numero_oficio": "SCE-IGT-IR-2026-157",
+        "observaciones_seguimiento": (
+            "Invitación a la mesa directiva del acto inaugural y a brindar las "
+            "palabras de bienvenida (21 oct., 09h00-16h00). Contraparte: Ec. "
+            "Carlos García (carlos.garcia@sce.gob.ec, 0996797882). Plazo de "
+            "confirmación: 25 de septiembre de 2026. Cubre el oficio de "
+            "invitación universidad que quedaba pendiente para esta fila "
+            "(véase observaciones de cruce del oficio 644)."
+        ),
+    },
+    {
+        "numero_lista": None,
+        "institucion": "Universidad Tecnológica Empresarial de Guayaquil (UTEG)",
+        "tipo_institucion": "Universidad",
+        "destinatario_oficio": "Ing. Mara Cabanilla Guerra, Ph.D.",
+        "firma": "Intendente Regional de Guayaquil",
+        "calidad": "Solicitud de espacios para mesas técnicas y sala VIP",
+        "cargo": "Rectora",
+        "direccion": "Av. del Bombero, km 6 1/2",
+        "correo_institucional": (
+            "relacionesinternacionales@uteg.edu.ec; "
+            "info.relacionesinternacionales@uteg.edu.ec"
+        ),
+        "telefonos_institucionales": None,
+        "sitio_web": "https://www.uteg.edu.ec/",
+        "tipo_invitacion": "Coordinación logística",
+        "oficina": "guayaquil",
+        "numero_oficio": "SCE-IGT-IR-2026-148",
+        "observaciones_seguimiento": (
+            "Solicitud de espacios adicionales para el 21 y 22 de octubre "
+            "(reserva del auditorio ya aprobada por correo del 26-ago-2026): "
+            "Biblioteca UTEG (mesa técnica, mín. 40 sillas), Aula Magna UTEG "
+            "(mesa técnica, mín. 40 sillas, ambas con proyección y de ser "
+            "posible micrófono/parlante), y un espacio como sala VIP para "
+            "autoridades y ponentes internacionales. Visita técnica realizada "
+            "el 28-ago-2026. Contraparte para difusión/comunicación: Econ. "
+            "José Matías Sánchez (jose.matias@sce.gob.ec, 099 429 7385). "
+            "Pendiente confirmación de UTEG."
+        ),
     },
 ]
 
