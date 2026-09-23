@@ -39,7 +39,7 @@ from database.db import (
 COLOR_AZUL = "#1A3A5C"
 # Contrato de compatibilidad con app.py. Se incrementa cuando cambia la
 # sincronización que transforma registros ya existentes.
-CONGRESO_SYNC_VERSION = 8
+CONGRESO_SYNC_VERSION = 9
 ZONA_HORARIA_ECUADOR = ZoneInfo("America/Guayaquil")
 ESTADOS = ["Pendiente", "Sí", "No"]
 OFICINAS = {
@@ -601,6 +601,37 @@ NUEVOS_OFICIOS_FIRMADOS = [
             "el 28-ago-2026. Contraparte para difusión/comunicación: Econ. "
             "José Matías Sánchez (jose.matias@sce.gob.ec, 099 429 7385). "
             "Pendiente confirmación de UTEG."
+        ),
+    },
+    {
+        "numero_lista": None,
+        "institucion": "Ministerio de Desarrollo Económico y Productivo",
+        "tipo_institucion": "Institución pública",
+        "destinatario_oficio": "Sariha Moya",
+        "firma": "Superintendente de Competencia Económica",
+        "calidad": "Expositor",
+        "cargo": "Ministra",
+        "direccion": (
+            "Av. Amazonas entre Pereira y Unión Nacional de Periodistas, "
+            "Plataforma Gubernamental de Gestión Financiera, Quito"
+        ),
+        "correo_institucional": None,
+        "telefonos_institucionales": None,
+        "sitio_web": "https://www.produccion.gob.ec/",
+        "tipo_invitacion": "Expositor",
+        "oficina": "guayaquil",
+        "numero_oficio": "SCE-2026-706",
+        "observaciones_seguimiento": (
+            "Alcance/reiteración al Oficio SCE-2026-670 (4-sept-2026, ya "
+            "registrado como invitación general a esta institución). Invita "
+            "a la Ministra Sariha Moya, o a la persona que designe, a "
+            "participar con la ponencia magistral \"Coyuntura económica del "
+            "Ecuador y dinámica competitiva de los mercados\" (21 oct., "
+            "09h00-16h00). Firmado por el Superintendente Hans Ehmig Dillon "
+            "el 15-sept-2026. Contraparte institucional: Gabriela Witt, "
+            "Directora Nacional de Relaciones Internacionales "
+            "(gabriela.witt@sce.gob.ec, 099 909 4991). Con copia a Sebastián "
+            "Londoño (MEF)."
         ),
     },
 ]
