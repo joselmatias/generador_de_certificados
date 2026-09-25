@@ -706,12 +706,16 @@ def _ultimo_cambio_invitado(item: dict[str, Any]) -> str:
     if fecha is None:
         return "Sin cambios"
     actor = item.get("ultimo_cambio_actor") or "Sistema"
-    campo = _ETIQUETAS_CAMPOS.get(
-        item.get("ultimo_cambio_campo"),
-        item.get("ultimo_cambio_campo") or item.get("ultimo_cambio_accion") or "Cambio",
-    )
-    valor = _texto(item.get("ultimo_cambio_valor"))
-    detalle = f"{campo}: {valor}" if valor else campo
+    campos = item.get("ultimo_cambio_campos") or []
+    valores = item.get("ultimo_cambio_valores") or []
+    detalles = []
+    for campo_crudo, valor_nuevo in zip(campos, valores):
+        etiqueta = _ETIQUETAS_CAMPOS.get(
+            campo_crudo, campo_crudo or item.get("ultimo_cambio_accion") or "Cambio"
+        )
+        valor = _texto(valor_nuevo)
+        detalles.append(f"{etiqueta}: {valor}" if valor else etiqueta)
+    detalle = "; ".join(detalles) if detalles else (item.get("ultimo_cambio_accion") or "Cambio")
     return f"{fecha:%d/%m/%Y %H:%M} · {actor} · {detalle}"
 
 
@@ -839,17 +843,25 @@ def _mostrar_indicadores(invitados: list[dict[str, Any]]) -> None:
         sum(item["confirmado"] == "Sí" for item in invitados),
         sum(item["confirmado"] == "No" for item in invitados),
         sum(item["confirmado"] == "Pendiente" for item in invitados),
+        sum(bool(item.get("gestionado")) for item in invitados),
         sum(item.get("responsable_id") is None for item in invitados),
         sum(item["asistencia_21"] == "Sí" for item in invitados),
         sum(item["asistencia_22"] == "Sí" for item in invitados),
     )
-    cols = st.columns(7)
+    cols = st.columns(8)
     etiquetas = (
-        "Invitados", "Confirmados", "No asistirán", "Pendientes",
+        "Invitados", "Confirmados", "No asistirán", "Pendientes", "Gestionados",
         "Sin responsable", "Asisten 21", "Asisten 22",
     )
+    ayudas = {
+        "Gestionados": (
+            "Invitados con al menos una actualización manual registrada por "
+            "un analista (asignación, observaciones, confirmación, etc.), "
+            "sin importar si siguen en estado Pendiente."
+        ),
+    }
     for col, etiqueta, valor in zip(cols, etiquetas, valores):
-        col.metric(etiqueta, valor)
+        col.metric(etiqueta, valor, help=ayudas.get(etiqueta))
 
 
 def _mostrar_avance_oficinas(invitados: list[dict[str, Any]]) -> None:
@@ -865,6 +877,7 @@ def _mostrar_avance_oficinas(invitados: list[dict[str, Any]]) -> None:
                 "Confirmados": sum(item["confirmado"] == "Sí" for item in grupo),
                 "No asistirán": sum(item["confirmado"] == "No" for item in grupo),
                 "Pendientes": sum(item["confirmado"] == "Pendiente" for item in grupo),
+                "Gestionados": sum(bool(item.get("gestionado")) for item in grupo),
                 "Sin responsable": sum(item.get("responsable_id") is None for item in grupo),
                 "Asisten 21": sum(item["asistencia_21"] == "Sí" for item in grupo),
                 "Asisten 22": sum(item["asistencia_22"] == "Sí" for item in grupo),

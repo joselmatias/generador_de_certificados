@@ -963,16 +963,29 @@ def listar_invitados_congreso(
                uh.fecha_cambio AS ultimo_cambio_fecha,
                uh.actor_nombre AS ultimo_cambio_actor,
                uh.accion AS ultimo_cambio_accion,
-               uh.campo AS ultimo_cambio_campo,
-               uh.valor_nuevo AS ultimo_cambio_valor
+               uh.campos AS ultimo_cambio_campos,
+               uh.valores AS ultimo_cambio_valores,
+               EXISTS (
+                   SELECT 1 FROM congreso_historial hg
+                   WHERE hg.invitado_id = i.id AND hg.accion = 'Actualización'
+               ) AS gestionado
         FROM congreso_invitados i
         LEFT JOIN congreso_responsables r ON r.id = i.responsable_id
         LEFT JOIN LATERAL (
-            SELECT h.fecha_cambio, h.actor_nombre, h.accion, h.campo, h.valor_nuevo
+            -- Agrupa todos los campos que cambiaron en el guardado más
+            -- reciente (misma fecha_cambio = misma transacción), en vez de
+            -- mostrar un único campo arbitrario cuando varios cambian juntos.
+            SELECT h.fecha_cambio, h.actor_nombre, h.accion,
+                   ARRAY_AGG(h.campo ORDER BY h.id) AS campos,
+                   ARRAY_AGG(h.valor_nuevo ORDER BY h.id) AS valores
             FROM congreso_historial h
             WHERE h.invitado_id = i.id
-            ORDER BY h.fecha_cambio DESC, h.id DESC
-            LIMIT 1
+              AND h.fecha_cambio = (
+                    SELECT MAX(h2.fecha_cambio)
+                    FROM congreso_historial h2
+                    WHERE h2.invitado_id = i.id
+              )
+            GROUP BY h.fecha_cambio, h.actor_nombre, h.accion
         ) uh ON TRUE
         {where}
         ORDER BY i.oficina NULLS FIRST, i.institucion, i.destinatario_oficio
