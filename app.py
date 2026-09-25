@@ -13,7 +13,7 @@ import streamlit as st
 from utils.feature_flags import CERTIFICATE_GENERATION_ENABLED
 
 DB_SCHEMA_VERSION = 17
-CONGRESO_SYNC_VERSION = 10
+CONGRESO_SYNC_VERSION = 11
 
 
 st.set_page_config(

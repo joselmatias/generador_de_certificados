@@ -39,7 +39,7 @@ from database.db import (
 COLOR_AZUL = "#1A3A5C"
 # Contrato de compatibilidad con app.py. Se incrementa cuando cambia la
 # sincronización que transforma registros ya existentes.
-CONGRESO_SYNC_VERSION = 10
+CONGRESO_SYNC_VERSION = 11
 ZONA_HORARIA_ECUADOR = ZoneInfo("America/Guayaquil")
 ESTADOS = ["Pendiente", "Sí", "No"]
 OFICINAS = {
@@ -702,21 +702,16 @@ def _fecha_hora_ecuador(valor: Any) -> datetime | None:
 
 
 def _ultimo_cambio_invitado(item: dict[str, Any]) -> str:
+    """Última observación de seguimiento registrada (no cualquier cambio)."""
     fecha = _fecha_hora_ecuador(item.get("ultimo_cambio_fecha"))
-    if fecha is None:
-        return "Sin cambios"
-    actor = item.get("ultimo_cambio_actor") or "Sistema"
-    campos = item.get("ultimo_cambio_campos") or []
-    valores = item.get("ultimo_cambio_valores") or []
-    detalles = []
-    for campo_crudo, valor_nuevo in zip(campos, valores):
-        etiqueta = _ETIQUETAS_CAMPOS.get(
-            campo_crudo, campo_crudo or item.get("ultimo_cambio_accion") or "Cambio"
-        )
-        valor = _texto(valor_nuevo)
-        detalles.append(f"{etiqueta}: {valor}" if valor else etiqueta)
-    detalle = "; ".join(detalles) if detalles else (item.get("ultimo_cambio_accion") or "Cambio")
-    return f"{fecha:%d/%m/%Y %H:%M} · {actor} · {detalle}"
+    if fecha is not None:
+        actor = item.get("ultimo_cambio_actor") or "Sistema"
+        texto = _texto(item.get("ultimo_cambio_valor")) or "(observación vacía)"
+        return f"{fecha:%d/%m/%Y %H:%M} · {actor} · {texto}"
+    # Observación cargada al crear el registro (import inicial u oficio
+    # firmado), sin que un analista la haya editado todavía desde el form.
+    observacion_actual = _texto(item.get("observaciones_seguimiento"))
+    return observacion_actual or "Sin observaciones registradas"
 
 
 def _tabla_asistentes(nombres: Any, cargos: Any) -> pd.DataFrame:
@@ -973,7 +968,7 @@ def _vista_seguimiento(
             key="congreso_col_firmado_por",
         )
         filtro_historial = f12.text_input(
-            "Historial/último cambio", key="congreso_col_historial"
+            "Última observación", key="congreso_col_historial"
         )
 
     if filtro_institucion.strip():
@@ -1022,7 +1017,7 @@ def _vista_seguimiento(
             "Cargos": (item.get("cargos_asistentes_delegados") or "").replace("\n", "; "),
             "Firmado por": _firmado_por(item.get("firma")),
             "N.º Oficio": item.get("numero_oficio") or "",
-            "Historial/último cambio": _ultimo_cambio_invitado(item),
+            "Última observación": _ultimo_cambio_invitado(item),
         }
         for item in filtrados
     ])
@@ -1032,7 +1027,7 @@ def _vista_seguimiento(
         use_container_width=True,
         height=330,
         column_config={
-            "Historial/último cambio": st.column_config.TextColumn(width="large")
+            "Última observación": st.column_config.TextColumn(width="large")
         },
     )
     st.caption(f"{len(filtrados)} casos visibles. Los casos sin número de oficio permanecen guardados, pero no aparecen en esta tabla.")
