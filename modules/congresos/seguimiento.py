@@ -1442,19 +1442,19 @@ def _vista_proyeccion_estudiantes(
                     "La fila dejará de mostrarse, pero conservará su historial y podrá "
                     "reactivarse desde Administrar instituciones."
                 )
-                with st.form("form_eliminar_fila_proyeccion"):
-                    eliminar_id = st.selectbox(
-                        "Institución que deseas retirar",
-                        list(activos_por_id),
-                        format_func=lambda valor: activos_por_id[valor]["institucion"],
-                    )
-                    confirmar_eliminacion = st.checkbox(
-                        "Confirmo que deseo eliminar esta fila de la proyección"
-                    )
-                    eliminar_fila = st.form_submit_button(
-                        "Eliminar fila",
-                        disabled=not actor_nombre or not confirmar_eliminacion,
-                    )
+                eliminar_id = st.selectbox(
+                    "Institución que deseas retirar",
+                    list(activos_por_id),
+                    format_func=lambda valor: activos_por_id[valor]["institucion"],
+                )
+                confirmar_eliminacion = st.checkbox(
+                    "Confirmo que deseo eliminar esta fila de la proyección",
+                    key=f"congreso_confirmar_eliminar_proyeccion_{eliminar_id}",
+                )
+                eliminar_fila = st.button(
+                    "Eliminar fila",
+                    disabled=not actor_nombre or not confirmar_eliminacion,
+                )
                 if eliminar_fila:
                     fila = activos_por_id[eliminar_id]
                     try:
